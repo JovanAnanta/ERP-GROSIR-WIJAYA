@@ -14,7 +14,7 @@ import { RolePermissionModule } from './modules/system/role-permission/role-perm
 import { SystemConfigurationModule } from './modules/system/system-configuration/system-configuration.module.js';
 
 import { CustomerModule } from './modules/sales/customer/customer.module.js';
-import { SupplierModule } from './modules/purchasing/suplier.module.js';
+import { SupplierModule } from './modules/purchasing/supplier.module.js';
 import { CategoryModule } from './modules/master-data/category/category.module.js';
 import { UnitModule } from './modules/master-data/unit/unit.module.js';
 import { ProductModule } from './modules/master-data/product/product.module.js';
