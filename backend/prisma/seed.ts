@@ -38,7 +38,8 @@ async function main(): Promise<void> {
 
   // 2. Buat User Admin Pertama (Super Owner)
   const salt = await bcrypt.genSalt(10);
-  const passwordHash = await bcrypt.hash('rahasia123', salt);
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD || 'rahasia123';
+  const passwordHash = await bcrypt.hash(adminPassword, salt);
 
   const user = await prisma.user.upsert({
     where: { username: 'admin' },
