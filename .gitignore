@@ -14,3 +14,13 @@ coverage/
 
 .DS_Store
 Thumbs.db
+
+# Generated files
+*.tsbuildinfo
+backend/generated/prisma/
+
+# Local AI/editor metadata
+.agents/
+.claude/
+.windsurf/
+.codex/

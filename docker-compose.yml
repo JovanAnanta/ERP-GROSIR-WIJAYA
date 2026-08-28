@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: erp-grosir-wijaya-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: erp_grosir_wijaya
+      POSTGRES_USER: erp_admin
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+volumes:
+  postgres_data:

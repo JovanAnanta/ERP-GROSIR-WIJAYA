@@ -1,0 +1,1350 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/**
+ * USER & ROLES
+ */
+
+model User {
+  userId       BigInt    @id @default(autoincrement()) @map("user_id")
+  username     String    @unique @db.VarChar(50)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  fullName     String    @map("full_name") @db.VarChar(150)
+  roleId       BigInt    @map("role_id")
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at")
+  lastLoginIp  String?   @map("last_login_ip") @db.VarChar(45)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  createdBy    BigInt?   @map("created_by")
+  updatedAt    DateTime? @updatedAt @map("updated_at")
+  updatedBy    BigInt?   @map("updated_by")
+
+  role Role @relation("UserRole", fields: [roleId], references: [roleId])
+
+  createdByUser User?  @relation("UserCreatedBy", fields: [createdBy], references: [userId])
+  createdUsers  User[] @relation("UserCreatedBy")
+
+  updatedByUser User?  @relation("UserUpdatedBy", fields: [updatedBy], references: [userId])
+  updatedUsers  User[] @relation("UserUpdatedBy")
+
+  sessions UserSession[]
+
+  createdRoles           Role[]           @relation("RoleCreatedBy")
+  createdRolePermissions RolePermission[] @relation("RolePermissionCreatedBy")
+
+  /**
+   * MASTER DATA
+   */
+  createdCategories       Category[]        @relation("CategoryCreatedBy")
+  updatedCategories       Category[]        @relation("CategoryUpdatedBy")
+  createdBrands           Brand[]           @relation("BrandCreatedBy")
+  updatedBrands           Brand[]           @relation("BrandUpdatedBy")
+  createdUnits            Unit[]            @relation("UnitCreatedBy")
+  updatedUnits            Unit[]            @relation("UnitUpdatedBy")
+  createdProducts         Product[]         @relation("ProductCreatedBy")
+  updatedProducts         Product[]         @relation("ProductUpdatedBy")
+  createdProductUnits     ProductUnit[]     @relation("ProductUnitCreatedBy")
+  updatedProductUnits     ProductUnit[]     @relation("ProductUnitUpdatedBy")
+  createdSuppliers        Supplier[]        @relation("SupplierCreatedBy")
+  updatedSuppliers        Supplier[]        @relation("SupplierUpdatedBy")
+  createdProductSuppliers ProductSupplier[] @relation("ProductSupplierCreatedBy")
+  updatedProductSuppliers ProductSupplier[] @relation("ProductSupplierUpdatedBy")
+  createdCustomers        Customer[]        @relation("CustomerCreatedBy")
+  updatedCustomers        Customer[]        @relation("CustomerUpdatedBy")
+
+  /**
+   * PURCHASE
+   */
+  createdPurchaseOrders          PurchaseOrder[]          @relation("PurchaseOrderCreatedBy")
+  updatedPurchaseOrders          PurchaseOrder[]          @relation("PurchaseOrderUpdatedBy")
+  createdPurchaseInvoices        PurchaseInvoice[]        @relation("PurchaseInvoiceCreatedBy")
+  updatedPurchaseInvoices        PurchaseInvoice[]        @relation("PurchaseInvoiceUpdatedBy")
+  createdPurchaseReturns         PurchaseReturn[]         @relation("PurchaseReturnCreatedBy")
+  createdPurchaseInvoicePayments PurchaseInvoicePayment[] @relation("PurchaseInvoicePaymentCreatedBy")
+
+  /**
+   * FINANCIAL
+   */
+  createdCustomerAccountTransactions  CustomerAccountTransaction[]  @relation("CustomerAccountTransactionCreatedBy")
+  createdSupplierAccountTransactions  SupplierAccountTransaction[]  @relation("SupplierAccountTransactionCreatedBy")
+  createdFinancialAccounts            FinancialAccount[]            @relation("FinancialAccountCreatedBy")
+  updatedFinancialAccounts            FinancialAccount[]            @relation("FinancialAccountUpdatedBy")
+  createdFinancialAccountTransactions FinancialAccountTransaction[] @relation("FinancialAccountTransactionCreatedBy")
+
+  /**
+   * INVENTORY
+   */
+  createdFifoLayers                 FifoLayer[]                 @relation("FifoLayerCreatedBy")
+  createdFifoLayerTransactions      FifoLayerTransaction[]      @relation("FifoLayerTransactionCreatedBy")
+  createdInventoryTransformations   InventoryTransformation[]   @relation("InventoryTransformationCreatedBy")
+  createdInventoryMovements         InventoryMovement[]         @relation("InventoryMovementCreatedBy")
+  createdInventoryAdjustments       InventoryAdjustment[]       @relation("InventoryAdjustmentCreatedBy")
+  approvedInventoryAdjustments      InventoryAdjustment[]       @relation("InventoryAdjustmentApprovedBy")
+  createdInventoryAdjustmentDetails InventoryAdjustmentDetail[] @relation("InventoryAdjustmentDetailCreatedBy")
+  createdStockOpnames               StockOpname[]               @relation("StockOpnameCreatedBy")
+  approvedStockOpnames              StockOpname[]               @relation("StockOpnameApprovedBy")
+  createdStockOpnameDetails         StockOpnameDetail[]         @relation("StockOpnameDetailCreatedBy")
+
+  /**
+   * SALES
+   */
+  createdSalesOrders          SalesOrder[]          @relation("SalesOrderCreatedBy")
+  updatedSalesOrders          SalesOrder[]          @relation("SalesOrderUpdatedBy")
+  createdSalesInvoices        SalesInvoice[]        @relation("SalesInvoiceCreatedBy")
+  approvedSalesInvoices       SalesInvoice[]        @relation("SalesInvoiceApprovedBy")
+  createdSalesInvoiceDetails  SalesInvoiceDetail[]  @relation("SalesInvoiceDetailCreatedBy")
+  createdSalesInvoicePayments SalesInvoicePayment[] @relation("SalesInvoicePaymentCreatedBy")
+  createdSalesReturns         SalesReturn[]         @relation("SalesReturnCreatedBy")
+  approvedSalesReturns        SalesReturn[]         @relation("SalesReturnApprovedBy")
+  createdSalesReturnDetails   SalesReturnDetail[]   @relation("SalesReturnDetailCreatedBy")
+
+  /* PRICING */
+  createdGuestPrices     GuestSuggestedPrice[]    @relation("GuestPriceCreatedBy")
+  updatedGuestPrices     GuestSuggestedPrice[]    @relation("GuestPriceUpdatedBy")
+  createdCustomerPrices  CustomerSuggestedPrice[] @relation("CustomerPriceCreatedBy")
+  updatedCustomerPrices  CustomerSuggestedPrice[] @relation("CustomerPriceUpdatedBy")
+  createdSupplierCosts   SupplierSuggestedCost[]  @relation("SupplierCostCreatedBy")
+  updatedSupplierCosts   SupplierSuggestedCost[]  @relation("SupplierCostUpdatedBy")
+  createdProductAliases  ProductAlias[]           @relation("ProductAliasCreatedBy")
+  createdUnitAliases     UnitAlias[]              @relation("UnitAliasCreatedBy")
+
+  /* LOGGING */
+  auditLogs    AuditLog[]
+  activityLogs ActivityLog[]
+  securityLogs SecurityLog[]
+
+  @@index([roleId])
+  @@index([createdBy])
+  @@index([updatedBy])
+  @@map("user")
+}
+
+model Role {
+  roleId    BigInt   @id @default(autoincrement()) @map("role_id")
+  roleCode  String   @unique @map("role_code") @db.VarChar(30)
+  roleName  String   @map("role_name") @db.VarChar(100)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy BigInt?  @map("created_by")
+
+  users       User[]           @relation("UserRole")
+  permissions RolePermission[]
+
+  createdByUser User? @relation("RoleCreatedBy", fields: [createdBy], references: [userId])
+
+  @@index([createdBy])
+  @@map("role")
+}
+
+model Permission {
+  permissionId   BigInt   @id @default(autoincrement()) @map("permission_id")
+  permissionCode String   @unique @map("permission_code") @db.VarChar(100)
+  permissionName String   @map("permission_name") @db.VarChar(150)
+  module         String   @db.VarChar(50)
+  action         String   @db.VarChar(30)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  roles RolePermission[]
+
+  @@index([module])
+  @@index([action])
+  @@map("permission")
+}
+
+model RolePermission {
+  rolePermissionId BigInt   @id @default(autoincrement()) @map("role_permission_id")
+  roleId           BigInt   @map("role_id")
+  permissionId     BigInt   @map("permission_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  createdBy        BigInt?  @map("created_by")
+
+  role       Role       @relation(fields: [roleId], references: [roleId])
+  permission Permission @relation(fields: [permissionId], references: [permissionId])
+
+  createdByUser User? @relation("RolePermissionCreatedBy", fields: [createdBy], references: [userId])
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@index([createdBy])
+  @@map("role_permission")
+}
+
+model UserSession {
+  sessionId        BigInt    @id @default(autoincrement()) @map("session_id")
+  userId           BigInt    @map("user_id")
+  sessionTokenHash String    @unique @map("session_token_hash") @db.VarChar(255)
+  deviceIdentifier String    @map("device_identifier") @db.VarChar(255)
+  ipAddress        String    @map("ip_address") @db.VarChar(45)
+  userAgent        String?   @map("user_agent") @db.VarChar(500)
+  createdAt        DateTime  @default(now()) @map("created_at")
+  lastActivityAt   DateTime  @map("last_activity_at")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  revokeReason     String?   @map("revoke_reason") @db.VarChar(100)
+
+  user User @relation(fields: [userId], references: [userId])
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+  @@map("user_session")
+}
+
+/**
+ * MASTER DATA
+ */
+
+model Category {
+  categoryId   BigInt    @id @default(autoincrement()) @map("category_id")
+  categoryName String    @unique @map("category_name") @db.VarChar(100)
+  isActive     Boolean   @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  createdBy    BigInt    @map("created_by")
+  updatedAt    DateTime? @updatedAt @map("updated_at")
+  updatedBy    BigInt?   @map("updated_by")
+
+  createdByUser User  @relation("CategoryCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser User? @relation("CategoryUpdatedBy", fields: [updatedBy], references: [userId])
+
+  products Product[]
+
+  @@index([createdBy])
+  @@index([updatedBy])
+  @@map("category")
+}
+
+model Brand {
+  brandId   BigInt    @id @default(autoincrement()) @map("brand_id")
+  brandName String    @unique @map("brand_name") @db.VarChar(100)
+  isActive  Boolean   @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy BigInt    @map("created_by")
+  updatedAt DateTime? @updatedAt @map("updated_at")
+  updatedBy BigInt?   @map("updated_by")
+
+  createdByUser User  @relation("BrandCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser User? @relation("BrandUpdatedBy", fields: [updatedBy], references: [userId])
+
+  products Product[]
+
+  @@index([createdBy])
+  @@index([updatedBy])
+  @@map("brand")
+}
+
+model Unit {
+  unitId    BigInt    @id @default(autoincrement()) @map("unit_id")
+  unitName  String    @unique @map("unit_name") @db.VarChar(50)
+  isActive  Boolean   @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy BigInt    @map("created_by")
+  updatedAt DateTime? @updatedAt @map("updated_at")
+  updatedBy BigInt?   @map("updated_by")
+
+  createdByUser User  @relation("UnitCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser User? @relation("UnitUpdatedBy", fields: [updatedBy], references: [userId])
+
+  productUnits ProductUnit[]
+
+  aliases UnitAlias[]
+
+  @@index([createdBy])
+  @@index([updatedBy])
+  @@map("unit")
+}
+
+model Product {
+  productId           BigInt    @id @default(autoincrement()) @map("product_id")
+  productName         String    @map("product_name") @db.VarChar(255)
+  categoryId          BigInt    @map("category_id")
+  brandId             BigInt?   @map("brand_id")
+  isActive            Boolean   @map("is_active")
+  minimumInventoryQty Decimal   @map("minimum_inventory_qty") @db.Decimal(18, 3)
+  createdAt           DateTime  @default(now()) @map("created_at")
+  createdBy           BigInt    @map("created_by")
+  updatedAt           DateTime? @updatedAt @map("updated_at")
+  updatedBy           BigInt?   @map("updated_by")
+
+  category      Category @relation(fields: [categoryId], references: [categoryId])
+  brand         Brand?   @relation(fields: [brandId], references: [brandId])
+  createdByUser User     @relation("ProductCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser User?    @relation("ProductUpdatedBy", fields: [updatedBy], references: [userId])
+
+  productUnits     ProductUnit[]
+  productSuppliers ProductSupplier[]
+  inventoryStocks  InventoryStock[]
+
+  aliases ProductAlias[]
+
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([createdBy])
+  @@index([updatedBy])
+  @@map("product")
+}
+
+model ProductUnit {
+  productUnitId    BigInt    @id @default(autoincrement()) @map("product_unit_id")
+  productId        BigInt    @map("product_id")
+  unitId           BigInt    @map("unit_id")
+  conversionFactor Decimal   @map("conversion_factor") @db.Decimal(18, 6)
+  displayOrder     Int       @map("display_order")
+  isParent         Boolean   @map("is_parent")
+  isActive         Boolean   @map("is_active")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  createdBy        BigInt    @map("created_by")
+  updatedAt        DateTime? @updatedAt @map("updated_at")
+  updatedBy        BigInt?   @map("updated_by")
+
+  product       Product @relation(fields: [productId], references: [productId])
+  unit          Unit    @relation(fields: [unitId], references: [unitId])
+  createdByUser User    @relation("ProductUnitCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser User?   @relation("ProductUnitUpdatedBy", fields: [updatedBy], references: [userId])
+
+  /**
+   * PURCHASE
+   */
+  purchaseOrderDetails   PurchaseOrderDetail[]
+  purchaseInvoiceDetails PurchaseInvoiceDetail[]
+  purchaseReturnDetails  PurchaseReturnDetail[]
+
+  /**
+   * INVENTORY
+   */
+  fifoLayers                 FifoLayer[]
+  inventoryMovements         InventoryMovement[]
+  inventoryAdjustmentDetails InventoryAdjustmentDetail[]
+  stockOpnameDetails         StockOpnameDetail[]
+  inventoryStocks            InventoryStock[]
+
+  /**
+   * SALES
+   */
+  salesOrderDetails   SalesOrderDetail[]
+  salesInvoiceDetails SalesInvoiceDetail[]
+  salesReturnDetails  SalesReturnDetail[]
+
+  guestPrices    GuestSuggestedPrice[]
+  customerPrices CustomerSuggestedPrice[]
+  supplierCosts  SupplierSuggestedCost[]
+
+  @@index([productId])
+  @@index([unitId])
+  @@index([createdBy])
+  @@index([updatedBy])
+  @@map("product_unit")
+}
+
+model Supplier {
+  supplierId   BigInt    @id @default(autoincrement()) @map("supplier_id")
+  supplierName String    @map("supplier_name") @db.VarChar(255)
+  phone        String?   @db.VarChar(30)
+  email        String?   @db.VarChar(150)
+  address      String?   @db.Text
+  picName      String?   @map("pic_name") @db.VarChar(150)
+  isActive     Boolean   @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  createdBy    BigInt    @map("created_by")
+  updatedAt    DateTime? @updatedAt @map("updated_at")
+  updatedBy    BigInt?   @map("updated_by")
+
+  createdByUser User  @relation("SupplierCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser User? @relation("SupplierUpdatedBy", fields: [updatedBy], references: [userId])
+
+  productSuppliers    ProductSupplier[]
+  purchaseOrders      PurchaseOrder[]
+  purchaseInvoices    PurchaseInvoice[]
+  purchaseReturns     PurchaseReturn[]
+  financialSummary    SupplierFinancialSummary?
+  accountTransactions SupplierAccountTransaction[]
+
+  suggestedCosts SupplierSuggestedCost[]
+
+  @@index([createdBy])
+  @@index([updatedBy])
+  @@map("supplier")
+}
+
+model ProductSupplier {
+  productSupplierId BigInt    @id @default(autoincrement()) @map("product_supplier_id")
+  productId         BigInt    @map("product_id")
+  supplierId        BigInt    @map("supplier_id")
+  isActive          Boolean   @map("is_active")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  createdBy         BigInt    @map("created_by")
+  updatedAt         DateTime? @updatedAt @map("updated_at")
+  updatedBy         BigInt?   @map("updated_by")
+
+  product       Product  @relation(fields: [productId], references: [productId])
+  supplier      Supplier @relation(fields: [supplierId], references: [supplierId])
+  createdByUser User     @relation("ProductSupplierCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser User?    @relation("ProductSupplierUpdatedBy", fields: [updatedBy], references: [userId])
+
+  @@index([productId])
+  @@index([supplierId])
+  @@index([createdBy])
+  @@index([updatedBy])
+  @@map("product_supplier")
+}
+
+model Customer {
+  customerId   BigInt    @id @default(autoincrement()) @map("customer_id")
+  customerName String    @map("customer_name") @db.VarChar(255)
+  phone        String?   @db.VarChar(30)
+  address      String?   @db.Text
+  isActive     Boolean   @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  createdBy    BigInt    @map("created_by")
+  updatedAt    DateTime? @updatedAt @map("updated_at")
+  updatedBy    BigInt?   @map("updated_by")
+
+  createdByUser User  @relation("CustomerCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser User? @relation("CustomerUpdatedBy", fields: [updatedBy], references: [userId])
+
+  salesOrders         SalesOrder[]
+  salesInvoices       SalesInvoice[]
+  salesReturns        SalesReturn[]
+  financialSummary    CustomerFinancialSummary?
+  accountTransactions CustomerAccountTransaction[]
+
+  suggestedPrices CustomerSuggestedPrice[]
+
+  @@index([createdBy])
+  @@index([updatedBy])
+  @@map("customer")
+}
+
+/**
+ * PURCHASE
+ */
+
+model PurchaseOrder {
+  purchaseOrderId     BigInt              @id @default(autoincrement()) @map("purchase_order_id")
+  purchaseOrderNumber String              @unique @map("purchase_order_number") @db.VarChar(30)
+  supplierId          BigInt              @map("supplier_id")
+  orderDate           DateTime            @map("order_date") @db.Date
+  expectedDate        DateTime?           @map("expected_date") @db.Date
+  status              PurchaseOrderStatus
+  note                String?             @db.VarChar(500)
+  createdAt           DateTime            @default(now()) @map("created_at")
+  createdBy           BigInt              @map("created_by")
+  updatedAt           DateTime?           @updatedAt @map("updated_at")
+  updatedBy           BigInt?             @map("updated_by")
+
+  supplier      Supplier @relation(fields: [supplierId], references: [supplierId])
+  createdByUser User     @relation("PurchaseOrderCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser User?    @relation("PurchaseOrderUpdatedBy", fields: [updatedBy], references: [userId])
+
+  details          PurchaseOrderDetail[]
+  purchaseInvoices PurchaseInvoice[]
+
+  @@index([supplierId])
+  @@index([createdBy])
+  @@index([updatedBy])
+  @@index([status])
+  @@map("purchase_order")
+}
+
+model PurchaseOrderDetail {
+  purchaseOrderDetailId BigInt  @id @default(autoincrement()) @map("purchase_order_detail_id")
+  purchaseOrderId       BigInt  @map("purchase_order_id")
+  productUnitId         BigInt  @map("product_unit_id")
+  quantity              Decimal @db.Decimal(18, 3)
+  note                  String? @db.VarChar(255)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [purchaseOrderId])
+  productUnit   ProductUnit   @relation(fields: [productUnitId], references: [productUnitId])
+
+  @@index([purchaseOrderId])
+  @@index([productUnitId])
+  @@map("purchase_order_detail")
+}
+
+model PurchaseInvoice {
+  purchaseInvoiceId     BigInt                       @id @default(autoincrement()) @map("purchase_invoice_id")
+  purchaseInvoiceNumber String                       @unique @map("purchase_invoice_number") @db.VarChar(30)
+  purchaseOrderId       BigInt?                      @map("purchase_order_id")
+  supplierId            BigInt                       @map("supplier_id")
+  invoiceDate           DateTime                     @map("invoice_date") @db.Date
+  dueDate               DateTime?                    @map("due_date") @db.Date
+  invoiceTotal          Decimal                      @map("invoice_total") @db.Decimal(18, 2)
+  discountAmount        Decimal                      @map("discount_amount") @db.Decimal(18, 2)
+  statusPayment         PurchaseInvoicePaymentStatus @map("status_payment")
+  paidAmount            Decimal                      @map("paid_amount") @db.Decimal(18, 2)
+  outstandingAmount     Decimal                      @map("outstanding_amount") @db.Decimal(18, 2)
+  status                PurchaseInvoiceStatus
+  note                  String?                      @db.VarChar(500)
+  createdAt             DateTime                     @default(now()) @map("created_at")
+  createdBy             BigInt                       @map("created_by")
+  updatedAt             DateTime?                    @updatedAt @map("updated_at")
+  updatedBy             BigInt?                      @map("updated_by")
+
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [purchaseOrderId])
+  supplier      Supplier       @relation(fields: [supplierId], references: [supplierId])
+  createdByUser User           @relation("PurchaseInvoiceCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser User?          @relation("PurchaseInvoiceUpdatedBy", fields: [updatedBy], references: [userId])
+
+  details  PurchaseInvoiceDetail[]
+  returns  PurchaseReturn[]
+  payments PurchaseInvoicePayment[]
+
+  @@index([purchaseOrderId])
+  @@index([supplierId])
+  @@index([createdBy])
+  @@index([updatedBy])
+  @@index([statusPayment])
+  @@index([status])
+  @@map("purchase_invoice")
+}
+
+model PurchaseInvoiceDetail {
+  purchaseInvoiceDetailId BigInt  @id @default(autoincrement()) @map("purchase_invoice_detail_id")
+  purchaseInvoiceId       BigInt  @map("purchase_invoice_id")
+  productUnitId           BigInt  @map("product_unit_id")
+  quantity                Decimal @db.Decimal(18, 3)
+  unitCost                Decimal @map("unit_cost") @db.Decimal(18, 2)
+  subtotal                Decimal @db.Decimal(18, 2)
+  note                    String? @db.VarChar(255)
+
+  purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [purchaseInvoiceId])
+  productUnit     ProductUnit     @relation(fields: [productUnitId], references: [productUnitId])
+
+  purchaseReturnDetails PurchaseReturnDetail[]
+
+  @@index([purchaseInvoiceId])
+  @@index([productUnitId])
+  @@map("purchase_invoice_detail")
+}
+
+model PurchaseReturn {
+  purchaseReturnId     BigInt   @id @default(autoincrement()) @map("purchase_return_id")
+  purchaseReturnNumber String   @unique @map("purchase_return_number") @db.VarChar(30)
+  purchaseInvoiceId    BigInt   @map("purchase_invoice_id")
+  supplierId           BigInt   @map("supplier_id")
+  returnDate           DateTime @map("return_date") @db.Date
+  returnTotal          Decimal  @map("return_total") @db.Decimal(18, 2)
+  note                 String?  @db.VarChar(500)
+  createdAt            DateTime @default(now()) @map("created_at")
+  createdBy            BigInt   @map("created_by")
+
+  purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [purchaseInvoiceId])
+  supplier        Supplier        @relation(fields: [supplierId], references: [supplierId])
+  createdByUser   User            @relation("PurchaseReturnCreatedBy", fields: [createdBy], references: [userId])
+
+  details PurchaseReturnDetail[]
+
+  @@index([purchaseInvoiceId])
+  @@index([supplierId])
+  @@index([createdBy])
+  @@map("purchase_return")
+}
+
+model PurchaseReturnDetail {
+  purchaseReturnDetailId  BigInt  @id @default(autoincrement()) @map("purchase_return_detail_id")
+  purchaseReturnId        BigInt  @map("purchase_return_id")
+  purchaseInvoiceDetailId BigInt  @map("purchase_invoice_detail_id")
+  productUnitId           BigInt  @map("product_unit_id")
+  quantity                Decimal @db.Decimal(18, 3)
+  unitCost                Decimal @map("unit_cost") @db.Decimal(18, 2)
+  subtotal                Decimal @db.Decimal(18, 2)
+
+  purchaseReturn        PurchaseReturn        @relation(fields: [purchaseReturnId], references: [purchaseReturnId])
+  purchaseInvoiceDetail PurchaseInvoiceDetail @relation(fields: [purchaseInvoiceDetailId], references: [purchaseInvoiceDetailId])
+  productUnit           ProductUnit           @relation(fields: [productUnitId], references: [productUnitId])
+
+  @@index([purchaseReturnId])
+  @@index([purchaseInvoiceDetailId])
+  @@index([productUnitId])
+  @@map("purchase_return_detail")
+}
+
+model PurchaseInvoicePayment {
+  purchasePaymentId  BigInt                @id @default(autoincrement()) @map("purchase_payment_id")
+  purchaseInvoiceId  BigInt                @map("purchase_invoice_id")
+  paymentDate        DateTime              @map("payment_date")
+  paymentAmount      Decimal               @map("payment_amount") @db.Decimal(18, 2)
+  paymentMethod      PurchasePaymentMethod @map("payment_method")
+  financialAccountId BigInt                @map("financial_account_id")
+  referenceNumber    String?               @map("reference_number") @db.VarChar(100)
+  note               String?               @db.VarChar(255)
+  createdAt          DateTime              @default(now()) @map("created_at")
+  createdBy          BigInt                @map("created_by")
+
+  purchaseInvoice  PurchaseInvoice  @relation(fields: [purchaseInvoiceId], references: [purchaseInvoiceId])
+  financialAccount FinancialAccount @relation(fields: [financialAccountId], references: [financialAccountId])
+  createdByUser    User             @relation("PurchaseInvoicePaymentCreatedBy", fields: [createdBy], references: [userId])
+
+  @@index([purchaseInvoiceId])
+  @@index([financialAccountId])
+  @@index([createdBy])
+  @@map("purchase_invoice_payment")
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum PurchaseInvoicePaymentStatus {
+  PAID
+  PARTIAL
+  UNPAID
+}
+
+enum PurchaseInvoiceStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
+enum PurchasePaymentMethod {
+  CASH
+  TRANSFER
+}
+
+/**
+ * FINANCIAL
+ */
+
+model CustomerFinancialSummary {
+  customerFinancialId BigInt    @id @default(autoincrement()) @map("customer_financial_id")
+  customerId          BigInt    @unique @map("customer_id")
+  outstandingAmount   Decimal   @default(0) @map("outstanding_amount") @db.Decimal(18, 2)
+  creditLimit         Decimal   @default(0) @map("credit_limit") @db.Decimal(18, 2)
+  currentAmount       Decimal   @default(0) @map("current_amount") @db.Decimal(18, 2)
+  overdueAmount       Decimal   @default(0) @map("overdue_amount") @db.Decimal(18, 2)
+  lastPaymentDate     DateTime? @map("last_payment_date")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  customer Customer @relation(fields: [customerId], references: [customerId])
+
+  @@map("customer_financial_summary")
+}
+
+model SupplierFinancialSummary {
+  supplierFinancialId BigInt    @id @default(autoincrement()) @map("supplier_financial_id")
+  supplierId          BigInt    @unique @map("supplier_id")
+  outstandingAmount   Decimal   @default(0) @map("outstanding_amount") @db.Decimal(18, 2)
+  currentAmount       Decimal   @default(0) @map("current_amount") @db.Decimal(18, 2)
+  overdueAmount       Decimal   @default(0) @map("overdue_amount") @db.Decimal(18, 2)
+  lastPaymentDate     DateTime? @map("last_payment_date")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  supplier Supplier @relation(fields: [supplierId], references: [supplierId])
+
+  @@map("supplier_financial_summary")
+}
+
+model CustomerAccountTransaction {
+  customerAccountTransactionId BigInt    @id @default(autoincrement()) @map("customer_account_transaction_id")
+  transactionNumber            String    @unique @map("transaction_number") @db.VarChar(30)
+  customerId                   BigInt    @map("customer_id")
+  transactionType              String    @map("transaction_type") @db.VarChar(50)
+  direction                    String    @db.VarChar(10)
+  amount                       Decimal   @db.Decimal(18, 2)
+  referenceType                String    @map("reference_type") @db.VarChar(50)
+  referenceId                  BigInt    @map("reference_id")
+  transactionDate              DateTime  @map("transaction_date")
+  dueDate                      DateTime? @map("due_date")
+  note                         String?   @db.VarChar(255)
+  createdAt                    DateTime  @default(now()) @map("created_at")
+  createdBy                    BigInt    @map("created_by")
+
+  customer      Customer @relation(fields: [customerId], references: [customerId])
+  createdByUser User     @relation("CustomerAccountTransactionCreatedBy", fields: [createdBy], references: [userId])
+
+  @@index([customerId])
+  @@index([transactionDate])
+  @@index([referenceType, referenceId])
+  @@index([createdBy])
+  @@map("customer_account_transaction")
+}
+
+model SupplierAccountTransaction {
+  supplierAccountTransactionId BigInt    @id @default(autoincrement()) @map("supplier_account_transaction_id")
+  transactionNumber            String    @unique @map("transaction_number") @db.VarChar(30)
+  supplierId                   BigInt    @map("supplier_id")
+  transactionType              String    @map("transaction_type") @db.VarChar(50)
+  direction                    String    @db.VarChar(10)
+  amount                       Decimal   @db.Decimal(18, 2)
+  referenceType                String    @map("reference_type") @db.VarChar(50)
+  referenceId                  BigInt    @map("reference_id")
+  transactionDate              DateTime  @map("transaction_date")
+  dueDate                      DateTime? @map("due_date")
+  note                         String?   @db.VarChar(255)
+  createdAt                    DateTime  @default(now()) @map("created_at")
+  createdBy                    BigInt    @map("created_by")
+
+  supplier      Supplier @relation(fields: [supplierId], references: [supplierId])
+  createdByUser User     @relation("SupplierAccountTransactionCreatedBy", fields: [createdBy], references: [userId])
+
+  @@index([supplierId])
+  @@index([transactionDate])
+  @@index([referenceType, referenceId])
+  @@index([createdBy])
+  @@map("supplier_account_transaction")
+}
+
+model FinancialAccount {
+  financialAccountId BigInt    @id @default(autoincrement()) @map("financial_account_id")
+  accountName        String    @unique @map("account_name") @db.VarChar(100)
+  accountType        String    @map("account_type") @db.VarChar(20)
+  accountNumber      String?   @map("account_number") @db.VarChar(100)
+  bankName           String?   @map("bank_name") @db.VarChar(100)
+  openingBalance     Decimal   @default(0) @map("opening_balance") @db.Decimal(18, 2)
+  currentBalance     Decimal   @default(0) @map("current_balance") @db.Decimal(18, 2)
+  isActive           Boolean   @default(true) @map("is_active")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  createdBy          BigInt    @map("created_by")
+  updatedAt          DateTime? @map("updated_at")
+  updatedBy          BigInt?   @map("updated_by")
+
+  createdByUser User  @relation("FinancialAccountCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser User? @relation("FinancialAccountUpdatedBy", fields: [updatedBy], references: [userId])
+
+  transactions            FinancialAccountTransaction[]
+  salesInvoicePayments    SalesInvoicePayment[]
+  purchaseInvoicePayments PurchaseInvoicePayment[]
+
+  @@index([createdBy])
+  @@index([updatedBy])
+  @@map("financial_account")
+}
+
+model FinancialAccountTransaction {
+  financialAccountTransactionId BigInt   @id @default(autoincrement()) @map("financial_account_transaction_id")
+  transactionNumber             String   @unique @map("transaction_number") @db.VarChar(30)
+  financialAccountId            BigInt   @map("financial_account_id")
+  transactionType               String   @map("transaction_type") @db.VarChar(50)
+  direction                     String   @db.VarChar(10)
+  amount                        Decimal  @db.Decimal(18, 2)
+  referenceType                 String   @map("reference_type") @db.VarChar(50)
+  referenceId                   BigInt   @map("reference_id")
+  transactionDate               DateTime @map("transaction_date")
+  note                          String?  @db.VarChar(255)
+  createdAt                     DateTime @default(now()) @map("created_at")
+  createdBy                     BigInt   @map("created_by")
+
+  financialAccount FinancialAccount @relation(fields: [financialAccountId], references: [financialAccountId])
+  createdByUser    User             @relation("FinancialAccountTransactionCreatedBy", fields: [createdBy], references: [userId])
+
+  @@index([financialAccountId])
+  @@index([transactionDate])
+  @@index([referenceType, referenceId])
+  @@index([createdBy])
+  @@map("financial_account_transaction")
+}
+
+/**
+ * INVENTORY
+ */
+
+enum FifoLayerOriginType {
+  PURCHASE
+  OPENING_BALANCE
+  TRANSFORMATION
+  INVENTORY_FOUND
+}
+
+enum TransactionDirection {
+  IN
+  OUT
+}
+
+model FifoLayer {
+  fifoLayerId               BigInt              @id @default(autoincrement()) @map("fifo_layer_id")
+  fifoLayerNumber           String              @unique @map("fifo_layer_number") @db.VarChar(30)
+  productUnitId             BigInt              @map("product_unit_id")
+  originType                FifoLayerOriginType @map("origin_type")
+  originInventoryMovementId BigInt              @map("origin_inventory_movement_id")
+  originId                  BigInt              @map("origin_id")
+  originalQty               Decimal             @map("original_qty") @db.Decimal(18, 3)
+  remainingQty              Decimal             @map("remaining_qty") @db.Decimal(18, 3)
+  unitCost                  Decimal             @map("unit_cost") @db.Decimal(18, 2)
+  originalCost              Decimal             @map("original_cost") @db.Decimal(18, 2)
+  remainingCost             Decimal             @map("remaining_cost") @db.Decimal(18, 2)
+  createdAt                 DateTime            @default(now()) @map("created_at")
+  createdBy                 BigInt              @map("created_by")
+
+  productUnit             ProductUnit            @relation(fields: [productUnitId], references: [productUnitId])
+  originInventoryMovement InventoryMovement      @relation("MovementGeneratedLayers", fields: [originInventoryMovementId], references: [inventoryMovementId])
+  createdByUser           User                   @relation("FifoLayerCreatedBy", fields: [createdBy], references: [userId])
+  transactions            FifoLayerTransaction[]
+
+  @@index([productUnitId])
+  @@index([originInventoryMovementId])
+  @@index([createdBy])
+  @@map("fifo_layer")
+}
+
+model FifoLayerTransaction {
+  fifoLayerTransactionId BigInt               @id @default(autoincrement()) @map("fifo_layer_transaction_id")
+  fifoLayerId            BigInt               @map("fifo_layer_id")
+  inventoryMovementId    BigInt               @map("inventory_movement_id")
+  quantity               Decimal              @db.Decimal(18, 3)
+  direction              TransactionDirection @map("direction")
+  unitCost               Decimal              @map("unit_cost") @db.Decimal(18, 2)
+  totalCost              Decimal              @map("total_cost") @db.Decimal(18, 2)
+  quantityBefore         Decimal              @map("quantity_before") @db.Decimal(18, 3)
+  quantityAfter          Decimal              @map("quantity_after") @db.Decimal(18, 3)
+  createdAt              DateTime             @default(now()) @map("created_at")
+  createdBy              BigInt               @map("created_by")
+
+  fifoLayer         FifoLayer         @relation(fields: [fifoLayerId], references: [fifoLayerId])
+  inventoryMovement InventoryMovement @relation("MovementConsumedLayers", fields: [inventoryMovementId], references: [inventoryMovementId])
+  createdByUser     User              @relation("FifoLayerTransactionCreatedBy", fields: [createdBy], references: [userId])
+
+  @@index([fifoLayerId])
+  @@index([inventoryMovementId])
+  @@index([createdBy])
+  @@map("fifo_layer_transaction")
+}
+
+model InventoryTransformation {
+  transformationId     BigInt   @id @default(autoincrement()) @map("transformation_id")
+  transformationNumber String   @unique @map("transformation_number") @db.VarChar(30)
+  transformationDate   DateTime @map("transformation_date")
+  note                 String?  @db.VarChar(255)
+  createdAt            DateTime @default(now()) @map("created_at")
+  createdBy            BigInt   @map("created_by")
+
+  createdByUser User                @relation("InventoryTransformationCreatedBy", fields: [createdBy], references: [userId])
+  movements     InventoryMovement[]
+
+  @@index([createdBy])
+  @@map("inventory_transformation")
+}
+
+model InventoryMovement {
+  inventoryMovementId BigInt               @id @default(autoincrement()) @map("inventory_movement_id")
+  movementNumber      String               @unique @map("movement_number") @db.VarChar(30)
+  productUnitId       BigInt               @map("product_unit_id")
+  direction           TransactionDirection @map("direction")
+  quantity            Decimal              @db.Decimal(18, 3)
+  movementType        String               @map("movement_type") @db.VarChar(50)
+  originType          String               @map("origin_type") @db.VarChar(50)
+  originId            BigInt               @map("origin_id")
+  transformationId    BigInt?              @map("transformation_id")
+  movementDate        DateTime             @map("movement_date")
+  note                String?              @db.VarChar(255)
+  createdAt           DateTime             @default(now()) @map("created_at")
+  createdBy           BigInt               @map("created_by")
+
+  productUnit    ProductUnit              @relation(fields: [productUnitId], references: [productUnitId])
+  transformation InventoryTransformation? @relation(fields: [transformationId], references: [transformationId])
+  createdByUser  User                     @relation("InventoryMovementCreatedBy", fields: [createdBy], references: [userId])
+
+  generatedLayers FifoLayer[]            @relation("MovementGeneratedLayers")
+  consumedLayers  FifoLayerTransaction[] @relation("MovementConsumedLayers")
+
+  @@index([productUnitId])
+  @@index([transformationId])
+  @@index([createdBy])
+  @@map("inventory_movement")
+}
+
+model InventoryAdjustment {
+  adjustmentId     BigInt    @id @default(autoincrement()) @map("adjustment_id")
+  adjustmentNumber String    @unique @map("adjustment_number") @db.VarChar(30)
+  adjustmentDate   DateTime  @map("adjustment_date")
+  reason           String    @db.VarChar(255)
+  status           String    @db.VarChar(20) // DRAFT / APPROVED / CANCELLED
+  note             String?   @db.VarChar(255)
+  createdAt        DateTime  @default(now()) @map("created_at")
+  createdBy        BigInt    @map("created_by")
+  approvedAt       DateTime? @map("approved_at")
+  approvedBy       BigInt?   @map("approved_by")
+
+  createdByUser  User                        @relation("InventoryAdjustmentCreatedBy", fields: [createdBy], references: [userId])
+  approvedByUser User?                       @relation("InventoryAdjustmentApprovedBy", fields: [approvedBy], references: [userId])
+  details        InventoryAdjustmentDetail[]
+
+  @@index([createdBy])
+  @@index([approvedBy])
+  @@map("inventory_adjustment")
+}
+
+model InventoryAdjustmentDetail {
+  adjustmentDetailId BigInt   @id @default(autoincrement()) @map("adjustment_detail_id")
+  adjustmentId       BigInt   @map("adjustment_id")
+  productUnitId      BigInt   @map("product_unit_id")
+  direction          String   @map("direction") @db.VarChar(10) // IN / OUT
+  quantity           Decimal  @db.Decimal(18, 3)
+  note               String?  @db.VarChar(255)
+  createdAt          DateTime @default(now()) @map("created_at")
+  createdBy          BigInt   @map("created_by")
+
+  adjustment    InventoryAdjustment @relation(fields: [adjustmentId], references: [adjustmentId])
+  productUnit   ProductUnit         @relation(fields: [productUnitId], references: [productUnitId])
+  createdByUser User                @relation("InventoryAdjustmentDetailCreatedBy", fields: [createdBy], references: [userId])
+
+  @@index([adjustmentId])
+  @@index([productUnitId])
+  @@index([createdBy])
+  @@map("inventory_adjustment_detail")
+}
+
+model StockOpname {
+  stockOpnameId     BigInt    @id @default(autoincrement()) @map("stock_opname_id")
+  stockOpnameNumber String    @unique @map("stock_opname_number") @db.VarChar(30)
+  opnameDate        DateTime  @map("opname_date")
+  status            String    @db.VarChar(20) // DRAFT / COUNTING / REVIEW / APPROVED / CANCELLED
+  note              String?   @db.VarChar(255)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  createdBy         BigInt    @map("created_by")
+  approvedAt        DateTime? @map("approved_at")
+  approvedBy        BigInt?   @map("approved_by")
+
+  createdByUser  User                @relation("StockOpnameCreatedBy", fields: [createdBy], references: [userId])
+  approvedByUser User?               @relation("StockOpnameApprovedBy", fields: [approvedBy], references: [userId])
+  details        StockOpnameDetail[]
+
+  @@index([createdBy])
+  @@index([approvedBy])
+  @@map("stock_opname")
+}
+
+model StockOpnameDetail {
+  stockOpnameDetailId BigInt   @id @default(autoincrement()) @map("stock_opname_detail_id")
+  stockOpnameId       BigInt   @map("stock_opname_id")
+  productUnitId       BigInt   @map("product_unit_id")
+  systemQty           Decimal  @map("system_qty") @db.Decimal(18, 3)
+  countedQty          Decimal  @map("counted_qty") @db.Decimal(18, 3)
+  varianceQty         Decimal  @map("variance_qty") @db.Decimal(18, 3)
+  note                String?  @db.VarChar(255)
+  createdAt           DateTime @default(now()) @map("created_at")
+  createdBy           BigInt   @map("created_by")
+
+  stockOpname   StockOpname @relation(fields: [stockOpnameId], references: [stockOpnameId])
+  productUnit   ProductUnit @relation(fields: [productUnitId], references: [productUnitId])
+  createdByUser User        @relation("StockOpnameDetailCreatedBy", fields: [createdBy], references: [userId])
+
+  @@index([stockOpnameId])
+  @@index([productUnitId])
+  @@index([createdBy])
+  @@map("stock_opname_detail")
+}
+
+model InventoryStock {
+  inventoryStockId BigInt   @id @default(autoincrement()) @map("inventory_stock_id")
+  productId        BigInt   @map("product_id")
+  productUnitId    BigInt   @map("product_unit_id")
+  actualQty        Decimal  @map("actual_qty") @db.Decimal(18, 3)
+  availableQty     Decimal  @map("available_qty") @db.Decimal(18, 3)
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  product     Product     @relation(fields: [productId], references: [productId])
+  productUnit ProductUnit @relation(fields: [productUnitId], references: [productUnitId])
+
+  @@index([productId])
+  @@index([productUnitId])
+  @@map("inventory_stock")
+}
+
+/**
+ * SALES
+ */
+
+enum SalesOrderStatus {
+  DRAFT
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum SalesPaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+}
+
+enum SalesInvoiceStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
+enum SalesReturnStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
+enum SalesPaymentMethod {
+  CASH
+  TRANSFER
+}
+
+model SalesOrder {
+  salesOrderId     BigInt             @id @default(autoincrement()) @map("sales_order_id")
+  salesOrderNumber String             @unique @map("sales_order_number") @db.VarChar(30)
+  customerId       BigInt?            @map("customer_id")
+  orderDate        DateTime           @map("order_date")
+  status           SalesOrderStatus
+  salesChannel     String             @map("sales_channel") @db.VarChar(50)
+  sourceType       String             @map("source_type") @db.VarChar(50)
+  paymentStatus    SalesPaymentStatus @map("payment_status")
+  paymentDueDate   DateTime?          @map("payment_due_date") @db.Date
+  note             String?            @db.VarChar(500)
+  createdAt        DateTime           @default(now()) @map("created_at")
+  createdBy        BigInt             @map("created_by")
+  updatedAt        DateTime?          @updatedAt @map("updated_at")
+  updatedBy        BigInt?            @map("updated_by")
+
+  customer      Customer? @relation(fields: [customerId], references: [customerId])
+  createdByUser User      @relation("SalesOrderCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser User?     @relation("SalesOrderUpdatedBy", fields: [updatedBy], references: [userId])
+
+  details  SalesOrderDetail[]
+  invoices SalesInvoice[]
+
+  @@index([customerId])
+  @@index([createdBy])
+  @@index([updatedBy])
+  @@map("sales_order")
+}
+
+model SalesOrderDetail {
+  salesOrderDetailId BigInt  @id @default(autoincrement()) @map("sales_order_detail_id")
+  salesOrderId       BigInt  @map("sales_order_id")
+  productUnitId      BigInt  @map("product_unit_id")
+  quantity           Decimal @db.Decimal(18, 3)
+  note               String? @db.VarChar(255)
+
+  salesOrder  SalesOrder  @relation(fields: [salesOrderId], references: [salesOrderId])
+  productUnit ProductUnit @relation(fields: [productUnitId], references: [productUnitId])
+
+  salesInvoiceDetails SalesInvoiceDetail[]
+
+  @@index([salesOrderId])
+  @@index([productUnitId])
+  @@map("sales_order_detail")
+}
+
+model SalesInvoice {
+  salesInvoiceId     BigInt             @id @default(autoincrement()) @map("sales_invoice_id")
+  salesInvoiceNumber String             @unique @map("sales_invoice_number") @db.VarChar(30)
+  salesOrderId       BigInt?            @map("sales_order_id")
+  customerId         BigInt?            @map("customer_id")
+  customerName       String?            @map("customer_name") @db.VarChar(50)
+  invoiceDate        DateTime           @map("invoice_date")
+  dueDate            DateTime?          @map("due_date") @db.Date
+  invoiceTotal       Decimal            @map("invoice_total") @db.Decimal(18, 2)
+  discountAmount     Decimal            @map("discount_amount") @db.Decimal(18, 2)
+  statusPayment      SalesPaymentStatus @map("status_payment")
+  paidAmount         Decimal            @map("paid_amount") @db.Decimal(18, 2)
+  outstandingAmount  Decimal            @map("outstanding_amount") @db.Decimal(18, 2)
+  status             SalesInvoiceStatus
+  note               String?            @db.VarChar(500)
+  createdAt          DateTime           @default(now()) @map("created_at")
+  createdBy          BigInt             @map("created_by")
+  approvedAt         DateTime?          @map("approved_at")
+  approvedBy         BigInt?            @map("approved_by")
+
+  salesOrder     SalesOrder? @relation(fields: [salesOrderId], references: [salesOrderId])
+  customer       Customer?   @relation(fields: [customerId], references: [customerId])
+  createdByUser  User        @relation("SalesInvoiceCreatedBy", fields: [createdBy], references: [userId])
+  approvedByUser User?       @relation("SalesInvoiceApprovedBy", fields: [approvedBy], references: [userId])
+
+  details  SalesInvoiceDetail[]
+  payments SalesInvoicePayment[]
+  returns  SalesReturn[]
+
+  @@index([salesOrderId])
+  @@index([customerId])
+  @@index([createdBy])
+  @@index([approvedBy])
+  @@map("sales_invoice")
+}
+
+model SalesInvoiceDetail {
+  salesInvoiceDetailId BigInt   @id @default(autoincrement()) @map("sales_invoice_detail_id")
+  salesInvoiceId       BigInt   @map("sales_invoice_id")
+  salesOrderDetailId   BigInt?  @map("sales_order_detail_id")
+  productUnitId        BigInt   @map("product_unit_id")
+  quantity             Decimal  @db.Decimal(18, 3)
+  unitPrice            Decimal  @map("unit_price") @db.Decimal(18, 2)
+  discountAmount       Decimal  @map("discount_amount") @db.Decimal(18, 2)
+  subtotal             Decimal  @db.Decimal(18, 2)
+  note                 String?  @db.VarChar(255)
+  createdAt            DateTime @default(now()) @map("created_at")
+  createdBy            BigInt   @map("created_by")
+
+  salesInvoice     SalesInvoice      @relation(fields: [salesInvoiceId], references: [salesInvoiceId])
+  salesOrderDetail SalesOrderDetail? @relation(fields: [salesOrderDetailId], references: [salesOrderDetailId])
+  productUnit      ProductUnit       @relation(fields: [productUnitId], references: [productUnitId])
+  createdByUser    User              @relation("SalesInvoiceDetailCreatedBy", fields: [createdBy], references: [userId])
+
+  salesReturnDetails SalesReturnDetail[]
+
+  @@index([salesInvoiceId])
+  @@index([salesOrderDetailId])
+  @@index([productUnitId])
+  @@index([createdBy])
+  @@map("sales_invoice_detail")
+}
+
+model SalesInvoicePayment {
+  salesPaymentId     BigInt             @id @default(autoincrement()) @map("sales_payment_id")
+  paymentNumber      String             @unique @map("payment_number") @db.VarChar(30)
+  salesInvoiceId     BigInt             @map("sales_invoice_id")
+  paymentDate        DateTime           @map("payment_date")
+  paymentMethod      SalesPaymentMethod @map("payment_method")
+  financialAccountId BigInt             @map("financial_account_id")
+  paymentAmount      Decimal            @map("payment_amount") @db.Decimal(18, 2)
+  referenceNumber    String?            @map("reference_number") @db.VarChar(100)
+  note               String?            @db.VarChar(255)
+  createdAt          DateTime           @default(now()) @map("created_at")
+  createdBy          BigInt             @map("created_by")
+
+  salesInvoice     SalesInvoice     @relation(fields: [salesInvoiceId], references: [salesInvoiceId])
+  financialAccount FinancialAccount @relation(fields: [financialAccountId], references: [financialAccountId])
+  createdByUser    User             @relation("SalesInvoicePaymentCreatedBy", fields: [createdBy], references: [userId])
+
+  @@index([salesInvoiceId])
+  @@index([financialAccountId])
+  @@index([createdBy])
+  @@map("sales_invoice_payment")
+}
+
+model SalesReturn {
+  salesReturnId     BigInt            @id @default(autoincrement()) @map("sales_return_id")
+  salesReturnNumber String            @unique @map("sales_return_number") @db.VarChar(30)
+  salesInvoiceId    BigInt            @map("sales_invoice_id")
+  customerId        BigInt?           @map("customer_id")
+  returnDate        DateTime          @map("return_date")
+  returnTotal       Decimal           @map("return_total") @db.Decimal(18, 2)
+  status            SalesReturnStatus
+  note              String?           @db.VarChar(500)
+  createdAt         DateTime          @default(now()) @map("created_at")
+  createdBy         BigInt            @map("created_by")
+  approvedAt        DateTime?         @map("approved_at")
+  approvedBy        BigInt?           @map("approved_by")
+
+  salesInvoice   SalesInvoice @relation(fields: [salesInvoiceId], references: [salesInvoiceId])
+  customer       Customer?    @relation(fields: [customerId], references: [customerId])
+  createdByUser  User         @relation("SalesReturnCreatedBy", fields: [createdBy], references: [userId])
+  approvedByUser User?        @relation("SalesReturnApprovedBy", fields: [approvedBy], references: [userId])
+
+  details SalesReturnDetail[]
+
+  @@index([salesInvoiceId])
+  @@index([customerId])
+  @@index([createdBy])
+  @@index([approvedBy])
+  @@map("sales_return")
+}
+
+model SalesReturnDetail {
+  salesReturnDetailId  BigInt   @id @default(autoincrement()) @map("sales_return_detail_id")
+  salesReturnId        BigInt   @map("sales_return_id")
+  salesInvoiceDetailId BigInt   @map("sales_invoice_detail_id")
+  productUnitId        BigInt   @map("product_unit_id")
+  quantity             Decimal  @db.Decimal(18, 3)
+  unitPrice            Decimal  @map("unit_price") @db.Decimal(18, 2)
+  subtotal             Decimal  @db.Decimal(18, 2)
+  note                 String?  @db.VarChar(255)
+  createdAt            DateTime @default(now()) @map("created_at")
+  createdBy            BigInt   @map("created_by")
+
+  salesReturn        SalesReturn        @relation(fields: [salesReturnId], references: [salesReturnId])
+  salesInvoiceDetail SalesInvoiceDetail @relation(fields: [salesInvoiceDetailId], references: [salesInvoiceDetailId])
+  productUnit        ProductUnit        @relation(fields: [productUnitId], references: [productUnitId])
+  createdByUser      User               @relation("SalesReturnDetailCreatedBy", fields: [createdBy], references: [userId])
+
+  @@index([salesReturnId])
+  @@index([salesInvoiceDetailId])
+  @@index([productUnitId])
+  @@index([createdBy])
+  @@map("sales_return_detail")
+}
+
+/**
+ * PRICING
+ */
+
+model GuestSuggestedPrice {
+  guestPriceId   BigInt    @id @default(autoincrement()) @map("guest_price_id")
+  productUnitId  BigInt    @map("product_unit_id")
+  suggestedPrice Decimal   @map("suggested_price") @db.Decimal(18, 2)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      BigInt    @map("created_by")
+  updatedAt      DateTime? @updatedAt @map("updated_at")
+  updatedBy      BigInt?   @map("updated_by")
+
+  productUnit   ProductUnit @relation(fields: [productUnitId], references: [productUnitId])
+  createdByUser User        @relation("GuestPriceCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser User?       @relation("GuestPriceUpdatedBy", fields: [updatedBy], references: [userId])
+
+  @@index([productUnitId])
+  @@index([createdBy])
+  @@index([updatedBy])
+  @@map("guest_suggested_price")
+}
+
+model CustomerSuggestedPrice {
+  customerPriceId BigInt    @id @default(autoincrement()) @map("customer_price_id")
+  customerId      BigInt    @map("customer_id")
+  productUnitId   BigInt    @map("product_unit_id")
+  suggestedPrice  Decimal   @map("suggested_price") @db.Decimal(18, 2)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  createdBy       BigInt    @map("created_by")
+  updatedAt       DateTime? @updatedAt @map("updated_at")
+  updatedBy       BigInt?   @map("updated_by")
+
+  customer      Customer    @relation(fields: [customerId], references: [customerId])
+  productUnit   ProductUnit @relation(fields: [productUnitId], references: [productUnitId])
+  createdByUser User        @relation("CustomerPriceCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser User?       @relation("CustomerPriceUpdatedBy", fields: [updatedBy], references: [userId])
+
+  @@unique([customerId, productUnitId])
+  @@index([createdBy])
+  @@index([updatedBy])
+  @@map("customer_suggested_price")
+}
+
+model SupplierSuggestedCost {
+  supplierCostId BigInt    @id @default(autoincrement()) @map("supplier_cost_id")
+  supplierId     BigInt    @map("supplier_id")
+  productUnitId  BigInt    @map("product_unit_id")
+  suggestedCost  Decimal   @map("suggested_cost") @db.Decimal(18, 2)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      BigInt    @map("created_by")
+  updatedAt      DateTime? @updatedAt @map("updated_at")
+  updatedBy      BigInt?   @map("updated_by")
+
+  supplier      Supplier    @relation(fields: [supplierId], references: [supplierId])
+  productUnit   ProductUnit @relation(fields: [productUnitId], references: [productUnitId])
+  createdByUser User        @relation("SupplierCostCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser User?       @relation("SupplierCostUpdatedBy", fields: [updatedBy], references: [userId])
+
+  @@unique([supplierId, productUnitId])
+  @@index([createdBy])
+  @@index([updatedBy])
+  @@map("supplier_suggested_cost")
+}
+
+model ProductAlias {
+  productAliasId BigInt   @id @default(autoincrement()) @map("product_alias_id")
+  productId      BigInt   @map("product_id")
+  aliasName      String   @unique @map("alias_name") @db.VarChar(255)
+  createdAt      DateTime @default(now()) @map("created_at")
+  createdBy      BigInt   @map("created_by")
+
+  product       Product @relation(fields: [productId], references: [productId])
+  createdByUser User    @relation("ProductAliasCreatedBy", fields: [createdBy], references: [userId])
+
+  @@index([productId])
+  @@index([createdBy])
+  @@map("product_alias")
+}
+
+model UnitAlias {
+  unitAliasId   BigInt   @id @default(autoincrement()) @map("unit_alias_id")
+  unitId        BigInt   @map("unit_id")
+  aliasName     String   @unique @map("alias_name") @db.VarChar(100)
+  createdAt     DateTime @default(now()) @map("created_at")
+  createdBy     BigInt   @map("created_by")
+
+  unit          Unit @relation(fields: [unitId], references: [unitId])
+  createdByUser User @relation("UnitAliasCreatedBy", fields: [createdBy], references: [userId])
+
+  @@index([unitId])
+  @@index([createdBy])
+  @@map("unit_alias")
+}
+
+/**
+ * LOGGING
+ */
+
+model AuditLog {
+  auditLogId    BigInt   @id @default(autoincrement()) @map("audit_log_id")
+  userId        BigInt   @map("user_id")
+  action        String   @db.VarChar(50)
+  entityType    String   @map("entity_type") @db.VarChar(50)
+  entityId      BigInt   @map("entity_id")
+  entityNumber  String?  @map("entity_number") @db.VarChar(50)
+  changedFields Json?    @map("changed_fields")
+  reason        String?  @db.VarChar(255)
+  ipAddress     String?  @map("ip_address") @db.VarChar(45)
+  userAgent     String?  @map("user_agent") @db.VarChar(500)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [userId])
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@map("audit_log")
+}
+
+model ActivityLog {
+  activityLogId BigInt   @id @default(autoincrement()) @map("activity_log_id")
+  userId        BigInt   @map("user_id")
+  activityType  String   @map("activity_type") @db.VarChar(50)
+  entityType    String?  @map("entity_type") @db.VarChar(50)
+  entityId      BigInt?  @map("entity_id")
+  entityNumber  String?  @map("entity_number") @db.VarChar(50)
+  description   String   @db.VarChar(500)
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [userId])
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@map("activity_log")
+}
+
+model SecurityLog {
+  securityLogId BigInt   @id @default(autoincrement()) @map("security_log_id")
+  userId        BigInt?  @map("user_id")
+  eventType     String   @map("event_type") @db.VarChar(50)
+  ipAddress     String?  @map("ip_address") @db.VarChar(45)
+  userAgent     String?  @map("user_agent") @db.VarChar(500)
+  success       Boolean
+  failureReason String?  @map("failure_reason") @db.VarChar(255)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [userId])
+
+  @@index([userId])
+  @@map("security_log")
+}
+
+
+// ... (tabel-tabel sebelumnya)
+
+model SystemConfiguration {
+  id             Int      @id @default(1)
+  companyName    String   @map("company_name") @db.VarChar(150)
+  address        String   @db.Text
+  phone          String   @db.VarChar(50)
+  logoBase64     String?  @map("logo_base64") @db.Text
+  receiptHeader1 String?  @map("receipt_header_1") @db.VarChar(255)
+  receiptHeader2 String?  @map("receipt_header_2") @db.VarChar(255)
+  receiptHeader3 String?  @map("receipt_header_3") @db.VarChar(255)
+  receiptFooter1 String?  @map("receipt_footer_1") @db.Text
+  receiptFooter2 String?  @map("receipt_footer_2") @db.Text
+  receiptFooter3 String?  @map("receipt_footer_3") @db.Text
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  updatedBy      BigInt?  @map("updated_by")
+
+  @@map("system_configuration")
+}
