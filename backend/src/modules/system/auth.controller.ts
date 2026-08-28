@@ -1,5 +1,6 @@
 import {
   Controller,
+  Get,
   Post,
   Body,
   Req,
@@ -7,13 +8,24 @@ import {
   Headers,
   Ip,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service.js';
 import { LoginDto, UnlockSessionDto } from './auth/dto/auth.dto.js';
+import { SessionGuard } from '../../common/guards/session.guards.js';
+import {
+  SESSION_ABSOLUTE_TTL_MS,
+  SESSION_COOKIE_NAME,
+} from './auth.constants.js';
+import type { CurrentUserWithRole } from './user/user.service.js';
 
 interface CookieRequest extends Request {
   cookies: Record<string, string | undefined>;
+}
+
+interface AuthenticatedRequest extends CookieRequest {
+  user: CurrentUserWithRole;
 }
 
 @Controller('auth')
@@ -41,11 +53,12 @@ export class AuthController {
       deviceId: safeDeviceId,
     });
 
-    res.cookie('erp_session', result.token, {
+    res.cookie(SESSION_COOKIE_NAME, result.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 12 * 60 * 60 * 1000,
+      path: '/',
+      maxAge: SESSION_ABSOLUTE_TTL_MS,
     });
 
     return res.status(HttpStatus.OK).json({
@@ -60,6 +73,23 @@ export class AuthController {
     });
   }
 
+  @Get('me')
+  @UseGuards(SessionGuard)
+  getCurrentUser(@Req() req: AuthenticatedRequest) {
+    return {
+      userId: req.user.userId.toString(),
+      username: req.user.username,
+      fullName: req.user.fullName,
+      roleId: req.user.roleId.toString(),
+    };
+  }
+
+  @Post('activity')
+  @UseGuards(SessionGuard)
+  recordActivity() {
+    return { acknowledged: true };
+  }
+
   @Post('unlock')
   async unlock(
     @Body() dto: UnlockSessionDto,
@@ -67,7 +97,7 @@ export class AuthController {
     @Ip() ip: string | undefined,
     @Headers('user-agent') userAgent: string | undefined,
   ) {
-    const token = req.cookies['erp_session'];
+    const token = req.cookies[SESSION_COOKIE_NAME];
 
     if (!token) {
       return {
@@ -97,7 +127,7 @@ export class AuthController {
     @Ip() ip: string | undefined,
     @Headers('user-agent') userAgent: string | undefined,
   ) {
-    const token = req.cookies['erp_session'];
+    const token = req.cookies[SESSION_COOKIE_NAME];
 
     if (token) {
       const safeIp = ip ?? req.socket.remoteAddress ?? 'UNKNOWN_IP';
@@ -105,7 +135,12 @@ export class AuthController {
       await this.authService.logout(token, safeIp, safeUserAgent);
     }
 
-    res.clearCookie('erp_session');
+    res.clearCookie(SESSION_COOKIE_NAME, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+    });
 
     return res.status(HttpStatus.OK).json({
       success: true,

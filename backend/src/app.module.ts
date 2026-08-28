@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { validateEnvironment } from './config/environment.js';
 
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
@@ -26,6 +27,7 @@ import { PurchasingModule } from './modules/purchasing/purchasing.module.js';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      validate: validateEnvironment,
     }),
     ThrottlerModule.forRoot([
       {

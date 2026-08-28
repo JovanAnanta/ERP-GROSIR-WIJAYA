@@ -19,6 +19,7 @@ import {
 } from './supplier/dto/supplier.dto.js';
 import { SessionGuard } from '../../common/guards/session.guards.js';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator.js';
+import { PositiveBigIntPipe } from '../../common/pipes/positive-bigint.pipe.js';
 import type { Request } from 'express';
 
 interface AuthRequest extends Request {
@@ -64,7 +65,7 @@ export class SupplierController {
   @Put(':id')
   @RequirePermissions('SUPPLIER_UPDATE')
   async update(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: UpdateSupplierDto,
     @Req() req: AuthRequest,
     @Ip() ip: string | undefined,
@@ -86,7 +87,7 @@ export class SupplierController {
   @Post(':id/inactivate')
   @RequirePermissions('SUPPLIER_INACTIVATE')
   async inactivate(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthRequest,
     @Ip() ip: string | undefined,
     @Headers('user-agent') ua: string | undefined,
@@ -106,7 +107,7 @@ export class SupplierController {
   @Post(':id/reactivate')
   @RequirePermissions('SUPPLIER_REACTIVATE')
   async reactivate(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthRequest,
     @Ip() ip: string | undefined,
     @Headers('user-agent') ua: string | undefined,

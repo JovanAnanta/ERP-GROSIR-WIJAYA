@@ -7,10 +7,10 @@ services:
     environment:
       POSTGRES_DB: erp_grosir_wijaya
       POSTGRES_USER: erp_admin
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD wajib diatur di file .env lokal}
 
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
 
     volumes:
       - postgres_data:/var/lib/postgresql

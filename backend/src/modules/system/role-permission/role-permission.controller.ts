@@ -13,6 +13,8 @@ import {
 import { RolePermissionService } from './role-permission.service.js';
 import { UpdateRolePermissionDto } from './dto/role-permission.dto.js';
 import { SessionGuard } from '../../../common/guards/session.guards.js';
+import { RolesGuard } from '../../../common/guards/roles.guard.js';
+import { RequireRoles } from '../../../common/decorators/roles.decorator.js';
 import type { Request } from 'express';
 
 interface AuthRequest extends Request {
@@ -20,7 +22,8 @@ interface AuthRequest extends Request {
 }
 
 @Controller('role-permissions')
-@UseGuards(SessionGuard)
+@RequireRoles('SUPER_OWNER')
+@UseGuards(SessionGuard, RolesGuard)
 export class RolePermissionController {
   constructor(private readonly rpService: RolePermissionService) {}
 

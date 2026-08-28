@@ -30,6 +30,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import logoImage from "../../assets/WIJAYA LOGISTICS.png";
 
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const ACTIVITY_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+
 export default function AppLayout() {
   const { user, logout, lockSession, isLocked } = useAuthStore();
   const navigate = useNavigate();
@@ -38,8 +41,8 @@ export default function AppLayout() {
   // =========================================================================
   // ENTERPRISE IDLE DETECTOR (FR-SYS-001)
   // =========================================================================
-  const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastActivitySyncRef = useRef(0);
 
   const triggerIdleLock = useCallback(() => {
     lockSession("Session_Locked_Idle");
@@ -49,7 +52,15 @@ export default function AppLayout() {
     if (isLocked) return;
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     idleTimerRef.current = setTimeout(triggerIdleLock, IDLE_TIMEOUT_MS);
-  }, [triggerIdleLock, isLocked, IDLE_TIMEOUT_MS]);
+  }, [triggerIdleLock, isLocked]);
+
+  const syncBackendActivity = useCallback(() => {
+    const now = Date.now();
+    if (now - lastActivitySyncRef.current < ACTIVITY_SYNC_INTERVAL_MS) return;
+
+    lastActivitySyncRef.current = now;
+    void apiClient.post('/auth/activity').catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     resetIdleTimer();
@@ -66,6 +77,7 @@ export default function AppLayout() {
       if (throttleTimer) return;
       throttleTimer = setTimeout(() => {
         resetIdleTimer();
+        syncBackendActivity();
         throttleTimer = null;
       }, 1000);
     };
@@ -81,7 +93,7 @@ export default function AppLayout() {
         window.removeEventListener(event, handleUserActivity),
       );
     };
-  }, [resetIdleTimer]);
+  }, [resetIdleTimer, syncBackendActivity]);
   // =========================================================================
 
   const handleLogout = async () => {

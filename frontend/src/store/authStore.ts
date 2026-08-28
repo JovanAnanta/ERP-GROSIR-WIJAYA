@@ -7,15 +7,65 @@ export interface AuthUser {
   roleId: string;
 }
 
+export type AuthStatus =
+  | 'INITIALIZING'
+  | 'AUTHENTICATED'
+  | 'UNAUTHENTICATED';
+
+function clearCachedUser(): void {
+  try {
+    localStorage.removeItem('erp_user');
+  } catch {
+    // Browser storage is optional; backend session remains authoritative.
+  }
+}
+
+function writeCachedUser(user: AuthUser): void {
+  try {
+    localStorage.setItem('erp_user', JSON.stringify(user));
+  } catch {
+    // A cache failure must never block authentication.
+  }
+}
+
+function readCachedUser(): AuthUser | null {
+  try {
+    const raw = localStorage.getItem('erp_user');
+    if (!raw) return null;
+
+    const value = JSON.parse(raw) as Partial<AuthUser> | null;
+    if (
+      !value ||
+      typeof value.userId !== 'string' ||
+      typeof value.username !== 'string' ||
+      typeof value.fullName !== 'string' ||
+      typeof value.roleId !== 'string'
+    ) {
+      clearCachedUser();
+      return null;
+    }
+
+    return value as AuthUser;
+  } catch {
+    clearCachedUser();
+    return null;
+  }
+}
+
+const cachedUser = readCachedUser();
+
 interface AuthState {
   user: AuthUser | null;
+  authStatus: AuthStatus;
   isAuthenticated: boolean;
-  isLocked: boolean; // True jika kena Idle/Absolute Timeout
+  isLocked: boolean; // True jika sesi terkunci karena idle timeout
   lockReason: string | null;
-  forceLogoutMessage: string | null; // Untuk pesan "Akun Anda telah digunakan di device lain"
+  forceLogoutMessage: string | null; // Pesan aman saat backend mengakhiri sesi
   
   // Actions
   login: (user: AuthUser) => void;
+  hydrate: (user: AuthUser) => void;
+  markUnauthenticated: () => void;
   logout: () => void;
   lockSession: (reason: string) => void;
   unlockSession: () => void;
@@ -24,19 +74,45 @@ interface AuthState {
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
-  user: JSON.parse(localStorage.getItem('erp_user') || 'null'),
-  isAuthenticated: !!localStorage.getItem('erp_user'),
+  user: cachedUser,
+  authStatus: 'INITIALIZING',
+  isAuthenticated: false,
   isLocked: false,
   lockReason: null,
   forceLogoutMessage: null,
 
   login: (user) => {
-    localStorage.setItem('erp_user', JSON.stringify(user));
-    set({ user, isAuthenticated: true, forceLogoutMessage: null });
+    writeCachedUser(user);
+    set({
+      user,
+      authStatus: 'AUTHENTICATED',
+      isAuthenticated: true,
+      forceLogoutMessage: null,
+    });
+  },
+  hydrate: (user) => {
+    writeCachedUser(user);
+    set({ user, authStatus: 'AUTHENTICATED', isAuthenticated: true });
+  },
+  markUnauthenticated: () => {
+    clearCachedUser();
+    set({
+      user: null,
+      authStatus: 'UNAUTHENTICATED',
+      isAuthenticated: false,
+      isLocked: false,
+      lockReason: null,
+    });
   },
   logout: () => {
-    localStorage.removeItem('erp_user');
-    set({ user: null, isAuthenticated: false, isLocked: false });
+    clearCachedUser();
+    set({
+      user: null,
+      authStatus: 'UNAUTHENTICATED',
+      isAuthenticated: false,
+      isLocked: false,
+      lockReason: null,
+    });
   },
   lockSession: (reason) => {
     set({ isLocked: true, lockReason: reason });
@@ -45,8 +121,15 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLocked: false, lockReason: null });
   },
   setForceLogout: (message) => {
-    localStorage.removeItem('erp_user');
-    set({ user: null, isAuthenticated: false, isLocked: false, forceLogoutMessage: message });
+    clearCachedUser();
+    set({
+      user: null,
+      authStatus: 'UNAUTHENTICATED',
+      isAuthenticated: false,
+      isLocked: false,
+      lockReason: null,
+      forceLogoutMessage: message,
+    });
   },
   clearForceLogout: () => {
     set({ forceLogoutMessage: null });

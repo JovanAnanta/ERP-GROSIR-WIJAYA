@@ -16,12 +16,10 @@ import { Input } from '@/components/ui/input';
 import { Lock, AlertTriangle } from 'lucide-react';
 
 export default function SessionLockPopup() {
-  const { isLocked, lockReason, unlockSession, logout, setForceLogout } = useAuthStore();
+  const { isLocked, unlockSession, logout, setForceLogout } = useAuthStore();
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const isAbsolute = lockReason === 'Session_Locked_Absolute';
 
   const handleUnlock = async () => {
     if (!password) {
@@ -83,9 +81,7 @@ export default function SessionLockPopup() {
             Sesi Terkunci
           </AlertDialogTitle>
           <AlertDialogDescription className="text-center font-medium text-slate-600 text-sm">
-            {isAbsolute 
-              ? 'Waktu sesi maksimum (12 jam) telah tercapai.' 
-              : 'Sistem mendeteksi tidak ada aktivitas (Idle selama 30 menit).'}
+            Sistem mendeteksi tidak ada aktivitas (Idle selama 30 menit).
             <br className="mt-2" />
             <span className="text-slate-800">Silakan masukkan Password untuk melanjutkan pekerjaan Anda tanpa me-refresh halaman.</span>
           </AlertDialogDescription>

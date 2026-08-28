@@ -498,7 +498,7 @@ export default function CreatePurchaseInvoiceTab({ onSuccess, editingInvoiceId, 
 
         <div className="col-span-1 md:col-span-2">
           <Label className="font-bold text-slate-600 text-[10px] uppercase">Supplier *</Label>
-          <Select value={supplierId || undefined} onValueChange={handleSupplierChange} disabled={purchaseOrderId !== "NONE"}>
+          <Select value={supplierId || null} onValueChange={handleSupplierChange} disabled={purchaseOrderId !== "NONE"}>
             <SelectTrigger className={`bg-white font-bold h-8 text-xs border-slate-300 ${purchaseOrderId !== "NONE" ? "opacity-70 bg-slate-100" : ""}`}>
               <SelectValue placeholder="-- Pilih Supplier --">
                 {suppliers.find(s => s.supplierId === supplierId)?.supplierName}
@@ -559,7 +559,7 @@ export default function CreatePurchaseInvoiceTab({ onSuccess, editingInvoiceId, 
                 <td className="p-1 border-r border-slate-200 text-center text-[10px] font-bold text-slate-400">{index + 1}</td>
                 
                 <td className="p-1 border-r border-slate-200">
-                  <Select value={item.productId || undefined} onValueChange={(val) => handleProductChange(index, val)}>
+                  <Select value={item.productId || null} onValueChange={(val) => handleProductChange(index, val)}>
                     <SelectTrigger className="h-7 text-[11px] font-bold border-none shadow-none focus:ring-1 focus:ring-[#00509e] rounded-sm bg-transparent">
                       <SelectValue placeholder="Pilih Produk...">
                         {allProducts.find(p => p.productId === item.productId)?.productName || item.productName}
@@ -572,7 +572,7 @@ export default function CreatePurchaseInvoiceTab({ onSuccess, editingInvoiceId, 
                 </td>
 
                 <td className="p-1 border-r border-slate-200">
-                  <Select value={item.productUnitId || undefined} onValueChange={(val) => handleUnitChange(index, val)} disabled={!item.productId}>
+                  <Select value={item.productUnitId || null} onValueChange={(val) => handleUnitChange(index, val)} disabled={!item.productId}>
                     <SelectTrigger className="h-7 text-[11px] font-bold border-none shadow-none focus:ring-1 focus:ring-[#00509e] rounded-sm bg-transparent">
                       <SelectValue placeholder="Satuan...">
                         {allProducts.find(p => p.productId === item.productId)?.units.find(u => u.productUnitId === item.productUnitId)?.unitName || item.unitName}
@@ -679,7 +679,7 @@ export default function CreatePurchaseInvoiceTab({ onSuccess, editingInvoiceId, 
                     <SelectTrigger className="w-[100px] h-7 text-[10px] font-bold bg-slate-50"><SelectValue/></SelectTrigger>
                     <SelectContent className="bg-white z-50 border-slate-200 shadow-lg"><SelectItem value="CASH" className="text-[10px]">CASH</SelectItem><SelectItem value="TRANSFER" className="text-[10px]">TRANSFER</SelectItem></SelectContent>
                   </Select>
-                  <Select value={financialAccountId || undefined} onValueChange={(val) => setFinancialAccountId(val || "")}>
+                  <Select value={financialAccountId || null} onValueChange={(val) => setFinancialAccountId(val || "")}>
                     <SelectTrigger className="h-7 text-[10px] font-bold flex-1 bg-[#fff8e1] border-amber-300">
                       <SelectValue placeholder="Pilih Kas/Bank *">
                         {financialAccounts.find(a => a.financialAccountId === financialAccountId)?.accountName}

@@ -10,6 +10,40 @@ import { Prisma } from '../../../generated/prisma/client.js';
 export class PurchaseOrderService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async validateReferences(
+    tx: Prisma.TransactionClient,
+    dto: CreatePurchaseOrderDto | UpdatePurchaseOrderDto,
+  ): Promise<void> {
+    const supplier = await tx.supplier.findUnique({
+      where: { supplierId: BigInt(dto.supplierId) },
+      select: { isActive: true },
+    });
+    if (!supplier?.isActive) {
+      throw new HttpException(
+        'Supplier tidak valid atau tidak aktif',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const productUnitIds = [
+      ...new Set(dto.items.map((item) => item.productUnitId)),
+    ].map((id) => BigInt(id));
+    const activeProductUnits = await tx.productUnit.count({
+      where: {
+        productUnitId: { in: productUnitIds },
+        isActive: true,
+        product: { isActive: true },
+        unit: { isActive: true },
+      },
+    });
+    if (activeProductUnits !== productUnitIds.length) {
+      throw new HttpException(
+        'Terdapat produk atau unit yang tidak valid atau tidak aktif',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
   private async generatePONumber(
     tx: Prisma.TransactionClient,
   ): Promise<string> {
@@ -19,6 +53,8 @@ export class PurchaseOrderService {
     const year = String(now.getFullYear()).slice(-2);
     const dateStr = `${day}${month}${year}`;
     const prefix = `PO-${dateStr}-`;
+
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`PO:${prefix}`}))`;
 
     const lastOrder = await tx.purchaseOrder.findFirst({
       where: { purchaseOrderNumber: { startsWith: prefix } },
@@ -43,6 +79,7 @@ export class PurchaseOrderService {
     }
 
     return await this.prisma.$transaction(async (tx) => {
+      await this.validateReferences(tx, dto);
       const poNumber = await this.generatePONumber(tx);
       const now = new Date();
 
@@ -102,6 +139,8 @@ export class PurchaseOrderService {
       }
 
       const now = new Date();
+
+      await this.validateReferences(tx, dto);
 
       await tx.purchaseOrderDetail.deleteMany({
         where: { purchaseOrderId: id },

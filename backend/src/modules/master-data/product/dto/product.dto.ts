@@ -8,12 +8,13 @@ import {
   ValidateNested,
   IsArray,
   Min,
+  Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ProductUnitInputDto {
-  @IsOptional() @IsString() productUnitId?: string;
-  @IsOptional() @IsString() unitId?: string;
+  @IsOptional() @IsString() @Matches(/^[1-9]\d*$/) productUnitId?: string;
+  @IsOptional() @IsString() @Matches(/^[1-9]\d*$/) unitId?: string;
   @IsOptional() @IsString() newUnitName?: string;
 
   @IsNumber() @Min(0.000001) conversionFactor!: number;
@@ -29,10 +30,10 @@ export class CreateProductDto {
   @IsString()
   productName!: string;
 
-  @IsOptional() @IsString() categoryId?: string;
+  @IsOptional() @IsString() @Matches(/^[1-9]\d*$/) categoryId?: string;
   @IsOptional() @IsString() newCategoryName?: string;
 
-  @IsOptional() @IsString() brandId?: string;
+  @IsOptional() @IsString() @Matches(/^[1-9]\d*$/) brandId?: string;
   @IsOptional() @IsString() newBrandName?: string;
 
   @IsNumber()
@@ -50,10 +51,10 @@ export class UpdateProductDto {
   @IsString()
   productName!: string;
 
-  @IsOptional() @IsString() categoryId?: string;
+  @IsOptional() @IsString() @Matches(/^[1-9]\d*$/) categoryId?: string;
   @IsOptional() @IsString() newCategoryName?: string;
 
-  @IsOptional() @IsString() brandId?: string;
+  @IsOptional() @IsString() @Matches(/^[1-9]\d*$/) brandId?: string;
   @IsOptional() @IsString() newBrandName?: string;
 
   @IsNumber()
@@ -68,12 +69,12 @@ export class UpdateProductDto {
 }
 
 export class ProductQueryDto {
-  @IsOptional() @IsString() page?: string;
-  @IsOptional() @IsString() limit?: string;
+  @IsOptional() @IsString() @Matches(/^[1-9]\d{0,8}$/) page?: string;
+  @IsOptional() @IsString() @Matches(/^(?:[1-9]|[1-9]\d|100)$/) limit?: string;
   @IsOptional() @IsString() search?: string;
   @IsOptional() @IsIn(['ACTIVE', 'INACTIVE', 'ALL']) status?: string;
-  @IsOptional() @IsString() categoryId?: string;
-  @IsOptional() @IsString() brandId?: string;
+  @IsOptional() @IsString() @Matches(/^[1-9]\d*$/) categoryId?: string;
+  @IsOptional() @IsString() @Matches(/^[1-9]\d*$/) brandId?: string;
   @IsOptional() @IsString() sortBy?: string;
   @IsOptional() @IsIn(['asc', 'desc']) sortDir?: 'asc' | 'desc';
 }

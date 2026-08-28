@@ -18,6 +18,9 @@ import {
   ResetPasswordDto,
 } from './dto/user.dto.js';
 import { SessionGuard } from '../../../common/guards/session.guards.js';
+import { RolesGuard } from '../../../common/guards/roles.guard.js';
+import { RequireRoles } from '../../../common/decorators/roles.decorator.js';
+import { PositiveBigIntPipe } from '../../../common/pipes/positive-bigint.pipe.js';
 
 interface AuthenticatedRequest extends Request {
   user: CurrentUserWithRole;
@@ -25,7 +28,8 @@ interface AuthenticatedRequest extends Request {
 }
 
 @Controller('users')
-@UseGuards(SessionGuard)
+@RequireRoles('SUPER_OWNER', 'OWNER')
+@UseGuards(SessionGuard, RolesGuard)
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
@@ -69,7 +73,7 @@ export class UserController {
 
   @Put(':id')
   async update(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: UpdateUserDto,
     @Req() req: AuthenticatedRequest,
     @Ip() ip: string | undefined,
@@ -97,7 +101,7 @@ export class UserController {
 
   @Post(':id/disable')
   async disable(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthenticatedRequest,
     @Ip() ip: string | undefined,
     @Headers('user-agent') ua: string | undefined,
@@ -109,7 +113,7 @@ export class UserController {
 
   @Post(':id/reset-password')
   async resetPassword(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: ResetPasswordDto,
     @Req() req: AuthenticatedRequest,
     @Ip() ip: string | undefined,
@@ -128,7 +132,7 @@ export class UserController {
 
   @Post(':id/force-logout')
   async forceLogout(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthenticatedRequest,
     @Ip() ip: string | undefined,
     @Headers('user-agent') ua: string | undefined,
@@ -140,7 +144,7 @@ export class UserController {
 
   @Post(':id/unlock-session')
   async unlockSession(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthenticatedRequest,
     @Ip() ip: string | undefined,
     @Headers('user-agent') ua: string | undefined,

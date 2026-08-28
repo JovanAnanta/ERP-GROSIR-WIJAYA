@@ -11,6 +11,7 @@ import {
   PurchaseInvoicePaymentStatus,
   PurchaseOrderStatus,
 } from '../../../generated/prisma/client.js';
+import { calculateTotalPaid } from './purchase-payment.utils.js';
 
 type CreatedInvoiceWithDetails = Prisma.PurchaseInvoiceGetPayload<{
   include: {
@@ -36,6 +37,7 @@ export class PurchaseInvoiceService {
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const year = String(now.getFullYear()).slice(-2);
     const prefix = `PI-${day}${month}${year}-`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`PI:${prefix}`}))`;
     const lastInvoice = await tx.purchaseInvoice.findFirst({
       where: { purchaseInvoiceNumber: { startsWith: prefix } },
       orderBy: { purchaseInvoiceNumber: 'desc' },
@@ -47,6 +49,95 @@ export class PurchaseInvoiceService {
       if (parts[2]) nextSequence = parseInt(parts[2], 10) + 1;
     }
     return `${prefix}${String(nextSequence).padStart(7, '0')}`;
+  }
+
+  private async validateInvoiceReferences(
+    tx: Prisma.TransactionClient,
+    dto: CreatePurchaseInvoiceDto | UpdatePurchaseInvoiceDto,
+  ): Promise<void> {
+    const supplierId = BigInt(dto.supplierId);
+    const supplier = await tx.supplier.findUnique({
+      where: { supplierId },
+      select: { isActive: true },
+    });
+    if (!supplier?.isActive) {
+      throw new HttpException(
+        'Supplier tidak valid atau tidak aktif',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (dto.purchaseOrderId) {
+      const purchaseOrder = await tx.purchaseOrder.findUnique({
+        where: { purchaseOrderId: BigInt(dto.purchaseOrderId) },
+        select: { supplierId: true, status: true },
+      });
+      if (
+        !purchaseOrder ||
+        purchaseOrder.status !== PurchaseOrderStatus.READY
+      ) {
+        throw new HttpException(
+          'Purchase Order tidak valid atau belum berstatus READY',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      if (purchaseOrder.supplierId !== supplierId) {
+        throw new HttpException(
+          'Supplier faktur harus sama dengan supplier Purchase Order',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+    }
+
+    const productUnitIds = [
+      ...new Set(dto.items.map((item) => item.productUnitId)),
+    ].map((id) => BigInt(id));
+    const activeProductUnits = await tx.productUnit.count({
+      where: {
+        productUnitId: { in: productUnitIds },
+        isActive: true,
+        product: { isActive: true },
+        unit: { isActive: true },
+      },
+    });
+    if (activeProductUnits !== productUnitIds.length) {
+      throw new HttpException(
+        'Terdapat produk atau unit yang tidak valid atau tidak aktif',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (dto.status === 'COMPLETED' && dto.payments?.length) {
+      const accountIds = [
+        ...new Set(dto.payments.map((payment) => payment.financialAccountId)),
+      ].map((id) => BigInt(id));
+      const activeAccounts = await tx.financialAccount.count({
+        where: { financialAccountId: { in: accountIds }, isActive: true },
+      });
+      if (activeAccounts !== accountIds.length) {
+        throw new HttpException(
+          'Terdapat akun pembayaran yang tidak valid atau tidak aktif',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+    }
+  }
+
+  private async generateFinancialTransactionNumber(
+    tx: Prisma.TransactionClient,
+    financialAccountId: bigint,
+  ): Promise<string> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('FAT:NUMBER'))`;
+    const lastTransaction = await tx.financialAccountTransaction.findFirst({
+      where: { transactionNumber: { startsWith: 'FAT-' } },
+      orderBy: { financialAccountTransactionId: 'desc' },
+      select: { transactionNumber: true },
+    });
+    const lastTimestamp = lastTransaction
+      ? Number(lastTransaction.transactionNumber.split('-')[1])
+      : 0;
+    const timestamp = Math.max(Date.now(), lastTimestamp + 1);
+    return `FAT-${timestamp}-${financialAccountId.toString()}`;
   }
 
   async create(userId: bigint, dto: CreatePurchaseInvoiceDto) {
@@ -62,13 +153,12 @@ export class PurchaseInvoiceService {
       const poId = dto.purchaseOrderId ? BigInt(dto.purchaseOrderId) : null;
       const now = new Date();
 
-      let totalPaid = new Prisma.Decimal(0);
-      if (dto.status === 'COMPLETED' && dto.payments) {
-        for (const p of dto.payments)
-          totalPaid = totalPaid.add(new Prisma.Decimal(p.paymentAmount));
-      }
-
       const invoiceTotal = new Prisma.Decimal(dto.invoiceTotal);
+      await this.validateInvoiceReferences(tx, dto);
+      const totalPaid =
+        dto.status === 'COMPLETED'
+          ? calculateTotalPaid(invoiceTotal, dto.payments)
+          : new Prisma.Decimal(0);
       const outstandingAmount = invoiceTotal.sub(totalPaid);
 
       let statusPayment: PurchaseInvoicePaymentStatus =
@@ -163,17 +253,17 @@ export class PurchaseInvoiceService {
       const poId = dto.purchaseOrderId ? BigInt(dto.purchaseOrderId) : null;
       const now = new Date();
 
+      await this.validateInvoiceReferences(tx, dto);
+
       await tx.purchaseInvoiceDetail.deleteMany({
         where: { purchaseInvoiceId: id },
       });
 
-      let totalPaid = new Prisma.Decimal(0);
-      if (dto.status === 'COMPLETED' && dto.payments) {
-        for (const p of dto.payments)
-          totalPaid = totalPaid.add(new Prisma.Decimal(p.paymentAmount));
-      }
-
       const invoiceTotal = new Prisma.Decimal(dto.invoiceTotal);
+      const totalPaid =
+        dto.status === 'COMPLETED'
+          ? calculateTotalPaid(invoiceTotal, dto.payments)
+          : new Prisma.Decimal(0);
       const outstandingAmount = invoiceTotal.sub(totalPaid);
 
       let statusPayment: PurchaseInvoicePaymentStatus =
@@ -254,6 +344,18 @@ export class PurchaseInvoiceService {
     const id = BigInt(invoiceId);
 
     return await this.prisma.$transaction(async (tx) => {
+      const lockedRows = await tx.$queryRaw<
+        Array<{ purchase_invoice_id: bigint }>
+      >`
+        SELECT purchase_invoice_id
+        FROM purchase_invoice
+        WHERE purchase_invoice_id = ${id}
+        FOR UPDATE
+      `;
+      if (lockedRows.length === 0) {
+        throw new HttpException('Faktur tidak ditemukan', HttpStatus.NOT_FOUND);
+      }
+
       const invoice = await tx.purchaseInvoice.findUnique({
         where: { purchaseInvoiceId: id },
       });
@@ -270,6 +372,18 @@ export class PurchaseInvoiceService {
       const payAmt = new Prisma.Decimal(dto.paymentAmount);
       const now = new Date();
 
+      const financialAccountId = BigInt(dto.financialAccountId);
+      const financialAccount = await tx.financialAccount.findUnique({
+        where: { financialAccountId },
+        select: { isActive: true },
+      });
+      if (!financialAccount?.isActive) {
+        throw new HttpException(
+          'Akun pembayaran tidak valid atau tidak aktif',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
       if (payAmt.greaterThan(invoice.outstandingAmount)) {
         throw new HttpException(
           'Nominal pembayaran melebihi sisa hutang',
@@ -280,7 +394,7 @@ export class PurchaseInvoiceService {
       await tx.purchaseInvoicePayment.create({
         data: {
           purchaseInvoiceId: id,
-          financialAccountId: BigInt(dto.financialAccountId),
+          financialAccountId,
           paymentAmount: payAmt,
           paymentMethod: dto.paymentMethod,
           paymentDate: new Date(dto.paymentDate),
@@ -291,7 +405,7 @@ export class PurchaseInvoiceService {
       });
 
       await tx.financialAccount.update({
-        where: { financialAccountId: BigInt(dto.financialAccountId) },
+        where: { financialAccountId },
         data: {
           currentBalance: { decrement: payAmt },
           updatedBy: userId,
@@ -299,10 +413,14 @@ export class PurchaseInvoiceService {
         },
       });
 
+      const transactionNumber = await this.generateFinancialTransactionNumber(
+        tx,
+        financialAccountId,
+      );
       await tx.financialAccountTransaction.create({
         data: {
-          transactionNumber: `FAT-${Date.now()}-${dto.financialAccountId}`,
-          financialAccountId: BigInt(dto.financialAccountId),
+          transactionNumber,
+          financialAccountId,
           transactionType: 'PURCHASE_PAYMENT',
           direction: 'OUT',
           amount: payAmt,
@@ -314,14 +432,24 @@ export class PurchaseInvoiceService {
         },
       });
 
-      await tx.supplierFinancialSummary.update({
-        where: { supplierId: invoice.supplierId },
+      const updatedSummary = await tx.supplierFinancialSummary.updateMany({
+        where: {
+          supplierId: invoice.supplierId,
+          outstandingAmount: { gte: payAmt },
+          currentAmount: { gte: payAmt },
+        },
         data: {
           outstandingAmount: { decrement: payAmt },
           currentAmount: { decrement: payAmt },
           updatedAt: now,
         },
       });
+      if (updatedSummary.count !== 1) {
+        throw new HttpException(
+          'Ringkasan hutang supplier tidak konsisten. Pembayaran dibatalkan.',
+          HttpStatus.CONFLICT,
+        );
+      }
 
       const newPaidAmount = invoice.paidAmount.add(payAmt);
       const newOutstanding = invoice.outstandingAmount.sub(payAmt);
@@ -558,6 +686,7 @@ export class PurchaseInvoiceService {
         },
       });
 
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`INVENTORY_STOCK:${parentUnit.productUnitId.toString()}`}))`;
       const stock = await tx.inventoryStock.findFirst({
         where: { productUnitId: parentUnit.productUnitId },
       });
@@ -617,9 +746,13 @@ export class PurchaseInvoiceService {
             updatedAt: now,
           },
         });
+        const transactionNumber = await this.generateFinancialTransactionNumber(
+          tx,
+          BigInt(p.financialAccountId),
+        );
         await tx.financialAccountTransaction.create({
           data: {
-            transactionNumber: `FAT-${Date.now()}-${p.financialAccountId}`,
+            transactionNumber,
             financialAccountId: BigInt(p.financialAccountId),
             transactionType: 'PURCHASE_PAYMENT',
             direction: 'OUT',
@@ -660,6 +793,7 @@ export class PurchaseInvoiceService {
   ) {
     for (const detail of invoice.details) {
       const prodId = detail.productUnit.productId;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`PRODUCT_SUPPLIER:${prodId.toString()}:${invoice.supplierId.toString()}`}))`;
       const exists = await tx.productSupplier.findFirst({
         where: { productId: prodId, supplierId: invoice.supplierId },
       });

@@ -13,6 +13,8 @@ import {
 import { SystemConfigurationService } from './system-configuration.service.js';
 import { UpdateSystemConfigurationDto } from './dto/system-configuration.dto.js';
 import { SessionGuard } from '../../../common/guards/session.guards.js';
+import { RolesGuard } from '../../../common/guards/roles.guard.js';
+import { RequireRoles } from '../../../common/decorators/roles.decorator.js';
 import type { Request } from 'express';
 
 interface AuthRequest extends Request {
@@ -20,7 +22,8 @@ interface AuthRequest extends Request {
 }
 
 @Controller('system-configuration')
-@UseGuards(SessionGuard)
+@RequireRoles('SUPER_OWNER')
+@UseGuards(SessionGuard, RolesGuard)
 export class SystemConfigurationController {
   constructor(private readonly configService: SystemConfigurationService) {}
 

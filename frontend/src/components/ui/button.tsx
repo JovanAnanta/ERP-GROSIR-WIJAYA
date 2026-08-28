@@ -55,4 +55,6 @@ function Button({
   )
 }
 
+// Shared by alert-dialog; this file intentionally exports the style helper.
+// eslint-disable-next-line react-refresh/only-export-components
 export { Button, buttonVariants }

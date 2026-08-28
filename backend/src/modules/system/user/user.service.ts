@@ -314,6 +314,14 @@ export class UserService {
         },
       });
 
+      await tx.userSession.updateMany({
+        where: { userId: targetUserId, revokedAt: null },
+        data: {
+          revokedAt: new Date(),
+          revokeReason: 'Password Reset',
+        },
+      });
+
       await this.writeLogs(
         tx,
         currentUser,

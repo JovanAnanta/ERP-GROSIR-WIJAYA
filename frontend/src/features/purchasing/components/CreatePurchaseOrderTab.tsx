@@ -242,7 +242,7 @@ export default function CreatePurchaseOrderTab({ onSuccess }: { onSuccess: () =>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 bg-slate-50 p-4 rounded-lg border border-slate-200 shrink-0">
         <div className="col-span-1 md:col-span-2">
           <Label className="font-bold text-slate-600 text-[10px] uppercase">Supplier (Dari Database) *</Label>
-          <Select value={supplierId || undefined} onValueChange={handleSupplierChange}>
+          <Select value={supplierId || null} onValueChange={handleSupplierChange}>
             <SelectTrigger className="bg-white font-bold h-8 text-xs border-slate-300">
               <SelectValue placeholder="-- Pilih Supplier --">
                 {suppliers.find(s => s.supplierId === supplierId)?.supplierName}
@@ -300,7 +300,7 @@ export default function CreatePurchaseOrderTab({ onSuccess }: { onSuccess: () =>
                 
                 {/* KOLOM PRODUK */}
                 <td className="p-1 border-r border-slate-200">
-                  <Select value={item.productId || undefined} onValueChange={(val) => handleProductChange(index, val)}>
+                  <Select value={item.productId || null} onValueChange={(val) => handleProductChange(index, val)}>
                     <SelectTrigger className="h-7 text-[11px] font-bold border-none shadow-none focus:ring-1 focus:ring-[#00509e] rounded-sm bg-transparent">
                       <SelectValue placeholder="Pilih Produk...">
                         {allProducts.find(p => p.productId === item.productId)?.productName}
@@ -314,7 +314,7 @@ export default function CreatePurchaseOrderTab({ onSuccess }: { onSuccess: () =>
 
                 {/* KOLOM SATUAN UNIT */}
                 <td className="p-1 border-r border-slate-200">
-                  <Select value={item.productUnitId || undefined} onValueChange={(val) => handleUnitChange(index, val)} disabled={!item.productId}>
+                  <Select value={item.productUnitId || null} onValueChange={(val) => handleUnitChange(index, val)} disabled={!item.productId}>
                     <SelectTrigger className="h-7 text-[11px] font-bold border-none shadow-none focus:ring-1 focus:ring-[#00509e] rounded-sm bg-transparent">
                       <SelectValue placeholder="Satuan...">
                         {allProducts.find(p => p.productId === item.productId)?.units.find(u => u.productUnitId === item.productUnitId)?.unitName}

@@ -8,23 +8,26 @@ import {
   IsNumber,
   IsIn,
   IsDateString,
+  Matches,
+  ArrayNotEmpty,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 // ================== PURCHASE ORDER ==================
 export class PurchaseOrderItemDto {
-  @IsNotEmpty() @IsString() productUnitId!: string;
+  @IsNotEmpty() @IsString() @Matches(/^[1-9]\d*$/) productUnitId!: string;
   @IsNumber() @Min(0.001) quantity!: number;
   @IsOptional() @IsString() note?: string;
 }
 
 export class CreatePurchaseOrderDto {
-  @IsNotEmpty() @IsString() supplierId!: string;
+  @IsNotEmpty() @IsString() @Matches(/^[1-9]\d*$/) supplierId!: string;
   @IsOptional() @IsDateString() expectedDate?: string;
   @IsOptional() @IsString() note?: string;
   @IsIn(['DRAFT', 'READY']) status!: 'DRAFT' | 'READY';
 
   @IsArray()
+  @ArrayNotEmpty({ message: 'Item Purchase Order tidak boleh kosong' })
   @ValidateNested({ each: true })
   @Type(() => PurchaseOrderItemDto)
   items!: PurchaseOrderItemDto[];
@@ -32,9 +35,13 @@ export class CreatePurchaseOrderDto {
 
 export class UpdatePurchaseOrderDto extends CreatePurchaseOrderDto {}
 
+export class PurchaseOrderListQueryDto {
+  @IsOptional() @IsString() @Matches(/^[1-9]\d*$/) supplierId?: string;
+}
+
 // ================== PURCHASE INVOICE ==================
 export class PurchaseInvoiceItemDto {
-  @IsNotEmpty() @IsString() productUnitId!: string;
+  @IsNotEmpty() @IsString() @Matches(/^[1-9]\d*$/) productUnitId!: string;
   @IsNumber() @Min(0.001) purchasedQty!: number;
   @IsOptional() @IsNumber() @Min(0) bonusQty?: number;
   @IsNumber() @Min(0) price!: number;
@@ -42,15 +49,15 @@ export class PurchaseInvoiceItemDto {
 }
 
 export class PurchasePaymentDto {
-  @IsNotEmpty() @IsString() financialAccountId!: string;
-  @IsNumber() @Min(0) paymentAmount!: number;
+  @IsNotEmpty() @IsString() @Matches(/^[1-9]\d*$/) financialAccountId!: string;
+  @IsNumber() @Min(0.01) paymentAmount!: number;
   @IsIn(['CASH', 'TRANSFER']) paymentMethod!: 'CASH' | 'TRANSFER';
   @IsOptional() @IsString() referenceNumber?: string;
 }
 
 export class CreatePurchaseInvoiceDto {
-  @IsNotEmpty() @IsString() supplierId!: string;
-  @IsOptional() @IsString() purchaseOrderId?: string;
+  @IsNotEmpty() @IsString() @Matches(/^[1-9]\d*$/) supplierId!: string;
+  @IsOptional() @IsString() @Matches(/^[1-9]\d*$/) purchaseOrderId?: string;
   @IsOptional() @IsString() supplierInvoiceNumber?: string;
 
   @IsNotEmpty() @IsDateString() invoiceDate!: string;
@@ -65,6 +72,7 @@ export class CreatePurchaseInvoiceDto {
     'MERGE' | 'REWRITE' | 'IGNORE';
 
   @IsArray()
+  @ArrayNotEmpty({ message: 'Item Purchase Invoice tidak boleh kosong' })
   @ValidateNested({ each: true })
   @Type(() => PurchaseInvoiceItemDto)
   items!: PurchaseInvoiceItemDto[];
@@ -78,9 +86,14 @@ export class CreatePurchaseInvoiceDto {
 
 export class UpdatePurchaseInvoiceDto extends CreatePurchaseInvoiceDto {}
 
+export class PurchaseInvoiceListQueryDto {
+  @IsOptional() @IsString() @Matches(/^[1-9]\d*$/) supplierId?: string;
+  @IsOptional() @IsIn(['ACTIVE', 'COMPLETED']) tab?: 'ACTIVE' | 'COMPLETED';
+}
+
 // ================== INVOICE PAYMENT (MODAL) ==================
 export class AddInvoicePaymentDto {
-  @IsNotEmpty() @IsString() financialAccountId!: string;
+  @IsNotEmpty() @IsString() @Matches(/^[1-9]\d*$/) financialAccountId!: string;
   @IsNumber() @Min(0.01) paymentAmount!: number;
   @IsIn(['CASH', 'TRANSFER']) paymentMethod!: 'CASH' | 'TRANSFER';
   @IsNotEmpty() @IsDateString() paymentDate!: string;

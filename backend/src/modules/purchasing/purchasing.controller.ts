@@ -17,11 +17,14 @@ import {
   CreatePurchaseInvoiceDto,
   UpdatePurchaseInvoiceDto,
   AddInvoicePaymentDto,
+  PurchaseInvoiceListQueryDto,
+  PurchaseOrderListQueryDto,
 } from './dto/purchasing.dto.js';
 import { SessionGuard } from '../../common/guards/session.guards.js';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import type { Request } from 'express';
+import { PositiveBigIntPipe } from '../../common/pipes/positive-bigint.pipe.js';
 
 interface AuthRequest extends Request {
   user: { userId: bigint; role: { roleCode: string } };
@@ -45,17 +48,14 @@ export class PurchasingController {
 
   @Get('list/invoices')
   @RequirePermissions('PURCHASE_INVOICE_VIEW')
-  async getInvoices(
-    @Query('supplierId') supplierId?: string,
-    @Query('tab') tab?: 'ACTIVE' | 'COMPLETED',
-  ) {
-    const data = await this.piService.findAll(supplierId, tab);
+  async getInvoices(@Query() query: PurchaseInvoiceListQueryDto) {
+    const data = await this.piService.findAll(query.supplierId, query.tab);
     return { success: true, data };
   }
 
   @Get('list/invoices/:id')
   @RequirePermissions('PURCHASE_INVOICE_VIEW')
-  async getInvoiceDetail(@Param('id') id: string) {
+  async getInvoiceDetail(@Param('id', PositiveBigIntPipe) id: string) {
     const data = await this.piService.findById(id);
     return { success: true, data };
   }
@@ -74,7 +74,7 @@ export class PurchasingController {
   @Put('orders/:id')
   @RequirePermissions('PURCHASE_ORDER_CREATE')
   async updatePO(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: UpdatePurchaseOrderDto,
     @Req() req: AuthRequest,
   ) {
@@ -88,8 +88,8 @@ export class PurchasingController {
 
   @Get('orders')
   @RequirePermissions('PURCHASE_ORDER_VIEW')
-  async getPOs(@Query('supplierId') supplierId?: string) {
-    const data = await this.poService.findAll(supplierId);
+  async getPOs(@Query() query: PurchaseOrderListQueryDto) {
+    const data = await this.poService.findAll(query.supplierId);
     return { success: true, data };
   }
 
@@ -110,7 +110,7 @@ export class PurchasingController {
   @Put('invoices/:id')
   @RequirePermissions('PURCHASE_INVOICE_CREATE')
   async updateInvoice(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: UpdatePurchaseInvoiceDto,
     @Req() req: AuthRequest,
   ) {
@@ -125,7 +125,7 @@ export class PurchasingController {
   @Post('invoices/:id/payments')
   @RequirePermissions('PURCHASE_INVOICE_CREATE')
   async addInvoicePayment(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: AddInvoicePaymentDto,
     @Req() req: AuthRequest,
   ) {
@@ -235,7 +235,9 @@ export class PurchasingController {
 
   @Get('lookups/supplier-catalog/:supplierId')
   @RequirePermissions('PURCHASE_ORDER_CREATE')
-  async getSupplierCatalog(@Param('supplierId') supplierId: string) {
+  async getSupplierCatalog(
+    @Param('supplierId', PositiveBigIntPipe) supplierId: string,
+  ) {
     const data = await this.prisma.productSupplier.findMany({
       where: { supplierId: BigInt(supplierId), isActive: true },
       include: {
@@ -257,7 +259,9 @@ export class PurchasingController {
 
   @Get('lookups/supplier-history/:supplierId')
   @RequirePermissions('PURCHASE_ORDER_CREATE')
-  async getSupplierHistory(@Param('supplierId') supplierId: string) {
+  async getSupplierHistory(
+    @Param('supplierId', PositiveBigIntPipe) supplierId: string,
+  ) {
     const data = await this.prisma.supplierSuggestedCost.findMany({
       where: { supplierId: BigInt(supplierId) },
       include: { productUnit: { include: { product: true, unit: true } } },

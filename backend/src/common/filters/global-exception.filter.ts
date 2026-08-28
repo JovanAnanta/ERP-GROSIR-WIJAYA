@@ -4,14 +4,18 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
-import { Response } from 'express';
+import type { Request, Response } from 'express';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(GlobalExceptionFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let category = 'System Error';
@@ -21,7 +25,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
 
-      if (status === HttpStatus.BAD_REQUEST) {
+      if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+        status = HttpStatus.INTERNAL_SERVER_ERROR;
+        category = 'System Error';
+        message = 'Terjadi kesalahan sistem internal.';
+        this.logInternalError(exception, request);
+      } else if (status === HttpStatus.BAD_REQUEST) {
         category = 'Validation Error';
         message =
           this.extractMessage(exceptionResponse) || 'Format data tidak valid.';
@@ -29,8 +38,6 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         status === HttpStatus.UNAUTHORIZED ||
         status === HttpStatus.FORBIDDEN
       ) {
-        // PERBAIKAN KRUSIAL:
-        // Jangan timpa pesan aslinya! Kita harus meneruskan pesan "Akun terkunci..." ke Frontend
         category = 'Authentication Error';
         message =
           this.extractMessage(exceptionResponse) ||
@@ -39,17 +46,18 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         category = 'Business Rule Error';
         message =
           this.extractMessage(exceptionResponse) ||
-          (exception as Error).message;
+          'Permintaan tidak dapat diproses.';
       }
     } else if (this.isPrismaError(exception)) {
       status = HttpStatus.UNPROCESSABLE_ENTITY;
       category = 'Business Rule Error';
+      this.logInternalError(exception, request);
 
       if (exception.code === 'P2002') {
         message = 'Data yang dikirim sudah digunakan (Duplikasi).';
       }
-    } else if (exception instanceof Error) {
-      message = exception.message;
+    } else {
+      this.logInternalError(exception, request);
     }
 
     response.status(status).json({
@@ -57,6 +65,25 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       category,
       message,
     });
+  }
+
+  private logInternalError(exception: unknown, request: Request): void {
+    const safeMetadata: Record<string, unknown> = {
+      method: request.method,
+      path: request.originalUrl ?? request.url,
+      errorType:
+        exception instanceof Error
+          ? exception.constructor.name
+          : typeof exception,
+    };
+
+    if (this.isPrismaError(exception)) {
+      safeMetadata.prismaCode = exception.code;
+    }
+
+    this.logger.error(
+      `Unhandled request error: ${JSON.stringify(safeMetadata)}`,
+    );
   }
 
   private extractMessage(response: string | object): string | null {

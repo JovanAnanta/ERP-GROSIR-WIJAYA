@@ -559,7 +559,7 @@ export default function PurchaseInvoiceCardList({ onEditInvoice }: Props) {
 
             <div>
               <Label className="font-bold text-slate-600 uppercase text-[10px]">Pilih Akun Kas / Bank Tujuan (Dari Database) *</Label>
-              <Select value={payAccountId || undefined} onValueChange={(val) => setPayAccountId(val || "")}>
+              <Select value={payAccountId || null} onValueChange={(val) => setPayAccountId(val || "")}>
                 <SelectTrigger className="h-10 text-xs font-bold bg-[#fff8e1] border-amber-300 mt-1">
                   <SelectValue placeholder="-- Klik di sini untuk pilih sumber dana --">
                     {financialAccounts.find(a => a.financialAccountId === payAccountId)?.accountName}

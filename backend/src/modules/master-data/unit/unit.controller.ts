@@ -13,6 +13,7 @@ import { UnitService } from './unit.service.js';
 import { CreateUnitDto, UpdateUnitDto, UnitQueryDto } from './dto/unit.dto.js';
 import { SessionGuard } from '../../../common/guards/session.guards.js';
 import { RequirePermissions } from '../../../common/decorators/permissions.decorator.js';
+import { PositiveBigIntPipe } from '../../../common/pipes/positive-bigint.pipe.js';
 import type { Request } from 'express';
 
 interface AuthRequest extends Request {
@@ -45,7 +46,7 @@ export class UnitController {
   @Put(':id')
   @RequirePermissions('UNIT_UPDATE')
   async update(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: UpdateUnitDto,
     @Req() req: AuthRequest,
   ) {
@@ -55,14 +56,20 @@ export class UnitController {
 
   @Post(':id/inactivate')
   @RequirePermissions('UNIT_INACTIVATE')
-  async inactivate(@Param('id') id: string, @Req() req: AuthRequest) {
+  async inactivate(
+    @Param('id', PositiveBigIntPipe) id: string,
+    @Req() req: AuthRequest,
+  ) {
     await this.unitService.inactivate(req.user.userId, BigInt(id));
     return { success: true, message: 'Unit berhasil dinonaktifkan.' };
   }
 
   @Post(':id/reactivate')
   @RequirePermissions('UNIT_REACTIVATE')
-  async reactivate(@Param('id') id: string, @Req() req: AuthRequest) {
+  async reactivate(
+    @Param('id', PositiveBigIntPipe) id: string,
+    @Req() req: AuthRequest,
+  ) {
     await this.unitService.reactivate(req.user.userId, BigInt(id));
     return { success: true, message: 'Unit berhasil diaktifkan kembali.' };
   }

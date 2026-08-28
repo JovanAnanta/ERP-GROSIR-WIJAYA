@@ -32,6 +32,7 @@
   },
   "include": [
     "src",
+    "test",
     "generated",
     "prisma",
     "prisma.config.ts"

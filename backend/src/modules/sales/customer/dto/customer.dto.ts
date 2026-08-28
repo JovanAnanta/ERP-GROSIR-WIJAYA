@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsBoolean,
   IsIn,
+  Matches,
 } from 'class-validator';
 
 export class CreateCustomerDto {
@@ -48,8 +49,8 @@ export class UpdateCustomerDto {
 }
 
 export class CustomerQueryDto {
-  @IsOptional() @IsString() page?: string;
-  @IsOptional() @IsString() limit?: string;
+  @IsOptional() @IsString() @Matches(/^[1-9]\d{0,8}$/) page?: string;
+  @IsOptional() @IsString() @Matches(/^(?:[1-9]|[1-9]\d|100)$/) limit?: string;
   @IsOptional() @IsString() search?: string;
   @IsOptional() @IsIn(['ACTIVE', 'INACTIVE', 'ALL']) status?: string;
   @IsOptional() @IsIn(['YES', 'NO', 'ALL']) hasOutstandingAr?: string;

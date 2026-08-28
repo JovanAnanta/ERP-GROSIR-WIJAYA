@@ -49,6 +49,7 @@ export class PermissionGuard implements CanActivate {
         roleId: user.roleId,
         permission: {
           permissionCode: { in: requiredPermissions },
+          isActive: true,
         },
       },
     });

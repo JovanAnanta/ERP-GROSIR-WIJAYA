@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsBoolean,
   IsIn,
+  Matches,
 } from 'class-validator';
 
 export class CreateCategoryDto {
@@ -27,8 +28,8 @@ export class UpdateCategoryDto {
 }
 
 export class CategoryQueryDto {
-  @IsOptional() @IsString() page?: string;
-  @IsOptional() @IsString() limit?: string;
+  @IsOptional() @IsString() @Matches(/^[1-9]\d{0,8}$/) page?: string;
+  @IsOptional() @IsString() @Matches(/^(?:[1-9]|[1-9]\d|100)$/) limit?: string;
   @IsOptional() @IsString() search?: string;
 
   // PERBAIKAN: Menambahkan filter Status untuk FR List

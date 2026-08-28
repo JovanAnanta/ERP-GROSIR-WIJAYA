@@ -18,6 +18,7 @@ import {
 } from './dto/product.dto.js';
 import { SessionGuard } from '../../../common/guards/session.guards.js';
 import { RequirePermissions } from '../../../common/decorators/permissions.decorator.js';
+import { PositiveBigIntPipe } from '../../../common/pipes/positive-bigint.pipe.js';
 import type { Request } from 'express';
 
 interface AuthRequest extends Request {
@@ -58,7 +59,7 @@ export class ProductController {
   @Put(':id')
   @RequirePermissions('PRODUCT_UPDATE')
   async update(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: UpdateProductDto,
     @Req() req: AuthRequest,
   ) {
@@ -68,14 +69,20 @@ export class ProductController {
 
   @Post(':id/inactivate')
   @RequirePermissions('PRODUCT_INACTIVATE')
-  async inactivate(@Param('id') id: string, @Req() req: AuthRequest) {
+  async inactivate(
+    @Param('id', PositiveBigIntPipe) id: string,
+    @Req() req: AuthRequest,
+  ) {
     await this.productService.toggleStatus(req.user.userId, BigInt(id), false);
     return { success: true, message: 'Produk berhasil dinonaktifkan.' };
   }
 
   @Post(':id/reactivate')
   @RequirePermissions('PRODUCT_REACTIVATE')
-  async reactivate(@Param('id') id: string, @Req() req: AuthRequest) {
+  async reactivate(
+    @Param('id', PositiveBigIntPipe) id: string,
+    @Req() req: AuthRequest,
+  ) {
     await this.productService.toggleStatus(req.user.userId, BigInt(id), true);
     return { success: true, message: 'Produk berhasil diaktifkan kembali.' };
   }

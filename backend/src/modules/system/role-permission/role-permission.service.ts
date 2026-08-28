@@ -60,6 +60,21 @@ export class RolePermissionService {
         HttpStatus.NOT_FOUND,
       );
 
+    if (newPermIds.length > 0) {
+      const validPermissionCount = await this.prisma.permission.count({
+        where: {
+          permissionId: { in: newPermIds.map((id) => BigInt(id)) },
+          isActive: true,
+        },
+      });
+      if (validPermissionCount !== newPermIds.length) {
+        throw new HttpException(
+          'Terdapat permission yang tidak valid atau tidak aktif.',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+    }
+
     await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // OPTIMISTIC CONCURRENCY CHECK (Array Validation Approach B)
       const currentDbPerms = await tx.rolePermission.findMany({

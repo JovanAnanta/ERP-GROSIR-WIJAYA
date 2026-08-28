@@ -3,13 +3,23 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client.js';
 import * as bcrypt from 'bcrypt';
 
-const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL!,
-});
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error('DATABASE_URL wajib diatur sebelum menjalankan seed.');
+}
+
+const adapter = new PrismaPg({ connectionString: databaseUrl });
 
 const prisma = new PrismaClient({ adapter });
 
 async function main(): Promise<void> {
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  if (!adminPassword) {
+    throw new Error(
+      'SEED_ADMIN_PASSWORD wajib diatur sebelum menjalankan seed.',
+    );
+  }
+
   console.log('🌱 Memulai proses seeding database...');
 
   // 1. Buat Role Standar (SUPER_OWNER, OWNER, ADMIN)
@@ -38,7 +48,6 @@ async function main(): Promise<void> {
 
   // 2. Buat User Admin Pertama (Super Owner)
   const salt = await bcrypt.genSalt(10);
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD || 'rahasia123';
   const passwordHash = await bcrypt.hash(adminPassword, salt);
 
   const user = await prisma.user.upsert({
@@ -116,7 +125,8 @@ async function main(): Promise<void> {
 
 main()
   .catch((e: unknown) => {
-    console.error('❌ Terjadi kesalahan saat seeding:', e);
+    const errorType = e instanceof Error ? e.constructor.name : typeof e;
+    console.error(`❌ Proses seeding gagal (${errorType}).`);
     process.exit(1);
   })
   .finally(() => {

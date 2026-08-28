@@ -19,6 +19,7 @@ import {
 } from './dto/category.dto.js';
 import { SessionGuard } from '../../../common/guards/session.guards.js';
 import { RequirePermissions } from '../../../common/decorators/permissions.decorator.js';
+import { PositiveBigIntPipe } from '../../../common/pipes/positive-bigint.pipe.js';
 import type { Request } from 'express';
 
 interface AuthRequest extends Request {
@@ -64,7 +65,7 @@ export class CategoryController {
   @Put(':id')
   @RequirePermissions('CATEGORY_UPDATE')
   async update(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: UpdateCategoryDto,
     @Req() req: AuthRequest,
     @Ip() ip: string | undefined,
@@ -89,7 +90,7 @@ export class CategoryController {
   @Post(':id/inactivate')
   @RequirePermissions('CATEGORY_INACTIVATE')
   async inactivate(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthRequest,
     @Ip() ip: string | undefined,
     @Headers('user-agent') ua: string | undefined,
@@ -109,7 +110,7 @@ export class CategoryController {
   @Post(':id/reactivate')
   @RequirePermissions('CATEGORY_REACTIVATE')
   async reactivate(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthRequest,
     @Ip() ip: string | undefined,
     @Headers('user-agent') ua: string | undefined,

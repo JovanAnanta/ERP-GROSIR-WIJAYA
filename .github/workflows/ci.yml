@@ -24,10 +24,13 @@ jobs:
         cd backend
         npm ci
         npx prisma generate
+        npm run lint
+        npm test -- --runInBand
         npm run build
 
     - name: Install and Build Frontend
       run: |
         cd frontend
         npm ci
+        npm run lint
         npm run build

@@ -25,6 +25,7 @@ export class CreateUserDto {
 
   @IsNotEmpty({ message: 'Role wajib diisi' })
   @IsString()
+  @Matches(/^[1-9]\d*$/, { message: 'Role ID tidak valid' })
   roleId!: string;
 }
 
@@ -35,6 +36,7 @@ export class UpdateUserDto {
 
   @IsNotEmpty({ message: 'Role wajib diisi' })
   @IsString()
+  @Matches(/^[1-9]\d*$/, { message: 'Role ID tidak valid' })
   roleId!: string;
 
   @IsNotEmpty({ message: 'Status wajib diisi' })

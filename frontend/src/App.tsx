@@ -1,6 +1,9 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 
 import { useAuthStore } from '@/store/authStore';
+import type { AuthUser } from '@/store/authStore';
+import { apiClient } from '@/lib/axios';
 
 import AppLayout from '@/components/layout/AppLayout';
 
@@ -38,6 +41,37 @@ function PublicRoute() {
 }
 
 export default function App() {
+  const authStatus = useAuthStore((state) => state.authStatus);
+  const hydrate = useAuthStore((state) => state.hydrate);
+  const markUnauthenticated = useAuthStore(
+    (state) => state.markUnauthenticated,
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    apiClient
+      .get<unknown, { success: boolean; data: AuthUser }>('/auth/me')
+      .then((response) => {
+        if (active) hydrate(response.data);
+      })
+      .catch(() => {
+        if (active) markUnauthenticated();
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [hydrate, markUnauthenticated]);
+
+  if (authStatus === 'INITIALIZING') {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-slate-50 text-sm font-medium text-slate-600">
+        Memverifikasi session...
+      </div>
+    );
+  }
+
   return (
     <Routes>
       {/* Root redirect ke /dashboard atau /login */}

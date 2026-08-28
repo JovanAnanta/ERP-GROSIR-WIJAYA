@@ -3,6 +3,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../database/prisma.service.js';
 import type { User, Prisma } from '../../../generated/prisma/client.js';
+import { SESSION_ABSOLUTE_TTL_MS } from './auth.constants.js';
 
 export interface AuthLoginParams {
   username: string;
@@ -19,8 +20,8 @@ export interface AuthLoginResult {
 
 @Injectable()
 export class AuthService {
-  // PERBAIKAN: Mendeklarasikan property DUMMY_HASH secara eksplisit untuk mencegah error TS2339
-  private readonly DUMMY_HASH = '$2b$10$abcdefghijklmnopqrstuv';
+  private readonly DUMMY_HASH =
+    '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.';
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -192,7 +193,7 @@ export class AuthService {
     // ... sisa logika pembuatan sesi tetap sama ...
     const tokenHash = this.hashToken(plainToken);
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + 12 * 60 * 60 * 1000);
+    const expiresAt = new Date(now.getTime() + SESSION_ABSOLUTE_TTL_MS);
 
     await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.userSession.updateMany({
@@ -279,6 +280,28 @@ export class AuthService {
       );
     }
 
+    if (!session.user.isActive) {
+      throw new HttpException(
+        'User telah dinonaktifkan. Hubungi Super Owner.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    const now = new Date();
+    const absoluteExpiresAt = new Date(
+      session.createdAt.getTime() + SESSION_ABSOLUTE_TTL_MS,
+    );
+    if (now >= absoluteExpiresAt || now >= session.expiresAt) {
+      await this.prisma.userSession.updateMany({
+        where: { sessionId: session.sessionId, revokedAt: null },
+        data: { revokedAt: now, revokeReason: 'Absolute session expired' },
+      });
+      throw new HttpException(
+        'Session telah berakhir. Silakan Login kembali.',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
     const isPasswordValid = await bcrypt.compare(
       password,
       session.user.passwordHash,
@@ -291,7 +314,7 @@ export class AuthService {
       const lastResetEvent = await this.prisma.securityLog.findFirst({
         where: {
           userId: session.userId,
-          eventType: { in: ['LOGIN_SUCCESS', 'ACCOUNT_UNLOCKED'] },
+          eventType: { in: ['LOGIN_SUCCESS', 'SESSION_UNLOCK'] },
           createdAt: { gte: fifteenMinsAgo },
         },
         orderBy: { createdAt: 'desc' },
@@ -354,13 +377,9 @@ export class AuthService {
       );
     }
 
-    // Jika password benar, refresh waktu kadaluarsa sesi
-    const now = new Date();
-    const newExpiresAt = new Date(now.getTime() + 12 * 60 * 60 * 1000);
-
     await this.prisma.userSession.update({
       where: { sessionId: session.sessionId },
-      data: { lastActivityAt: now, expiresAt: newExpiresAt },
+      data: { lastActivityAt: now },
     });
 
     await this.logSecurityEvent(

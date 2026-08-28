@@ -19,6 +19,7 @@ import {
 } from './dto/brand.dto.js';
 import { SessionGuard } from '../../../common/guards/session.guards.js';
 import { RequirePermissions } from '../../../common/decorators/permissions.decorator.js';
+import { PositiveBigIntPipe } from '../../../common/pipes/positive-bigint.pipe.js';
 import type { Request } from 'express';
 
 interface AuthRequest extends Request {
@@ -62,7 +63,7 @@ export class BrandController {
   @Put(':id')
   @RequirePermissions('BRAND_UPDATE')
   async update(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: UpdateBrandDto,
     @Req() req: AuthRequest,
     @Ip() ip: string | undefined,
@@ -82,7 +83,7 @@ export class BrandController {
   @Post(':id/inactivate')
   @RequirePermissions('BRAND_INACTIVATE')
   async inactivate(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthRequest,
     @Ip() ip: string | undefined,
     @Headers('user-agent') ua: string | undefined,
@@ -99,7 +100,7 @@ export class BrandController {
   @Post(':id/reactivate')
   @RequirePermissions('BRAND_REACTIVATE')
   async reactivate(
-    @Param('id') id: string,
+    @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthRequest,
     @Ip() ip: string | undefined,
     @Headers('user-agent') ua: string | undefined,
