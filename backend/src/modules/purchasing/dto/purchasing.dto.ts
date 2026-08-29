@@ -37,6 +37,9 @@ export class UpdatePurchaseOrderDto extends CreatePurchaseOrderDto {}
 
 export class PurchaseOrderListQueryDto {
   @IsOptional() @IsString() @Matches(/^[1-9]\d*$/) supplierId?: string;
+  @IsOptional() @IsIn(['ACTIVE', 'HISTORY']) tab?: 'ACTIVE' | 'HISTORY';
+  @IsOptional() @IsString() @Matches(/^[1-9]\d{0,8}$/) page?: string;
+  @IsOptional() @IsString() @Matches(/^(?:[1-9]|[1-9]\d|100)$/) limit?: string;
 }
 
 // ================== PURCHASE INVOICE ==================
@@ -89,6 +92,8 @@ export class UpdatePurchaseInvoiceDto extends CreatePurchaseInvoiceDto {}
 export class PurchaseInvoiceListQueryDto {
   @IsOptional() @IsString() @Matches(/^[1-9]\d*$/) supplierId?: string;
   @IsOptional() @IsIn(['ACTIVE', 'COMPLETED']) tab?: 'ACTIVE' | 'COMPLETED';
+  @IsOptional() @IsString() @Matches(/^[1-9]\d{0,8}$/) page?: string;
+  @IsOptional() @IsString() @Matches(/^(?:[1-9]|[1-9]\d|100)$/) limit?: string;
 }
 
 // ================== INVOICE PAYMENT (MODAL) ==================
@@ -99,4 +104,53 @@ export class AddInvoicePaymentDto {
   @IsNotEmpty() @IsDateString() paymentDate!: string;
   @IsOptional() @IsString() referenceNumber?: string;
   @IsOptional() @IsString() note?: string;
+}
+
+// ================== PURCHASE RETURN ==================
+export const PURCHASE_RETURN_RESOLUTION_TYPES = [
+  'REPLACEMENT',
+  'CURRENT_INVOICE_DEDUCTION',
+  'NEXT_INVOICE_DEDUCTION',
+  'CASHBACK',
+] as const;
+
+export type PurchaseReturnResolutionTypeInput =
+  (typeof PURCHASE_RETURN_RESOLUTION_TYPES)[number];
+
+export class PurchaseReturnItemDto {
+  @IsNotEmpty()
+  @IsString()
+  @Matches(/^[1-9]\d*$/)
+  purchaseInvoiceDetailId!: string;
+  @IsNotEmpty() @IsString() @Matches(/^[1-9]\d*$/) productUnitId!: string;
+  @IsNumber() @Min(0.001) quantity!: number;
+  @IsNumber() @Min(0.01) unitCost!: number;
+}
+
+export class SavePurchaseReturnDto {
+  @IsNotEmpty() @IsString() @Matches(/^[1-9]\d*$/) purchaseInvoiceId!: string;
+  @IsDateString() returnDate!: string;
+  @IsOptional() @IsDateString() expectedResolutionDate?: string;
+  @IsIn(PURCHASE_RETURN_RESOLUTION_TYPES)
+  resolutionType!: PurchaseReturnResolutionTypeInput;
+  @IsIn(['DRAFT', 'READY']) status!: 'DRAFT' | 'READY';
+  @IsNotEmpty() @IsString() reason!: string;
+  @IsOptional() @IsString() note?: string;
+
+  @IsArray()
+  @ArrayNotEmpty({ message: 'Minimal satu item harus diretur' })
+  @ValidateNested({ each: true })
+  @Type(() => PurchaseReturnItemDto)
+  items!: PurchaseReturnItemDto[];
+}
+
+export class CompletePurchaseReturnDto {
+  @IsOptional() @IsString() @Matches(/^[1-9]\d*$/) financialAccountId?: string;
+  @IsOptional()
+  @IsIn(['CASH', 'TRANSFER'])
+  paymentMethod?: 'CASH' | 'TRANSFER';
+  @IsOptional()
+  @IsString()
+  @Matches(/^[1-9]\d*$/)
+  appliedPurchaseInvoiceId?: string;
 }

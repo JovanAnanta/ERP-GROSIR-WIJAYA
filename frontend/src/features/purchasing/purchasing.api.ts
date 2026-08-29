@@ -96,7 +96,58 @@ export interface ReadyPOOption {
 export interface FinancialAccountOption {
   financialAccountId: string;
   accountName: string;
+  accountType: string;
   currentBalance: number;
+}
+
+export interface PurchasePaginationMeta {
+  currentPage: number;
+  pageSize: number;
+  totalData: number;
+  totalPage: number;
+}
+
+export interface PurchaseOrderListItem {
+  purchaseOrderId: string;
+  purchaseOrderNumber: string;
+  supplierId: string;
+  supplierName: string;
+  orderDate: string;
+  expectedDate?: string | null;
+  status: 'DRAFT' | 'READY' | 'COMPLETED' | 'CANCELLED';
+  note?: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+  createdBy: string;
+  updatedBy?: string | null;
+  createdByName: string;
+  updatedByName?: string | null;
+  totalItem: number;
+  totalQuantity: number;
+  details: PurchaseOrderDetailItem[];
+}
+
+export interface PurchaseOrderDetailItem {
+  purchaseOrderDetailId: string;
+  productId: string;
+  productUnitId: string;
+  productName: string;
+  unitName: string;
+  quantity: number;
+  note?: string | null;
+}
+
+export interface PurchaseOrderFullDetail extends PurchaseOrderListItem {
+  supplierPhone?: string | null;
+  supplierEmail?: string | null;
+  supplierAddress?: string | null;
+  supplierPicName?: string | null;
+  purchaseInvoices: Array<{
+    purchaseInvoiceId: string;
+    purchaseInvoiceNumber: string;
+    status: 'DRAFT' | 'COMPLETED' | 'CANCELLED';
+    createdAt: string;
+  }>;
 }
 
 // DASHBOARD LIST & SUMMARY INTERFACES
@@ -124,6 +175,7 @@ export interface PurchaseInvoiceListItem {
   status: 'DRAFT' | 'COMPLETED' | 'CANCELLED';
   note?: string;
   createdAt: string;
+  returnSummary?: { total: number; pending: number; overdue: number };
 }
 
 export interface PurchaseInvoiceDetailItem {
@@ -152,6 +204,87 @@ export interface PurchaseInvoiceFullDetail extends PurchaseInvoiceListItem {
   discountAmount: number;
   details: PurchaseInvoiceDetailItem[];
   payments: PurchaseInvoiceDetailPayment[];
+}
+
+export type PurchaseReturnStatus = 'DRAFT' | 'READY' | 'COMPLETED' | 'CANCELLED';
+export type PurchaseReturnResolutionType = 'REPLACEMENT' | 'CURRENT_INVOICE_DEDUCTION' | 'NEXT_INVOICE_DEDUCTION' | 'CASHBACK';
+
+export interface PurchaseReturnContextItem {
+  purchaseInvoiceDetailId: string;
+  originalProductUnitId: string;
+  productName: string;
+  purchasedQty: number;
+  purchasedUnitName: string;
+  returnedBaseQty: number;
+  maxBaseQty: number;
+  fifoBaseUnitCost: number;
+  units: Array<{
+    productUnitId: string;
+    unitName: string;
+    conversionFactor: number;
+    defaultReturnUnitCost: number;
+  }>;
+}
+
+export interface PurchaseReturnContext {
+  purchaseInvoiceId: string;
+  purchaseInvoiceNumber: string;
+  supplierId: string;
+  supplierName: string;
+  invoiceDate: string;
+  outstandingAmount: number;
+  items: PurchaseReturnContextItem[];
+}
+
+export interface PurchaseReturnDetail {
+  purchaseReturnId: string;
+  purchaseReturnNumber: string;
+  purchaseInvoiceId: string;
+  purchaseInvoiceNumber?: string;
+  supplierId: string;
+  supplierName?: string;
+  status: PurchaseReturnStatus;
+  resolutionType: PurchaseReturnResolutionType;
+  returnDate: string;
+  expectedResolutionDate?: string | null;
+  returnTotal: number;
+  inventoryCostTotal: number;
+  financialAccountId?: string | null;
+  financialAccountName?: string | null;
+  appliedPurchaseInvoiceId?: string | null;
+  appliedPurchaseInvoiceNumber?: string | null;
+  reason: string;
+  note?: string | null;
+  createdAt: string;
+  details: Array<{
+    purchaseReturnDetailId: string;
+    purchaseInvoiceDetailId: string;
+    productUnitId: string;
+    productName?: string;
+    unitName?: string;
+    quantity: number;
+    baseQuantity: number;
+    unitCost: number;
+    fifoUnitCost: number;
+    inventoryCostSubtotal: number;
+    subtotal: number;
+  }>;
+}
+
+export interface SavePurchaseReturnPayload {
+  purchaseInvoiceId: string;
+  returnDate: string;
+  expectedResolutionDate?: string;
+  resolutionType: PurchaseReturnResolutionType;
+  status: 'DRAFT' | 'READY';
+  reason: string;
+  note?: string;
+  items: Array<{
+    purchaseInvoiceDetailId: string;
+    productUnitId: string;
+    quantity: number;
+    unitCost: number;
+  }>;
 }
 
 export interface AddPaymentPayload {
@@ -190,15 +323,73 @@ export const purchasingApi = {
     const res = await apiClient.get<{ data: SupplierFinancialSummaryCard[] }>('/purchasing/list/supplier-summaries');
     return res.data.data;
   },
-  getInvoices: async (supplierId?: string, tab?: 'ACTIVE' | 'COMPLETED') => {
-    const params = new URLSearchParams();
-    if (supplierId) params.append('supplierId', supplierId);
-    if (tab) params.append('tab', tab);
-    const res = await apiClient.get<{ data: PurchaseInvoiceListItem[] }>(`/purchasing/list/invoices?${params.toString()}`);
+  getOrders: async (tab: 'ACTIVE' | 'HISTORY', page = 1, limit = 20) => {
+    const params = new URLSearchParams({
+      tab,
+      page: String(page),
+      limit: String(limit),
+    });
+    const res = await apiClient.get<{
+      data: PurchaseOrderListItem[];
+      meta: PurchasePaginationMeta;
+    }>(`/purchasing/orders?${params.toString()}`);
+    return { data: res.data.data, meta: res.data.meta };
+  },
+  getOrderDetail: async (id: string) => {
+    const res = await apiClient.get<{ data: PurchaseOrderFullDetail }>(
+      `/purchasing/orders/${id}`,
+    );
     return res.data.data;
+  },
+  getInvoices: async (supplierId: string, tab: 'ACTIVE' | 'COMPLETED', page = 1, limit = 20) => {
+    const params = new URLSearchParams();
+    params.append('supplierId', supplierId);
+    params.append('tab', tab);
+    params.append('page', String(page));
+    params.append('limit', String(limit));
+    const res = await apiClient.get<{
+      data: PurchaseInvoiceListItem[];
+      meta: PurchasePaginationMeta;
+    }>(`/purchasing/list/invoices?${params.toString()}`);
+    return { data: res.data.data, meta: res.data.meta };
   },
   getInvoiceDetail: async (id: string) => {
     const res = await apiClient.get<{ data: PurchaseInvoiceFullDetail }>(`/purchasing/list/invoices/${id}`);
+    return res.data.data;
+  },
+  getPurchaseReturnContext: async (invoiceId: string) => {
+    const res = await apiClient.get<{ data: PurchaseReturnContext }>(`/purchasing/invoices/${invoiceId}/return-context`);
+    return res.data.data;
+  },
+  getInvoiceReturns: async (invoiceId: string) => {
+    const res = await apiClient.get<{ data: PurchaseReturnDetail[] }>(`/purchasing/invoices/${invoiceId}/returns`);
+    return res.data.data;
+  },
+  getPurchaseReturn: async (returnId: string) => {
+    const res = await apiClient.get<{ data: PurchaseReturnDetail }>(`/purchasing/returns/${returnId}`);
+    return res.data.data;
+  },
+  createPurchaseReturn: async (data: SavePurchaseReturnPayload) => {
+    const res = await apiClient.post<{ data: PurchaseReturnDetail }>('/purchasing/returns', data);
+    return res.data.data;
+  },
+  updatePurchaseReturn: async (returnId: string, data: SavePurchaseReturnPayload) => {
+    const res = await apiClient.put<{ data: PurchaseReturnDetail }>(`/purchasing/returns/${returnId}`, data);
+    return res.data.data;
+  },
+  markPurchaseReturnReady: async (returnId: string) => {
+    const res = await apiClient.post<{ data: PurchaseReturnDetail }>(`/purchasing/returns/${returnId}/ready`);
+    return res.data.data;
+  },
+  completePurchaseReturn: async (returnId: string, data: { financialAccountId?: string; paymentMethod?: 'CASH' | 'TRANSFER'; appliedPurchaseInvoiceId?: string }) => {
+    const res = await apiClient.post<{ data: PurchaseReturnDetail }>(`/purchasing/returns/${returnId}/complete`, data);
+    return res.data.data;
+  },
+  cancelPurchaseReturn: async (returnId: string) => {
+    await apiClient.post(`/purchasing/returns/${returnId}/cancel`);
+  },
+  getPurchaseReturnCompletionOptions: async (returnId: string) => {
+    const res = await apiClient.get<{ data: Array<{ purchaseInvoiceId: string; purchaseInvoiceNumber: string; invoiceDate: string; invoiceTotal: number }> }>(`/purchasing/returns/${returnId}/completion-options`);
     return res.data.data;
   },
 

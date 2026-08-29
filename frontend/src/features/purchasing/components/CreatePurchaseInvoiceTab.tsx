@@ -40,6 +40,14 @@ const parseNumberId = (str: string): number => {
   return isNaN(num) ? 0 : num;
 };
 
+const escapeHtml = (value: string): string => value.replace(/[&<>'"]/g, (character) => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  "'": '&#39;',
+  '"': '&quot;',
+}[character] ?? character));
+
 interface Props {
   onSuccess: () => void;
   editingInvoiceId?: string | null;
@@ -437,6 +445,7 @@ export default function CreatePurchaseInvoiceTab({ onSuccess, editingInvoiceId, 
             <div class="line"></div>
             <div style="display: flex; justify-content: space-between;"><span>Diskon:</span> <span>Rp ${discountAmount.toLocaleString('id-ID')}</span></div>
             <div style="display: flex; justify-content: space-between;" class="bold"><span>Grand Total:</span> <span>Rp ${grandTotal.toLocaleString('id-ID')}</span></div>
+            ${note ? `<div style="margin-top: 4px;"><b>Catatan Faktur:</b> ${escapeHtml(note)}</div>` : ''}
             <div class="line"></div>
             <div class="center">${cfg.receiptFooter1 || 'Terima Kasih'}</div>
           </body>

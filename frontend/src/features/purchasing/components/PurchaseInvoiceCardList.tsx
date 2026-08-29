@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { purchasingApi, type SupplierFinancialSummaryCard, type PurchaseInvoiceListItem, type PurchaseInvoiceFullDetail, type FinancialAccountOption } from "../purchasing.api";
+import { purchasingApi, type SupplierFinancialSummaryCard, type PurchaseInvoiceListItem, type PurchaseInvoiceFullDetail, type FinancialAccountOption, type PurchasePaginationMeta } from "../purchasing.api";
 import { systemConfigApi } from "@/features/system/system-configuration.api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,10 +8,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogOverlay } from "@/components/ui/dialog";
 import { Loader2, AlertTriangle, Eye, CreditCard, ArrowLeft, Building2, CheckCircle2, Clock, RefreshCw, Save, Printer, Receipt } from "lucide-react";
 import { parseApiError } from "@/utils/error";
+import PurchaseReturnDialog from "./PurchaseReturnDialog";
 
 interface Props {
   onEditInvoice: (invoiceId: string) => void;
 }
+
+const escapeHtml = (value: string): string => value.replace(/[&<>'"]/g, (character) => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  "'": '&#39;',
+  '"': '&quot;',
+}[character] ?? character));
 
 export default function PurchaseInvoiceCardList({ onEditInvoice }: Props) {
   const [selectedSupplier, setSelectedSupplier] = useState<SupplierFinancialSummaryCard | null>(null);
@@ -19,8 +28,12 @@ export default function PurchaseInvoiceCardList({ onEditInvoice }: Props) {
   
   const [summaries, setSummaries] = useState<SupplierFinancialSummaryCard[]>([]);
   const [invoices, setInvoices] = useState<PurchaseInvoiceListItem[]>([]);
+  const [meta, setMeta] = useState<PurchasePaginationMeta>({ currentPage: 1, pageSize: 20, totalData: 0, totalPage: 0 });
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [returnInvoiceId, setReturnInvoiceId] = useState<string | null>(null);
 
   // Modal Detail (Dilebarkan ke max-w-[1200px] agar sangat lega dan teks tidak turun)
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -64,11 +77,15 @@ export default function PurchaseInvoiceCardList({ onEditInvoice }: Props) {
     return () => { isMounted = false; };
   }, []);
 
-  const loadInvoices = useCallback(async (supplierId: string, tab: 'ACTIVE' | 'COMPLETED') => {
+  const loadInvoices = useCallback(async (supplierId: string, tab: 'ACTIVE' | 'COMPLETED', requestedPage: number, requestedLimit: number) => {
     setIsLoading(true); setErrorMsg(null);
     try {
-      const data = await purchasingApi.getInvoices(supplierId, tab);
-      setInvoices(data);
+      const response = await purchasingApi.getInvoices(supplierId, tab, requestedPage, requestedLimit);
+      setInvoices(response.data);
+      setMeta(response.meta);
+      if (response.meta.totalPage > 0 && requestedPage > response.meta.totalPage) {
+        setPage(response.meta.totalPage);
+      }
     } catch (err: unknown) {
       setErrorMsg(parseApiError(err as Error));
     } finally {
@@ -76,16 +93,22 @@ export default function PurchaseInvoiceCardList({ onEditInvoice }: Props) {
     }
   }, []);
 
+  useEffect(() => {
+    if (!selectedSupplier) return;
+    const timeoutId = window.setTimeout(() => {
+      void loadInvoices(selectedSupplier.supplierId, activeTab, page, limit);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [activeTab, limit, loadInvoices, page, selectedSupplier]);
+
   const handleSelectSupplier = (supp: SupplierFinancialSummaryCard) => {
+    setPage(1);
     setSelectedSupplier(supp);
-    loadInvoices(supp.supplierId, activeTab);
   };
 
   const handleTabChange = (tab: 'ACTIVE' | 'COMPLETED') => {
+    setPage(1);
     setActiveTab(tab);
-    if (selectedSupplier) {
-      loadInvoices(selectedSupplier.supplierId, tab);
-    }
   };
 
   const handleOpenDetail = async (invoiceId: string) => {
@@ -130,7 +153,7 @@ export default function PurchaseInvoiceCardList({ onEditInvoice }: Props) {
       });
       setIsPaymentOpen(false);
       if (selectedSupplier) {
-        loadInvoices(selectedSupplier.supplierId, activeTab);
+        await loadInvoices(selectedSupplier.supplierId, activeTab, page, limit);
       }
       const sumData = await purchasingApi.getSupplierSummaries();
       setSummaries(sumData);
@@ -173,8 +196,7 @@ export default function PurchaseInvoiceCardList({ onEditInvoice }: Props) {
             <div class="center bold" style="font-size: 13px; margin-top: 4px;">${cfg.companyName}</div>
             <div class="center">${cfg.address}</div>
             <div class="center">Telp: ${cfg.phone}</div>
-            ${cfg.receiptHeader1 ? `<div class="center" style="margin-top: 2px;">${cfg.receiptHeader1}</div>` : ''}
-            <div class="line"></div>
+            <div class="line"></div><div class="center bold">PURCHASE INVOICE</div><div class="line"></div>
             <div>No. Faktur : ${invDetail.purchaseInvoiceNumber}</div>
             <div>Supplier   : ${invDetail.supplierName}</div>
             <div>Tgl Terima : ${invDetail.invoiceDate.slice(0, 10)}</div>
@@ -205,8 +227,8 @@ export default function PurchaseInvoiceCardList({ onEditInvoice }: Props) {
             <div style="display: flex; justify-content: space-between;" class="bold font-size: 12px;"><span>GRAND TOTAL:</span> <span>Rp ${invDetail.invoiceTotal.toLocaleString('id-ID')}</span></div>
             <div style="display: flex; justify-content: space-between;"><span>Sudah Bayar:</span> <span>Rp ${invDetail.paidAmount.toLocaleString('id-ID')}</span></div>
             <div style="display: flex; justify-content: space-between;" class="bold"><span>Sisa Hutang:</span> <span>Rp ${invDetail.outstandingAmount.toLocaleString('id-ID')}</span></div>
-            <div class="line"></div>
-            <div class="center">${cfg.receiptFooter1 || 'Terima Kasih atas Kerjasama Anda'}</div>
+            ${invDetail.note ? `<div style="margin-top: 4px;"><b>Catatan Faktur:</b> ${escapeHtml(invDetail.note)}</div>` : ''}
+            <div class="line"></div><div class="center">HANYA UNTUK TOKO</div>
             <div class="center" style="font-size: 9px; margin-top: 6px; color: #555;">Dicetak: ${printDate}</div>
           </body>
         </html>
@@ -237,7 +259,7 @@ export default function PurchaseInvoiceCardList({ onEditInvoice }: Props) {
           </h2>
         </div>
         <Button variant="outline" size="sm" onClick={async () => {
-          if (selectedSupplier) loadInvoices(selectedSupplier.supplierId, activeTab);
+          if (selectedSupplier) void loadInvoices(selectedSupplier.supplierId, activeTab, page, limit);
           const sumData = await purchasingApi.getSupplierSummaries();
           setSummaries(sumData);
         }} className="h-8 text-xs font-bold text-slate-600 border-slate-300">
@@ -299,7 +321,7 @@ export default function PurchaseInvoiceCardList({ onEditInvoice }: Props) {
         /* LEVEL 2: INVOICE CARDS KECIL */
         <div className="flex-1 flex flex-col overflow-hidden">
           
-          <div className="flex gap-2 mb-4 shrink-0 border-b border-slate-200 pb-3">
+          <div className="flex flex-wrap gap-2 mb-4 shrink-0 border-b border-slate-200 pb-3 items-center">
             <button 
               onClick={() => handleTabChange('ACTIVE')} 
               className={`px-4 py-2 text-xs font-black uppercase rounded-lg transition-all flex items-center gap-2 ${activeTab === 'ACTIVE' ? 'bg-[#326dc8] text-white shadow' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
@@ -312,6 +334,13 @@ export default function PurchaseInvoiceCardList({ onEditInvoice }: Props) {
             >
               <CheckCircle2 className="w-4 h-4"/> Riwayat Selesai (Lunas)
             </button>
+            <div className="ml-auto flex items-center gap-2 text-xs text-slate-500 font-medium">
+              <span>Tampilkan:</span>
+              <Select value={String(limit)} onValueChange={(value) => { setLimit(Number(value)); setPage(1); }}>
+                <SelectTrigger className="w-[80px] bg-white"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-white z-50"><SelectItem value="20">20</SelectItem><SelectItem value="30">30</SelectItem><SelectItem value="50">50</SelectItem><SelectItem value="100">100</SelectItem></SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar p-1">
@@ -382,6 +411,11 @@ export default function PurchaseInvoiceCardList({ onEditInvoice }: Props) {
                         {inv.note && (
                           <p className="text-[11px] text-slate-500 italic mt-2 truncate"><b>Catatan:</b> {inv.note}</p>
                         )}
+                        {inv.returnSummary && inv.returnSummary.total > 0 && (
+                          <div className={`mt-2 rounded px-2 py-1 text-[10px] font-black ${inv.returnSummary.overdue > 0 ? 'bg-rose-100 text-rose-700' : inv.returnSummary.pending > 0 ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                            {inv.returnSummary.total} Retur · {inv.returnSummary.pending > 0 ? `${inv.returnSummary.pending} Menunggu` : 'Selesai'}
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex justify-end items-center gap-1.5 pt-2 border-t border-slate-100">
@@ -400,6 +434,11 @@ export default function PurchaseInvoiceCardList({ onEditInvoice }: Props) {
                             <CreditCard className="w-3 h-3 mr-1"/> Bayar
                           </Button>
                         )}
+                        {inv.status === 'COMPLETED' && (
+                          <Button size="sm" onClick={() => setReturnInvoiceId(inv.purchaseInvoiceId)} className="h-7 bg-orange-600 px-2.5 text-[11px] font-bold text-white hover:bg-orange-700">
+                            <RefreshCw className="mr-1 h-3 w-3" /> {inv.returnSummary?.total ? 'Retur' : 'Buat Retur'}
+                          </Button>
+                        )}
                       </div>
                     </div>
                   );
@@ -407,6 +446,15 @@ export default function PurchaseInvoiceCardList({ onEditInvoice }: Props) {
               </div>
             )}
           </div>
+          {meta.totalData > 0 && (
+            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap justify-between items-center gap-2 text-sm shrink-0">
+              <span className="text-slate-500">Menampilkan {invoices.length} dari {meta.totalData} PI · Halaman {meta.currentPage} dari {Math.max(meta.totalPage, 1)}</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={meta.currentPage <= 1 || isLoading} onClick={() => setPage((value) => value - 1)}>Prev</Button>
+                <Button variant="outline" size="sm" disabled={meta.currentPage >= meta.totalPage || isLoading} onClick={() => setPage((value) => value + 1)}>Next</Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -611,6 +659,15 @@ export default function PurchaseInvoiceCardList({ onEditInvoice }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PurchaseReturnDialog
+        invoiceId={returnInvoiceId}
+        open={Boolean(returnInvoiceId)}
+        onOpenChange={(nextOpen) => { if (!nextOpen) setReturnInvoiceId(null); }}
+        onChanged={() => {
+          if (selectedSupplier) void loadInvoices(selectedSupplier.supplierId, activeTab, page, limit);
+        }}
+      />
 
     </div>
   );

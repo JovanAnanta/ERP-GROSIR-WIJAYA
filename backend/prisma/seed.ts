@@ -62,6 +62,33 @@ async function main(): Promise<void> {
     },
   });
 
+  // Akun operasional awal. Upsert hanya berdasarkan nama dan tidak pernah
+  // menimpa saldo maupun konfigurasi akun yang sudah digunakan.
+  await prisma.financialAccount.upsert({
+    where: { accountName: 'KAS' },
+    update: {},
+    create: {
+      accountName: 'KAS',
+      accountType: 'CASH',
+      openingBalance: 0,
+      currentBalance: 0,
+      isActive: true,
+      createdBy: user.userId,
+    },
+  });
+  await prisma.financialAccount.upsert({
+    where: { accountName: 'BANK' },
+    update: {},
+    create: {
+      accountName: 'BANK',
+      accountType: 'BANK',
+      openingBalance: 0,
+      currentBalance: 0,
+      isActive: true,
+      createdBy: user.userId,
+    },
+  });
+
   // 3. Master Data Permission (FR-SYS-003)
   const permissions = [
     {

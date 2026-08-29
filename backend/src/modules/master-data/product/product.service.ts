@@ -6,7 +6,11 @@ import {
   ProductQueryDto,
   ProductUnitInputDto,
 } from './dto/product.dto.js';
-import type { Prisma, Product } from '../../../../generated/prisma/client.js';
+import type {
+  Prisma,
+  Product,
+  ProductUnit,
+} from '../../../../generated/prisma/client.js';
 import { ImportProductsPayloadDto } from './dto/product.dto.js';
 
 interface FormattableProductUnit {
@@ -158,7 +162,11 @@ export class ProductService {
 
         let parentProductUnitId: bigint | null = null;
 
-        for (const unitInput of units) {
+        const orderedUnits = [
+          parents[0],
+          ...units.filter((unit) => !unit.isParent),
+        ];
+        for (const unitInput of orderedUnits) {
           const unitId = await this.resolveUnit(
             tx,
             userId,
@@ -176,10 +184,11 @@ export class ProductService {
               ? Boolean(unitInput.isActive)
               : true;
 
-          const pu = await tx.productUnit.create({
+          const pu: ProductUnit = await tx.productUnit.create({
             data: {
               productId: product.productId,
               unitId: unitId,
+              parentProductUnitId: isParentFlag ? null : parentProductUnitId,
               conversionFactor: convFactor,
               displayOrder: dOrder,
               isParent: isParentFlag,
@@ -229,6 +238,15 @@ export class ProductService {
     if (!existing)
       throw new HttpException('Produk tidak ditemukan.', HttpStatus.NOT_FOUND);
 
+    const units: ProductUnitInputDto[] = dto.units || [];
+    const parents = units.filter((unit) => unit.isParent);
+    if (parents.length !== 1 || Number(parents[0].conversionFactor) !== 1) {
+      throw new HttpException(
+        'Wajib memiliki 1 Parent Unit dengan Conversion Factor 1.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     return await this.prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
         const categoryId = await this.resolveCategory(
@@ -256,9 +274,31 @@ export class ProductService {
           },
         });
 
-        const units: ProductUnitInputDto[] = dto.units || [];
+        const existingParent = await tx.productUnit.findFirst({
+          where: { productId, isParent: true },
+          select: { productUnitId: true },
+        });
+        if (!existingParent) {
+          throw new HttpException(
+            'Parent Unit produk tidak ditemukan.',
+            HttpStatus.CONFLICT,
+          );
+        }
+        if (
+          !parents[0].productUnitId ||
+          BigInt(parents[0].productUnitId) !== existingParent.productUnitId
+        ) {
+          throw new HttpException(
+            'Parent Unit produk yang sudah digunakan tidak dapat diganti.',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
         if (units.length > 0) {
-          for (const unitInput of units) {
+          const orderedUnits = [
+            parents[0],
+            ...units.filter((unit) => !unit.isParent),
+          ];
+          for (const unitInput of orderedUnits) {
             const unitId = await this.resolveUnit(
               tx,
               userId,
@@ -287,6 +327,9 @@ export class ProductService {
                 where: { productUnitId: BigInt(unitInput.productUnitId) },
                 data: {
                   unitId,
+                  parentProductUnitId: isParentFlag
+                    ? null
+                    : existingParent.productUnitId,
                   conversionFactor: convFactor,
                   displayOrder: dOrder,
                   isParent: isParentFlag,
@@ -301,6 +344,9 @@ export class ProductService {
                   data: {
                     productId,
                     unitId,
+                    parentProductUnitId: isParentFlag
+                      ? null
+                      : existingParent.productUnitId,
                     conversionFactor: convFactor,
                     displayOrder: dOrder,
                     isParent: isParentFlag,
@@ -402,6 +448,7 @@ export class ProductService {
         actualStockDisplay: formattedStock,
         units: p.productUnits.map((pu) => ({
           productUnitId: pu.productUnitId.toString(),
+          parentProductUnitId: pu.parentProductUnitId?.toString() ?? null,
           unitName: pu.unit.unitName,
           conversionFactor: Number(pu.conversionFactor),
           displayOrder: pu.displayOrder,
@@ -564,6 +611,18 @@ export class ProductService {
             const incomingUnitNames = item.units.map((u) =>
               u.unitName.trim().toUpperCase(),
             );
+            const existingParent = existingUnits.find((unit) => unit.isParent);
+            const incomingParent = parents[0];
+            if (
+              !existingParent ||
+              existingParent.unit.unitName.trim().toUpperCase() !==
+                incomingParent.unitName.trim().toUpperCase()
+            ) {
+              throw new HttpException(
+                `Baris ke-${i + 1} (${pName}): Satuan Dasar produk yang sudah digunakan tidak dapat diganti.`,
+                HttpStatus.BAD_REQUEST,
+              );
+            }
 
             for (const eu of existingUnits) {
               if (
@@ -605,10 +664,14 @@ export class ProductService {
           const sortedUnits = [...item.units].sort(
             (a, b) => Number(a.conversionFactor) - Number(b.conversionFactor),
           );
+          const orderedUnits = [
+            parents[0],
+            ...sortedUnits.filter((unit) => !unit.isParent),
+          ];
           let displayOrder = 100;
           let parentProductUnitId: bigint | null = null;
 
-          for (const u of sortedUnits) {
+          for (const u of orderedUnits) {
             const unitKey = u.unitName.trim().toUpperCase();
             let unitId = unitMap.get(unitKey);
             if (!unitId) {
@@ -630,10 +693,11 @@ export class ProductService {
             });
 
             if (existingPU) {
-              const updatedPU = await tx.productUnit.update({
+              const updatedPU: ProductUnit = await tx.productUnit.update({
                 where: { productUnitId: existingPU.productUnitId },
                 data: {
                   conversionFactor: Number(u.conversionFactor),
+                  parentProductUnitId: u.isParent ? null : parentProductUnitId,
                   displayOrder,
                   isParent: u.isParent,
                   isActive: true,
@@ -644,10 +708,11 @@ export class ProductService {
               if (updatedPU.isParent)
                 parentProductUnitId = updatedPU.productUnitId;
             } else {
-              const newPU = await tx.productUnit.create({
+              const newPU: ProductUnit = await tx.productUnit.create({
                 data: {
                   productId: targetProductId,
                   unitId,
+                  parentProductUnitId: u.isParent ? null : parentProductUnitId,
                   conversionFactor: Number(u.conversionFactor),
                   displayOrder,
                   isParent: u.isParent,

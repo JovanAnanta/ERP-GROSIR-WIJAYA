@@ -72,6 +72,7 @@ model User {
   createdPurchaseInvoices        PurchaseInvoice[]        @relation("PurchaseInvoiceCreatedBy")
   updatedPurchaseInvoices        PurchaseInvoice[]        @relation("PurchaseInvoiceUpdatedBy")
   createdPurchaseReturns         PurchaseReturn[]         @relation("PurchaseReturnCreatedBy")
+  updatedPurchaseReturns         PurchaseReturn[]         @relation("PurchaseReturnUpdatedBy")
   createdPurchaseInvoicePayments PurchaseInvoicePayment[] @relation("PurchaseInvoicePaymentCreatedBy")
 
   /**
@@ -110,17 +111,21 @@ model User {
   approvedSalesReturns        SalesReturn[]         @relation("SalesReturnApprovedBy")
   createdSalesReturnDetails   SalesReturnDetail[]   @relation("SalesReturnDetailCreatedBy")
 
-  /* PRICING */
-  createdGuestPrices     GuestSuggestedPrice[]    @relation("GuestPriceCreatedBy")
-  updatedGuestPrices     GuestSuggestedPrice[]    @relation("GuestPriceUpdatedBy")
-  createdCustomerPrices  CustomerSuggestedPrice[] @relation("CustomerPriceCreatedBy")
-  updatedCustomerPrices  CustomerSuggestedPrice[] @relation("CustomerPriceUpdatedBy")
-  createdSupplierCosts   SupplierSuggestedCost[]  @relation("SupplierCostCreatedBy")
-  updatedSupplierCosts   SupplierSuggestedCost[]  @relation("SupplierCostUpdatedBy")
-  createdProductAliases  ProductAlias[]           @relation("ProductAliasCreatedBy")
-  createdUnitAliases     UnitAlias[]              @relation("UnitAliasCreatedBy")
+  /**
+   * PRICING
+   */
+  createdGuestPrices    GuestSuggestedPrice[]    @relation("GuestPriceCreatedBy")
+  updatedGuestPrices    GuestSuggestedPrice[]    @relation("GuestPriceUpdatedBy")
+  createdCustomerPrices CustomerSuggestedPrice[] @relation("CustomerPriceCreatedBy")
+  updatedCustomerPrices CustomerSuggestedPrice[] @relation("CustomerPriceUpdatedBy")
+  createdSupplierCosts  SupplierSuggestedCost[]  @relation("SupplierCostCreatedBy")
+  updatedSupplierCosts  SupplierSuggestedCost[]  @relation("SupplierCostUpdatedBy")
+  createdProductAliases ProductAlias[]           @relation("ProductAliasCreatedBy")
+  createdUnitAliases    UnitAlias[]              @relation("UnitAliasCreatedBy")
 
-  /* LOGGING */
+  /**
+   * LOGGING
+   */
   auditLogs    AuditLog[]
   activityLogs ActivityLog[]
   securityLogs SecurityLog[]
@@ -298,22 +303,25 @@ model Product {
 }
 
 model ProductUnit {
-  productUnitId    BigInt    @id @default(autoincrement()) @map("product_unit_id")
-  productId        BigInt    @map("product_id")
-  unitId           BigInt    @map("unit_id")
-  conversionFactor Decimal   @map("conversion_factor") @db.Decimal(18, 6)
-  displayOrder     Int       @map("display_order")
-  isParent         Boolean   @map("is_parent")
-  isActive         Boolean   @map("is_active")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  createdBy        BigInt    @map("created_by")
-  updatedAt        DateTime? @updatedAt @map("updated_at")
-  updatedBy        BigInt?   @map("updated_by")
+  productUnitId       BigInt    @id @default(autoincrement()) @map("product_unit_id")
+  productId           BigInt    @map("product_id")
+  unitId              BigInt    @map("unit_id")
+  parentProductUnitId BigInt?   @map("parent_product_unit_id")
+  conversionFactor    Decimal   @map("conversion_factor") @db.Decimal(18, 6)
+  displayOrder        Int       @map("display_order")
+  isParent            Boolean   @map("is_parent")
+  isActive            Boolean   @map("is_active")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  createdBy           BigInt    @map("created_by")
+  updatedAt           DateTime? @updatedAt @map("updated_at")
+  updatedBy           BigInt?   @map("updated_by")
 
-  product       Product @relation(fields: [productId], references: [productId])
-  unit          Unit    @relation(fields: [unitId], references: [unitId])
-  createdByUser User    @relation("ProductUnitCreatedBy", fields: [createdBy], references: [userId])
-  updatedByUser User?   @relation("ProductUnitUpdatedBy", fields: [updatedBy], references: [userId])
+  product       Product       @relation(fields: [productId], references: [productId])
+  unit          Unit          @relation(fields: [unitId], references: [unitId])
+  createdByUser User          @relation("ProductUnitCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser User?         @relation("ProductUnitUpdatedBy", fields: [updatedBy], references: [userId])
+  parentUnit    ProductUnit?  @relation("ProductUnitHierarchy", fields: [parentProductUnitId], references: [productUnitId], onDelete: Restrict)
+  childUnits    ProductUnit[] @relation("ProductUnitHierarchy")
 
   /**
    * PURCHASE
@@ -344,6 +352,7 @@ model ProductUnit {
 
   @@index([productId])
   @@index([unitId])
+  @@index([parentProductUnitId])
   @@index([createdBy])
   @@index([updatedBy])
   @@map("product_unit")
@@ -498,9 +507,10 @@ model PurchaseInvoice {
   createdByUser User           @relation("PurchaseInvoiceCreatedBy", fields: [createdBy], references: [userId])
   updatedByUser User?          @relation("PurchaseInvoiceUpdatedBy", fields: [updatedBy], references: [userId])
 
-  details  PurchaseInvoiceDetail[]
-  returns  PurchaseReturn[]
-  payments PurchaseInvoicePayment[]
+  details                PurchaseInvoiceDetail[]
+  returns                PurchaseReturn[]         @relation("PurchaseReturnSourceInvoice")
+  appliedPurchaseReturns PurchaseReturn[]         @relation("PurchaseReturnAppliedInvoice")
+  payments               PurchaseInvoicePayment[]
 
   @@index([purchaseOrderId])
   @@index([supplierId])
@@ -531,24 +541,40 @@ model PurchaseInvoiceDetail {
 }
 
 model PurchaseReturn {
-  purchaseReturnId     BigInt   @id @default(autoincrement()) @map("purchase_return_id")
-  purchaseReturnNumber String   @unique @map("purchase_return_number") @db.VarChar(30)
-  purchaseInvoiceId    BigInt   @map("purchase_invoice_id")
-  supplierId           BigInt   @map("supplier_id")
-  returnDate           DateTime @map("return_date") @db.Date
-  returnTotal          Decimal  @map("return_total") @db.Decimal(18, 2)
-  note                 String?  @db.VarChar(500)
-  createdAt            DateTime @default(now()) @map("created_at")
-  createdBy            BigInt   @map("created_by")
+  purchaseReturnId         BigInt                       @id @default(autoincrement()) @map("purchase_return_id")
+  purchaseReturnNumber     String                       @unique @map("purchase_return_number") @db.VarChar(30)
+  purchaseInvoiceId        BigInt                       @map("purchase_invoice_id")
+  supplierId               BigInt                       @map("supplier_id")
+  status                   PurchaseReturnStatus         @default(DRAFT)
+  resolutionType           PurchaseReturnResolutionType @map("resolution_type")
+  returnDate               DateTime                     @map("return_date") @db.Date
+  expectedResolutionDate   DateTime?                    @map("expected_resolution_date") @db.Date
+  returnTotal              Decimal                      @map("return_total") @db.Decimal(18, 2)
+  inventoryCostTotal       Decimal                      @map("inventory_cost_total") @db.Decimal(18, 2)
+  financialAccountId       BigInt?                      @map("financial_account_id")
+  appliedPurchaseInvoiceId BigInt?                      @map("applied_purchase_invoice_id")
+  reason                   String                       @db.VarChar(255)
+  note                     String?                      @db.VarChar(500)
+  createdAt                DateTime                     @default(now()) @map("created_at")
+  createdBy                BigInt                       @map("created_by")
+  updatedAt                DateTime?                    @updatedAt @map("updated_at")
+  updatedBy                BigInt?                      @map("updated_by")
 
-  purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [purchaseInvoiceId])
-  supplier        Supplier        @relation(fields: [supplierId], references: [supplierId])
-  createdByUser   User            @relation("PurchaseReturnCreatedBy", fields: [createdBy], references: [userId])
+  purchaseInvoice        PurchaseInvoice   @relation("PurchaseReturnSourceInvoice", fields: [purchaseInvoiceId], references: [purchaseInvoiceId])
+  appliedPurchaseInvoice PurchaseInvoice?  @relation("PurchaseReturnAppliedInvoice", fields: [appliedPurchaseInvoiceId], references: [purchaseInvoiceId])
+  supplier               Supplier          @relation(fields: [supplierId], references: [supplierId])
+  financialAccount       FinancialAccount? @relation(fields: [financialAccountId], references: [financialAccountId])
+  createdByUser          User              @relation("PurchaseReturnCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser          User?             @relation("PurchaseReturnUpdatedBy", fields: [updatedBy], references: [userId])
 
   details PurchaseReturnDetail[]
 
   @@index([purchaseInvoiceId])
   @@index([supplierId])
+  @@index([status])
+  @@index([resolutionType])
+  @@index([financialAccountId])
+  @@index([appliedPurchaseInvoiceId])
   @@index([createdBy])
   @@map("purchase_return")
 }
@@ -558,17 +584,23 @@ model PurchaseReturnDetail {
   purchaseReturnId        BigInt  @map("purchase_return_id")
   purchaseInvoiceDetailId BigInt  @map("purchase_invoice_detail_id")
   productUnitId           BigInt  @map("product_unit_id")
+  fifoLayerId             BigInt  @map("fifo_layer_id")
   quantity                Decimal @db.Decimal(18, 3)
+  baseQuantity            Decimal @map("base_quantity") @db.Decimal(18, 3)
   unitCost                Decimal @map("unit_cost") @db.Decimal(18, 2)
+  fifoUnitCost            Decimal @map("fifo_unit_cost") @db.Decimal(18, 6)
+  inventoryCostSubtotal   Decimal @map("inventory_cost_subtotal") @db.Decimal(18, 2)
   subtotal                Decimal @db.Decimal(18, 2)
 
   purchaseReturn        PurchaseReturn        @relation(fields: [purchaseReturnId], references: [purchaseReturnId])
   purchaseInvoiceDetail PurchaseInvoiceDetail @relation(fields: [purchaseInvoiceDetailId], references: [purchaseInvoiceDetailId])
   productUnit           ProductUnit           @relation(fields: [productUnitId], references: [productUnitId])
+  fifoLayer             FifoLayer             @relation(fields: [fifoLayerId], references: [fifoLayerId])
 
   @@index([purchaseReturnId])
   @@index([purchaseInvoiceDetailId])
   @@index([productUnitId])
+  @@index([fifoLayerId])
   @@map("purchase_return_detail")
 }
 
@@ -611,6 +643,20 @@ enum PurchaseInvoiceStatus {
   DRAFT
   COMPLETED
   CANCELLED
+}
+
+enum PurchaseReturnStatus {
+  DRAFT
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum PurchaseReturnResolutionType {
+  REPLACEMENT
+  CURRENT_INVOICE_DEDUCTION
+  NEXT_INVOICE_DEDUCTION
+  CASHBACK
 }
 
 enum PurchasePaymentMethod {
@@ -721,6 +767,7 @@ model FinancialAccount {
   transactions            FinancialAccountTransaction[]
   salesInvoicePayments    SalesInvoicePayment[]
   purchaseInvoicePayments PurchaseInvoicePayment[]
+  purchaseReturns         PurchaseReturn[]
 
   @@index([createdBy])
   @@index([updatedBy])
@@ -728,18 +775,19 @@ model FinancialAccount {
 }
 
 model FinancialAccountTransaction {
-  financialAccountTransactionId BigInt   @id @default(autoincrement()) @map("financial_account_transaction_id")
-  transactionNumber             String   @unique @map("transaction_number") @db.VarChar(30)
-  financialAccountId            BigInt   @map("financial_account_id")
-  transactionType               String   @map("transaction_type") @db.VarChar(50)
-  direction                     String   @db.VarChar(10)
-  amount                        Decimal  @db.Decimal(18, 2)
-  referenceType                 String   @map("reference_type") @db.VarChar(50)
-  referenceId                   BigInt   @map("reference_id")
-  transactionDate               DateTime @map("transaction_date")
-  note                          String?  @db.VarChar(255)
-  createdAt                     DateTime @default(now()) @map("created_at")
-  createdBy                     BigInt   @map("created_by")
+  financialAccountTransactionId BigInt                 @id @default(autoincrement()) @map("financial_account_transaction_id")
+  transactionNumber             String                 @unique @map("transaction_number") @db.VarChar(30)
+  financialAccountId            BigInt                 @map("financial_account_id")
+  transactionType               String                 @map("transaction_type") @db.VarChar(50)
+  paymentMethod                 PurchasePaymentMethod? @map("payment_method")
+  direction                     String                 @db.VarChar(10)
+  amount                        Decimal                @db.Decimal(18, 2)
+  referenceType                 String                 @map("reference_type") @db.VarChar(50)
+  referenceId                   BigInt                 @map("reference_id")
+  transactionDate               DateTime               @map("transaction_date")
+  note                          String?                @db.VarChar(255)
+  createdAt                     DateTime               @default(now()) @map("created_at")
+  createdBy                     BigInt                 @map("created_by")
 
   financialAccount FinancialAccount @relation(fields: [financialAccountId], references: [financialAccountId])
   createdByUser    User             @relation("FinancialAccountTransactionCreatedBy", fields: [createdBy], references: [userId])
@@ -757,6 +805,7 @@ model FinancialAccountTransaction {
 
 enum FifoLayerOriginType {
   PURCHASE
+  PURCHASE_RETURN_REPLACEMENT
   OPENING_BALANCE
   TRANSFORMATION
   INVENTORY_FOUND
@@ -786,6 +835,7 @@ model FifoLayer {
   originInventoryMovement InventoryMovement      @relation("MovementGeneratedLayers", fields: [originInventoryMovementId], references: [inventoryMovementId])
   createdByUser           User                   @relation("FifoLayerCreatedBy", fields: [createdBy], references: [userId])
   transactions            FifoLayerTransaction[]
+  purchaseReturnDetails   PurchaseReturnDetail[]
 
   @@index([productUnitId])
   @@index([originInventoryMovementId])
@@ -1256,11 +1306,11 @@ model ProductAlias {
 }
 
 model UnitAlias {
-  unitAliasId   BigInt   @id @default(autoincrement()) @map("unit_alias_id")
-  unitId        BigInt   @map("unit_id")
-  aliasName     String   @unique @map("alias_name") @db.VarChar(100)
-  createdAt     DateTime @default(now()) @map("created_at")
-  createdBy     BigInt   @map("created_by")
+  unitAliasId BigInt   @id @default(autoincrement()) @map("unit_alias_id")
+  unitId      BigInt   @map("unit_id")
+  aliasName   String   @unique @map("alias_name") @db.VarChar(100)
+  createdAt   DateTime @default(now()) @map("created_at")
+  createdBy   BigInt   @map("created_by")
 
   unit          Unit @relation(fields: [unitId], references: [unitId])
   createdByUser User @relation("UnitAliasCreatedBy", fields: [createdBy], references: [userId])
@@ -1327,7 +1377,6 @@ model SecurityLog {
   @@index([userId])
   @@map("security_log")
 }
-
 
 // ... (tabel-tabel sebelumnya)
 

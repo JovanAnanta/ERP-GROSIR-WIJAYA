@@ -26,8 +26,15 @@ const createEmptyRow = (): POItemForm => ({
   productId: "", productUnitId: "", productName: "", unitName: "", quantity: 1, availableQty: 0, note: ""
 });
 
-export default function CreatePurchaseOrderTab({ onSuccess }: { onSuccess: () => void }) {
+interface Props {
+  editingOrderId?: string | null;
+  onSuccess: () => void;
+  onCancelEdit?: () => void;
+}
+
+export default function CreatePurchaseOrderTab({ editingOrderId, onSuccess, onCancelEdit }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingEdit, setIsLoadingEdit] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [suppliers, setSuppliers] = useState<SupplierDropdownOption[]>([]);
@@ -59,6 +66,50 @@ export default function CreatePurchaseOrderTab({ onSuccess }: { onSuccess: () =>
   useEffect(() => {
     loadInitialData();
   }, [loadInitialData]);
+
+  useEffect(() => {
+    if (!editingOrderId || allProducts.length === 0) return;
+    let isMounted = true;
+
+    const loadOrderForEdit = async () => {
+      setIsLoadingEdit(true);
+      setErrorMsg(null);
+      try {
+        const order = await purchasingApi.getOrderDetail(editingOrderId);
+        if (!['DRAFT', 'READY'].includes(order.status)) {
+          throw new Error('Purchase Order yang sudah selesai atau dibatalkan tidak dapat diedit.');
+        }
+        const loadedItems: POItemForm[] = order.details.map((detail) => {
+          const product = allProducts.find((item) => item.productId === detail.productId);
+          const unit = product?.units.find((item) => item.productUnitId === detail.productUnitId);
+          return {
+            rowId: crypto.randomUUID(),
+            productId: detail.productId,
+            productUnitId: detail.productUnitId,
+            productName: detail.productName,
+            unitName: detail.unitName,
+            quantity: detail.quantity,
+            availableQty: unit?.availableQty ?? 0,
+            note: detail.note ?? '',
+          };
+        });
+        while (loadedItems.length < 7) loadedItems.push(createEmptyRow());
+        if (isMounted) {
+          setSupplierId(order.supplierId);
+          setExpectedDate(order.expectedDate?.slice(0, 10) ?? '');
+          setNote(order.note ?? '');
+          setItems(loadedItems);
+        }
+      } catch (error: unknown) {
+        if (isMounted) showError(parseApiError(error));
+      } finally {
+        if (isMounted) setIsLoadingEdit(false);
+      }
+    };
+
+    void loadOrderForEdit();
+    return () => { isMounted = false; };
+  }, [allProducts, editingOrderId, showError]);
 
   const handleSupplierChange = (val: string | null) => {
     const safeVal = val || "";
@@ -212,10 +263,15 @@ export default function CreatePurchaseOrderTab({ onSuccess }: { onSuccess: () =>
 
     setIsSubmitting(true); setErrorMsg(null);
     try {
-      await purchasingApi.createOrder({
+      const payload = {
         supplierId, expectedDate: expectedDate || undefined, note, status,
         items: validItemsToSubmit.map(i => ({ productUnitId: i.productUnitId, quantity: i.quantity, note: i.note }))
-      });
+      };
+      if (editingOrderId) {
+        await purchasingApi.updateOrder(editingOrderId, payload);
+      } else {
+        await purchasingApi.createOrder(payload);
+      }
       resetForm(); // KEMBALIKAN KE SEMULA JIKA SUKSES
       onSuccess(); 
     } catch (err: unknown) {
@@ -229,8 +285,10 @@ export default function CreatePurchaseOrderTab({ onSuccess }: { onSuccess: () =>
     <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col min-h-full overflow-y-auto custom-scrollbar">
       <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-3 shrink-0">
         <FileCheck className="w-5 h-5 text-amber-500"/>
-        <h2 className="text-base font-black text-slate-800 uppercase tracking-wide">Buat Purchase Order (PO) Baru</h2>
+        <h2 className="text-base font-black text-slate-800 uppercase tracking-wide">{editingOrderId ? 'Edit Purchase Order (PO)' : 'Buat Purchase Order (PO) Baru'}</h2>
       </div>
+
+      {isLoadingEdit && <div className="mb-4 p-3 bg-blue-50 text-blue-700 text-sm font-bold border border-blue-200 rounded flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Memuat seluruh data Purchase Order...</div>}
 
       {errorMsg && (
         <div className="mb-4 p-3 bg-rose-50 text-rose-700 text-sm font-bold border border-rose-200 rounded flex items-center gap-2 shrink-0">
@@ -267,6 +325,7 @@ export default function CreatePurchaseOrderTab({ onSuccess }: { onSuccess: () =>
       <div className="mb-2 flex justify-between items-end shrink-0">
         <Label className="font-extrabold text-slate-800 text-sm uppercase">Daftar Barang Pesanan</Label>
         <div className="flex gap-2">
+          {editingOrderId && onCancelEdit && <Button variant="outline" onClick={onCancelEdit} disabled={isSubmitting} className="font-bold h-9 text-xs px-5">Batal Edit</Button>}
           <Button onClick={() => openCatalog('HISTORY')} disabled={!supplierId} variant="outline" size="sm" className="h-7 text-[10px] font-bold text-emerald-600 border-emerald-200 bg-emerald-50 hover:bg-emerald-100">
             <Download className="w-3 h-3 mr-1"/> Tarik Histori Beli
           </Button>
