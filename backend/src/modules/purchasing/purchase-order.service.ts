@@ -2,6 +2,7 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
 import {
   CreatePurchaseOrderDto,
+  PurchaseOrderListQueryDto,
   UpdatePurchaseOrderDto,
 } from './dto/purchasing.dto.js';
 import { Prisma } from '../../../generated/prisma/client.js';
@@ -122,6 +123,21 @@ export class PurchaseOrderService {
     const id = BigInt(poId);
 
     return await this.prisma.$transaction(async (tx) => {
+      const lockedRows = await tx.$queryRaw<
+        Array<{ purchase_order_id: bigint }>
+      >`
+        SELECT purchase_order_id
+        FROM purchase_order
+        WHERE purchase_order_id = ${id}
+        FOR UPDATE
+      `;
+      if (lockedRows.length === 0) {
+        throw new HttpException(
+          'Purchase Order tidak ditemukan',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
       const existing = await tx.purchaseOrder.findUnique({
         where: { purchaseOrderId: id },
       });
@@ -131,9 +147,9 @@ export class PurchaseOrderService {
           HttpStatus.NOT_FOUND,
         );
 
-      if (existing.status !== 'DRAFT') {
+      if (!['DRAFT', 'READY'].includes(existing.status)) {
         throw new HttpException(
-          'Purchase Order yang sudah siap (Ready) tidak dapat diubah.',
+          'Purchase Order yang sudah selesai atau dibatalkan tidak dapat diubah.',
           HttpStatus.BAD_REQUEST,
         );
       }
@@ -181,39 +197,143 @@ export class PurchaseOrderService {
     });
   }
 
-  // =========================================================================
-  // PERBAIKAN: Menambahkan dukungan Filter `supplierId` untuk Card Layout
-  // =========================================================================
-  async findAll(supplierId?: string) {
+  async findAll(query: PurchaseOrderListQueryDto) {
+    const page = parseInt(query.page ?? '1', 10);
+    const limit = parseInt(query.limit ?? '20', 10);
+    const skip = (page - 1) * limit;
     const whereClause: Prisma.PurchaseOrderWhereInput = {};
-    if (supplierId) whereClause.supplierId = BigInt(supplierId);
+    if (query.supplierId) {
+      whereClause.supplierId = BigInt(query.supplierId);
+    }
+    if (query.tab === 'ACTIVE') {
+      whereClause.status = { in: ['DRAFT', 'READY'] };
+    } else if (query.tab === 'HISTORY') {
+      whereClause.status = { in: ['COMPLETED', 'CANCELLED'] };
+    }
 
+    const total = await this.prisma.purchaseOrder.count({
+      where: whereClause,
+    });
     const data = await this.prisma.purchaseOrder.findMany({
       where: whereClause,
-      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+      orderBy:
+        query.tab === 'HISTORY'
+          ? [{ createdAt: 'desc' }]
+          : [
+              { expectedDate: { sort: 'asc', nulls: 'last' } },
+              { createdAt: 'desc' },
+            ],
       include: {
         supplier: { select: { supplierName: true } },
+        createdByUser: { select: { fullName: true } },
+        updatedByUser: { select: { fullName: true } },
+        details: {
+          include: {
+            productUnit: { include: { product: true, unit: true } },
+          },
+        },
+      },
+    });
+
+    const mappedData = data.map((o) => ({
+      ...o,
+      purchaseOrderId: o.purchaseOrderId.toString(),
+      supplierId: o.supplierId.toString(),
+      supplierName: o.supplier.supplierName,
+      createdBy: o.createdBy.toString(),
+      updatedBy: o.updatedBy?.toString() || null,
+      createdByName: o.createdByUser.fullName,
+      updatedByName: o.updatedByUser?.fullName || null,
+      totalItem: o.details.length,
+      totalQuantity: o.details.reduce(
+        (sum, detail) => sum + Number(detail.quantity),
+        0,
+      ),
+      details: o.details.map((d) => ({
+        ...d,
+        purchaseOrderDetailId: d.purchaseOrderDetailId.toString(),
+        purchaseOrderId: d.purchaseOrderId.toString(),
+        productUnitId: d.productUnitId.toString(),
+        productId: d.productUnit.productId.toString(),
+        quantity: Number(d.quantity),
+        productName: d.productUnit.product.productName,
+        unitName: d.productUnit.unit.unitName,
+      })),
+    }));
+
+    return {
+      data: mappedData,
+      meta: {
+        currentPage: page,
+        pageSize: limit,
+        totalData: total,
+        totalPage: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async findById(id: string) {
+    const data = await this.prisma.purchaseOrder.findUnique({
+      where: { purchaseOrderId: BigInt(id) },
+      include: {
+        supplier: true,
+        createdByUser: { select: { fullName: true } },
+        updatedByUser: { select: { fullName: true } },
+        purchaseInvoices: {
+          select: {
+            purchaseInvoiceId: true,
+            purchaseInvoiceNumber: true,
+            status: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        },
         details: {
           include: { productUnit: { include: { product: true, unit: true } } },
         },
       },
     });
 
-    return data.map((o) => ({
-      ...o,
-      purchaseOrderId: o.purchaseOrderId.toString(),
-      supplierId: o.supplierId.toString(),
-      createdBy: o.createdBy.toString(),
-      updatedBy: o.updatedBy?.toString() || null,
-      details: o.details.map((d) => ({
-        ...d,
-        purchaseOrderDetailId: d.purchaseOrderDetailId.toString(),
-        purchaseOrderId: d.purchaseOrderId.toString(),
-        productUnitId: d.productUnitId.toString(),
-        quantity: Number(d.quantity),
-        productName: d.productUnit.product.productName,
-        unitName: d.productUnit.unit.unitName,
+    if (!data) {
+      throw new HttpException(
+        'Purchase Order tidak ditemukan',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    return {
+      ...data,
+      purchaseOrderId: data.purchaseOrderId.toString(),
+      supplierId: data.supplierId.toString(),
+      createdBy: data.createdBy.toString(),
+      updatedBy: data.updatedBy?.toString() || null,
+      createdByName: data.createdByUser.fullName,
+      updatedByName: data.updatedByUser?.fullName || null,
+      supplierName: data.supplier.supplierName,
+      supplierPhone: data.supplier.phone,
+      supplierEmail: data.supplier.email,
+      supplierAddress: data.supplier.address,
+      supplierPicName: data.supplier.picName,
+      totalItem: data.details.length,
+      totalQuantity: data.details.reduce(
+        (sum, detail) => sum + Number(detail.quantity),
+        0,
+      ),
+      details: data.details.map((detail) => ({
+        purchaseOrderDetailId: detail.purchaseOrderDetailId.toString(),
+        productUnitId: detail.productUnitId.toString(),
+        productId: detail.productUnit.productId.toString(),
+        productName: detail.productUnit.product.productName,
+        unitName: detail.productUnit.unit.unitName,
+        quantity: Number(detail.quantity),
+        note: detail.note,
       })),
-    }));
+      purchaseInvoices: data.purchaseInvoices.map((invoice) => ({
+        ...invoice,
+        purchaseInvoiceId: invoice.purchaseInvoiceId.toString(),
+      })),
+    };
   }
 }

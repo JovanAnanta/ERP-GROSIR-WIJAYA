@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import SupplierListPage from "./supplier/SupplierListPage";
 import { Users, FileCheck, FileText, ChevronDown, ListOrdered } from "lucide-react";
@@ -11,16 +12,19 @@ import {
 import CreatePurchaseOrderTab from "./components/CreatePurchaseOrderTab";
 import CreatePurchaseInvoiceTab from "./components/CreatePurchaseInvoiceTab";
 import PurchaseInvoiceCardList from "./components/PurchaseInvoiceCardList";
+import PurchaseOrderCardList from "./components/PurchaseOrderCardList";
 
 type TabType = "purchases" | "transactions" | "suppliers";
 type TransactionSubtype = "po" | "pi";
 
 export default function PurchasingModulePage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [purchaseListVersion, setPurchaseListVersion] = useState(0);
   
   const activeTab = (searchParams.get("tab") as TabType) || "purchases";
   const subType = (searchParams.get("sub") as TransactionSubtype) || "po";
   const editInvoiceId = searchParams.get("editId");
+  const editOrderId = searchParams.get("editPoId");
 
   const setActiveTab = (tab: TabType, sub?: TransactionSubtype) => {
     const params: Record<string, string> = { tab };
@@ -94,21 +98,36 @@ export default function PurchasingModulePage() {
       </div>
 
       <div className="flex-1 pt-4 overflow-hidden flex flex-col">
-        <div className={`flex-1 flex-col ${activeTab === "purchases" ? "flex" : "hidden"}`}>
-          <PurchaseInvoiceCardList onEditInvoice={(invId) => {
-            // Pindah ke tab transaksi PI dengan membawa parameter editId
-            setSearchParams({ tab: "transactions", sub: "pi", editId: invId });
-          }} />
+        <div className={`flex-1 flex-col overflow-y-auto custom-scrollbar ${activeTab === "purchases" ? "flex" : "hidden"}`}>
+          <div className="space-y-4 pb-2">
+            <PurchaseOrderCardList key={`po-${purchaseListVersion}`} onEditOrder={(poId) => {
+              setSearchParams({ tab: "transactions", sub: "po", editPoId: poId });
+            }} />
+            <div className="min-h-[650px]">
+              <PurchaseInvoiceCardList key={`pi-${purchaseListVersion}`} onEditInvoice={(invId) => {
+                setSearchParams({ tab: "transactions", sub: "pi", editId: invId });
+              }} />
+            </div>
+          </div>
         </div>
 
         <div className={`flex-1 flex-col ${activeTab === "transactions" && subType === "po" ? "flex" : "hidden"}`}>
-          <CreatePurchaseOrderTab onSuccess={() => alert("Purchase Order berhasil disimpan!")} />
+          <CreatePurchaseOrderTab
+            editingOrderId={editOrderId}
+            onSuccess={() => {
+              setPurchaseListVersion((value) => value + 1);
+              alert(editOrderId ? "Purchase Order berhasil diperbarui!" : "Purchase Order berhasil disimpan!");
+              setSearchParams({ tab: "purchases" });
+            }}
+            onCancelEdit={() => setSearchParams({ tab: "purchases" })}
+          />
         </div>
 
         <div className={`flex-1 flex-col ${activeTab === "transactions" && subType === "pi" ? "flex" : "hidden"}`}>
           <CreatePurchaseInvoiceTab 
             editingInvoiceId={editInvoiceId}
             onSuccess={() => {
+              setPurchaseListVersion((value) => value + 1);
               alert(editInvoiceId ? "Draft Purchase Invoice berhasil diperbarui & diproses!" : "Faktur Pembelian berhasil diproses!");
               // Kembali ke list setelah sukses edit/post
               setSearchParams({ tab: "purchases" });

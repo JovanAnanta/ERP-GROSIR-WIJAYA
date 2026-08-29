@@ -2,6 +2,7 @@ import { apiClient } from '@/lib/axios';
 
 export interface ProductUnit {
   productUnitId?: string;
+  parentProductUnitId?: string | null;
   unitId?: string;
   unitName: string;
   conversionFactor: number;

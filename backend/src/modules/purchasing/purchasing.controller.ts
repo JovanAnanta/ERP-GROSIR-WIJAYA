@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { PurchaseOrderService } from './purchase-order.service.js';
 import { PurchaseInvoiceService } from './purchase-invoice.service.js';
+import { PurchaseReturnService } from './purchase-return.service.js';
 import {
   CreatePurchaseOrderDto,
   UpdatePurchaseOrderDto,
@@ -19,12 +20,16 @@ import {
   AddInvoicePaymentDto,
   PurchaseInvoiceListQueryDto,
   PurchaseOrderListQueryDto,
+  CompletePurchaseReturnDto,
+  SavePurchaseReturnDto,
 } from './dto/purchasing.dto.js';
 import { SessionGuard } from '../../common/guards/session.guards.js';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import type { Request } from 'express';
 import { PositiveBigIntPipe } from '../../common/pipes/positive-bigint.pipe.js';
+import { RolesGuard } from '../../common/guards/roles.guard.js';
+import { RequireRoles } from '../../common/decorators/roles.decorator.js';
 
 interface AuthRequest extends Request {
   user: { userId: bigint; role: { roleCode: string } };
@@ -36,8 +41,117 @@ export class PurchasingController {
   constructor(
     private readonly poService: PurchaseOrderService,
     private readonly piService: PurchaseInvoiceService,
+    private readonly returnService: PurchaseReturnService,
     private readonly prisma: PrismaService,
   ) {}
+
+  @Get('invoices/:id/return-context')
+  @UseGuards(RolesGuard)
+  @RequireRoles('ADMIN', 'OWNER', 'SUPER_OWNER')
+  async getReturnContext(@Param('id', PositiveBigIntPipe) id: string) {
+    return {
+      success: true,
+      data: await this.returnService.getInvoiceContext(id),
+    };
+  }
+
+  @Get('invoices/:id/returns')
+  @UseGuards(RolesGuard)
+  @RequireRoles('ADMIN', 'OWNER', 'SUPER_OWNER')
+  async getInvoiceReturns(@Param('id', PositiveBigIntPipe) id: string) {
+    return { success: true, data: await this.returnService.findByInvoice(id) };
+  }
+
+  @Post('returns')
+  @UseGuards(RolesGuard)
+  @RequireRoles('ADMIN', 'OWNER', 'SUPER_OWNER')
+  async createReturn(
+    @Body() dto: SavePurchaseReturnDto,
+    @Req() req: AuthRequest,
+  ) {
+    return {
+      success: true,
+      message: 'Purchase Return berhasil disimpan.',
+      data: await this.returnService.create(req.user.userId, dto),
+    };
+  }
+
+  @Put('returns/:id')
+  @UseGuards(RolesGuard)
+  @RequireRoles('ADMIN', 'OWNER', 'SUPER_OWNER')
+  async updateReturn(
+    @Param('id', PositiveBigIntPipe) id: string,
+    @Body() dto: SavePurchaseReturnDto,
+    @Req() req: AuthRequest,
+  ) {
+    return {
+      success: true,
+      message: 'Purchase Return berhasil diperbarui.',
+      data: await this.returnService.update(req.user.userId, id, dto),
+    };
+  }
+
+  @Post('returns/:id/ready')
+  @UseGuards(RolesGuard)
+  @RequireRoles('ADMIN', 'OWNER', 'SUPER_OWNER')
+  async readyReturn(
+    @Param('id', PositiveBigIntPipe) id: string,
+    @Req() req: AuthRequest,
+  ) {
+    return {
+      success: true,
+      message: 'Barang retur telah diambil.',
+      data: await this.returnService.markReady(req.user.userId, id),
+    };
+  }
+
+  @Post('returns/:id/complete')
+  @UseGuards(RolesGuard)
+  @RequireRoles('ADMIN', 'OWNER', 'SUPER_OWNER')
+  async completeReturn(
+    @Param('id', PositiveBigIntPipe) id: string,
+    @Body() dto: CompletePurchaseReturnDto,
+    @Req() req: AuthRequest,
+  ) {
+    return {
+      success: true,
+      message: 'Purchase Return telah diselesaikan.',
+      data: await this.returnService.complete(req.user.userId, id, dto),
+    };
+  }
+
+  @Post('returns/:id/cancel')
+  @UseGuards(RolesGuard)
+  @RequireRoles('ADMIN', 'OWNER', 'SUPER_OWNER')
+  async cancelReturn(
+    @Param('id', PositiveBigIntPipe) id: string,
+    @Req() req: AuthRequest,
+  ) {
+    return {
+      success: true,
+      message: 'Purchase Return dibatalkan.',
+      data: await this.returnService.cancel(req.user.userId, id),
+    };
+  }
+
+  @Get('returns/:id')
+  @UseGuards(RolesGuard)
+  @RequireRoles('ADMIN', 'OWNER', 'SUPER_OWNER')
+  async getReturn(@Param('id', PositiveBigIntPipe) id: string) {
+    return { success: true, data: await this.returnService.findById(id) };
+  }
+
+  @Get('returns/:id/completion-options')
+  @UseGuards(RolesGuard)
+  @RequireRoles('ADMIN', 'OWNER', 'SUPER_OWNER')
+  async getReturnCompletionOptions(
+    @Param('id', PositiveBigIntPipe) id: string,
+  ) {
+    return {
+      success: true,
+      data: await this.returnService.getCompletionOptions(id),
+    };
+  }
 
   @Get('list/supplier-summaries')
   @RequirePermissions('PURCHASE_INVOICE_VIEW')
@@ -49,8 +163,8 @@ export class PurchasingController {
   @Get('list/invoices')
   @RequirePermissions('PURCHASE_INVOICE_VIEW')
   async getInvoices(@Query() query: PurchaseInvoiceListQueryDto) {
-    const data = await this.piService.findAll(query.supplierId, query.tab);
-    return { success: true, data };
+    const result = await this.piService.findAll(query);
+    return { success: true, ...result };
   }
 
   @Get('list/invoices/:id')
@@ -89,7 +203,14 @@ export class PurchasingController {
   @Get('orders')
   @RequirePermissions('PURCHASE_ORDER_VIEW')
   async getPOs(@Query() query: PurchaseOrderListQueryDto) {
-    const data = await this.poService.findAll(query.supplierId);
+    const result = await this.poService.findAll(query);
+    return { success: true, ...result };
+  }
+
+  @Get('orders/:id')
+  @RequirePermissions('PURCHASE_ORDER_VIEW')
+  async getPODetail(@Param('id', PositiveBigIntPipe) id: string) {
+    const data = await this.poService.findById(id);
     return { success: true, data };
   }
 
@@ -180,6 +301,7 @@ export class PurchasingController {
       data: accounts.map((a) => ({
         financialAccountId: a.financialAccountId.toString(),
         accountName: a.accountName,
+        accountType: a.accountType,
         currentBalance: Number(a.currentBalance),
       })),
     };

@@ -2,6 +2,7 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
 import {
   CreatePurchaseInvoiceDto,
+  PurchaseInvoiceListQueryDto,
   UpdatePurchaseInvoiceDto,
   AddInvoicePaymentDto,
   PurchasePaymentDto,
@@ -12,6 +13,11 @@ import {
   PurchaseOrderStatus,
 } from '../../../generated/prisma/client.js';
 import { calculateTotalPaid } from './purchase-payment.utils.js';
+import { toBaseQuantity, toBaseUnitCost } from './fifo-cost.utils.js';
+import {
+  generateFifoLayerNumber,
+  recordInitialFifoIn,
+} from './fifo-ledger.utils.js';
 
 type CreatedInvoiceWithDetails = Prisma.PurchaseInvoiceGetPayload<{
   include: {
@@ -422,6 +428,7 @@ export class PurchaseInvoiceService {
           transactionNumber,
           financialAccountId,
           transactionType: 'PURCHASE_PAYMENT',
+          paymentMethod: dto.paymentMethod,
           direction: 'OUT',
           amount: payAmt,
           referenceType: 'PURCHASE_INVOICE',
@@ -548,27 +555,51 @@ export class PurchaseInvoiceService {
     }));
   }
 
-  async findAll(supplierId?: string, tab?: 'ACTIVE' | 'COMPLETED') {
+  async findAll(query: PurchaseInvoiceListQueryDto) {
+    const page = parseInt(query.page ?? '1', 10);
+    const limit = parseInt(query.limit ?? '20', 10);
+    const skip = (page - 1) * limit;
     const whereClause: Prisma.PurchaseInvoiceWhereInput = {};
-    if (supplierId) whereClause.supplierId = BigInt(supplierId);
+    if (query.supplierId) whereClause.supplierId = BigInt(query.supplierId);
 
-    if (tab === 'ACTIVE') {
+    if (query.tab === 'ACTIVE') {
       whereClause.OR = [
         { status: 'DRAFT' },
         { status: 'COMPLETED', statusPayment: { in: ['UNPAID', 'PARTIAL'] } },
       ];
-    } else if (tab === 'COMPLETED') {
+    } else if (query.tab === 'COMPLETED') {
       whereClause.status = 'COMPLETED';
       whereClause.statusPayment = 'PAID';
     }
 
+    const total = await this.prisma.purchaseInvoice.count({
+      where: whereClause,
+    });
     const data = await this.prisma.purchaseInvoice.findMany({
       where: whereClause,
-      include: { supplier: { select: { supplierName: true } } },
-      orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+      skip,
+      take: limit,
+      include: {
+        supplier: { select: { supplierName: true } },
+        returns: {
+          where: { status: { not: 'CANCELLED' } },
+          select: {
+            status: true,
+            resolutionType: true,
+            expectedResolutionDate: true,
+          },
+        },
+      },
+      orderBy:
+        query.tab === 'COMPLETED'
+          ? [{ createdAt: 'desc' }]
+          : [
+              { dueDate: { sort: 'asc', nulls: 'last' } },
+              { createdAt: 'desc' },
+            ],
     });
 
-    return data.map((d) => ({
+    const mappedData = data.map((d) => ({
       ...d,
       purchaseInvoiceId: d.purchaseInvoiceId.toString(),
       purchaseOrderId: d.purchaseOrderId?.toString() || null,
@@ -579,7 +610,27 @@ export class PurchaseInvoiceService {
       outstandingAmount: Number(d.outstandingAmount),
       createdBy: d.createdBy.toString(),
       updatedBy: d.updatedBy?.toString() || null,
+      returnSummary: {
+        total: d.returns.length,
+        pending: d.returns.filter((item) => item.status !== 'COMPLETED').length,
+        overdue: d.returns.filter(
+          (item) =>
+            item.status === 'READY' &&
+            item.expectedResolutionDate &&
+            item.expectedResolutionDate < new Date(),
+        ).length,
+      },
     }));
+
+    return {
+      data: mappedData,
+      meta: {
+        currentPage: page,
+        pageSize: limit,
+        totalData: total,
+        totalPage: Math.ceil(total / limit),
+      },
+    };
   }
 
   async findById(id: string) {
@@ -651,10 +702,12 @@ export class PurchaseInvoiceService {
           HttpStatus.INTERNAL_SERVER_ERROR,
         );
 
-      const multiplier = selectedUnit.conversionFactor.div(
+      const parentQty = toBaseQuantity(
+        detail.quantity,
+        selectedUnit.conversionFactor,
         parentUnit.conversionFactor,
       );
-      const parentQty = detail.quantity.mul(multiplier);
+      const baseUnitCost = toBaseUnitCost(detail.subtotal, parentQty);
 
       const movement = await tx.inventoryMovement.create({
         data: {
@@ -670,20 +723,31 @@ export class PurchaseInvoiceService {
         },
       });
 
-      await tx.fifoLayer.create({
+      const layer = await tx.fifoLayer.create({
         data: {
-          fifoLayerNumber: `FIFO-${Date.now()}-${detail.purchaseInvoiceDetailId}`,
+          fifoLayerNumber: await generateFifoLayerNumber(tx, now),
           productUnitId: parentUnit.productUnitId,
           originType: 'PURCHASE',
           originInventoryMovementId: movement.inventoryMovementId,
           originId: detail.purchaseInvoiceDetailId,
           originalQty: parentQty,
           remainingQty: parentQty,
-          unitCost: detail.unitCost,
+          // FIFO is stored in the parent/base unit, so its unit cost must use
+          // the same unit as originalQty/remainingQty.
+          unitCost: baseUnitCost,
           originalCost: detail.subtotal,
           remainingCost: detail.subtotal,
           createdBy: userId,
         },
+      });
+
+      await recordInitialFifoIn(tx, {
+        fifoLayerId: layer.fifoLayerId,
+        inventoryMovementId: movement.inventoryMovementId,
+        quantity: parentQty,
+        unitCost: baseUnitCost,
+        totalCost: detail.subtotal,
+        createdBy: userId,
       });
 
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`INVENTORY_STOCK:${parentUnit.productUnitId.toString()}`}))`;
@@ -755,6 +819,7 @@ export class PurchaseInvoiceService {
             transactionNumber,
             financialAccountId: BigInt(p.financialAccountId),
             transactionType: 'PURCHASE_PAYMENT',
+            paymentMethod: p.paymentMethod,
             direction: 'OUT',
             amount: amt,
             referenceType: 'PURCHASE_INVOICE',
