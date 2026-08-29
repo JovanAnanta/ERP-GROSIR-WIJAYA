@@ -12,6 +12,8 @@ import PurchaseReturnDialog from "./PurchaseReturnDialog";
 
 interface Props {
   onEditInvoice: (invoiceId: string) => void;
+  canCreate?: boolean;
+  canUpdate?: boolean;
 }
 
 const escapeHtml = (value: string): string => value.replace(/[&<>'"]/g, (character) => ({
@@ -22,7 +24,7 @@ const escapeHtml = (value: string): string => value.replace(/[&<>'"]/g, (charact
   '"': '&quot;',
 }[character] ?? character));
 
-export default function PurchaseInvoiceCardList({ onEditInvoice }: Props) {
+export default function PurchaseInvoiceCardList({ onEditInvoice, canCreate = true, canUpdate = true }: Props) {
   const [selectedSupplier, setSelectedSupplier] = useState<SupplierFinancialSummaryCard | null>(null);
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'COMPLETED'>('ACTIVE');
   
@@ -423,18 +425,18 @@ export default function PurchaseInvoiceCardList({ onEditInvoice }: Props) {
                           <Eye className="w-3 h-3 mr-1"/> Detail
                         </Button>
 
-                        {inv.status === 'DRAFT' && (
+                        {inv.status === 'DRAFT' && canUpdate && (
                           <Button size="sm" onClick={() => onEditInvoice(inv.purchaseInvoiceId)} className="h-7 text-[11px] font-bold bg-[#326dc8] hover:bg-blue-700 text-white px-2.5">
                             Edit
                           </Button>
                         )}
 
-                        {inv.status === 'COMPLETED' && inv.statusPayment !== 'PAID' && (
+                        {inv.status === 'COMPLETED' && inv.statusPayment !== 'PAID' && canUpdate && (
                           <Button size="sm" onClick={() => handleOpenPayment(inv)} className="h-7 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-2.5">
                             <CreditCard className="w-3 h-3 mr-1"/> Bayar
                           </Button>
                         )}
-                        {inv.status === 'COMPLETED' && (
+                        {inv.status === 'COMPLETED' && (canCreate || Boolean(inv.returnSummary?.total)) && (
                           <Button size="sm" onClick={() => setReturnInvoiceId(inv.purchaseInvoiceId)} className="h-7 bg-orange-600 px-2.5 text-[11px] font-bold text-white hover:bg-orange-700">
                             <RefreshCw className="mr-1 h-3 w-3" /> {inv.returnSummary?.total ? 'Retur' : 'Buat Retur'}
                           </Button>

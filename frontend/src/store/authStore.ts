@@ -5,6 +5,7 @@ export interface AuthUser {
   username: string;
   fullName: string;
   roleId: string;
+  permissions: string[];
 }
 
 export type AuthStatus =
@@ -45,7 +46,14 @@ function readCachedUser(): AuthUser | null {
       return null;
     }
 
-    return value as AuthUser;
+    return {
+      ...(value as Omit<AuthUser, 'permissions'>),
+      permissions: Array.isArray(value.permissions)
+        ? value.permissions.filter((permission): permission is string =>
+            typeof permission === 'string',
+          )
+        : [],
+    };
   } catch {
     clearCachedUser();
     return null;
@@ -135,3 +143,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ forceLogoutMessage: null });
   }
 }));
+
+export function hasPermission(
+  user: AuthUser | null | undefined,
+  permission: string,
+): boolean {
+  if (!user) return false;
+  if (user.roleId === '1' || user.roleId === '2') return true;
+  return user.permissions.includes('*') || user.permissions.includes(permission);
+}

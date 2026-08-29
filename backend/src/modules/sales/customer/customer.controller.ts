@@ -18,7 +18,9 @@ import {
   CustomerQueryDto,
 } from './dto/customer.dto.js';
 import { SessionGuard } from '../../../common/guards/session.guards.js';
+import { PermissionGuard } from '../../../common/guards/permissions.guard.js';
 import { RequirePermissions } from '../../../common/decorators/permissions.decorator.js';
+import { PERMISSIONS } from '../../../common/authorization/permission-catalog.js';
 import { PositiveBigIntPipe } from '../../../common/pipes/positive-bigint.pipe.js';
 import type { Request } from 'express';
 
@@ -27,19 +29,19 @@ interface AuthRequest extends Request {
 }
 
 @Controller('customers')
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, PermissionGuard)
 export class CustomerController {
   constructor(private readonly customerService: CustomerService) {}
 
   @Get()
-  @RequirePermissions('CUSTOMER_VIEW') // Menerapkan Guard dari FR-003
+  @RequirePermissions(PERMISSIONS.SALES_VIEW)
   async getAll(@Query() query: CustomerQueryDto) {
     const result = await this.customerService.findAll(query);
     return { success: true, ...result };
   }
 
   @Post()
-  @RequirePermissions('CUSTOMER_CREATE')
+  @RequirePermissions(PERMISSIONS.SALES_CREATE)
   async create(
     @Body() dto: CreateCustomerDto,
     @Req() req: AuthRequest,
@@ -63,7 +65,7 @@ export class CustomerController {
   }
 
   @Put(':id')
-  @RequirePermissions('CUSTOMER_UPDATE')
+  @RequirePermissions(PERMISSIONS.SALES_UPDATE)
   async update(
     @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: UpdateCustomerDto,
@@ -85,7 +87,7 @@ export class CustomerController {
   }
 
   @Post(':id/inactivate')
-  @RequirePermissions('CUSTOMER_INACTIVATE')
+  @RequirePermissions(PERMISSIONS.SALES_UPDATE)
   async inactivate(
     @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthRequest,
@@ -105,7 +107,7 @@ export class CustomerController {
   }
 
   @Post(':id/reactivate')
-  @RequirePermissions('CUSTOMER_REACTIVATE')
+  @RequirePermissions(PERMISSIONS.SALES_UPDATE)
   async reactivate(
     @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthRequest,

@@ -13,11 +13,15 @@ import CreatePurchaseOrderTab from "./components/CreatePurchaseOrderTab";
 import CreatePurchaseInvoiceTab from "./components/CreatePurchaseInvoiceTab";
 import PurchaseInvoiceCardList from "./components/PurchaseInvoiceCardList";
 import PurchaseOrderCardList from "./components/PurchaseOrderCardList";
+import { hasPermission, useAuthStore } from "@/store/authStore";
 
 type TabType = "purchases" | "transactions" | "suppliers";
 type TransactionSubtype = "po" | "pi";
 
 export default function PurchasingModulePage() {
+  const user = useAuthStore((state) => state.user);
+  const canCreate = hasPermission(user, 'PURCHASE_CREATE');
+  const canUpdate = hasPermission(user, 'PURCHASE_UPDATE');
   const [searchParams, setSearchParams] = useSearchParams();
   const [purchaseListVersion, setPurchaseListVersion] = useState(0);
   
@@ -52,7 +56,7 @@ export default function PurchasingModulePage() {
           <ListOrdered className="w-4 h-4 text-emerald-600" /> Purchase List & Monitoring
         </button>
 
-        <DropdownMenu>
+        {(canCreate || canUpdate) && <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               onClick={() => setActiveTab("transactions", subType)}
@@ -85,7 +89,7 @@ export default function PurchasingModulePage() {
               <span>Purchase Invoice (PI)</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
+        </DropdownMenu>}
 
         <button
           onClick={() => setSearchParams({ tab: "suppliers" })}
@@ -100,11 +104,13 @@ export default function PurchasingModulePage() {
       <div className="flex-1 pt-4 overflow-hidden flex flex-col">
         <div className={`flex-1 flex-col overflow-y-auto custom-scrollbar ${activeTab === "purchases" ? "flex" : "hidden"}`}>
           <div className="space-y-4 pb-2">
-            <PurchaseOrderCardList key={`po-${purchaseListVersion}`} onEditOrder={(poId) => {
+            <PurchaseOrderCardList key={`po-${purchaseListVersion}`} canUpdate={canUpdate} onEditOrder={(poId) => {
+              if (!canUpdate) return;
               setSearchParams({ tab: "transactions", sub: "po", editPoId: poId });
             }} />
             <div className="min-h-[650px]">
-              <PurchaseInvoiceCardList key={`pi-${purchaseListVersion}`} onEditInvoice={(invId) => {
+              <PurchaseInvoiceCardList key={`pi-${purchaseListVersion}`} canCreate={canCreate} canUpdate={canUpdate} onEditInvoice={(invId) => {
+                if (!canUpdate) return;
                 setSearchParams({ tab: "transactions", sub: "pi", editId: invId });
               }} />
             </div>
@@ -112,7 +118,7 @@ export default function PurchasingModulePage() {
         </div>
 
         <div className={`flex-1 flex-col ${activeTab === "transactions" && subType === "po" ? "flex" : "hidden"}`}>
-          <CreatePurchaseOrderTab
+          {(editOrderId ? canUpdate : canCreate) ? <CreatePurchaseOrderTab
             editingOrderId={editOrderId}
             onSuccess={() => {
               setPurchaseListVersion((value) => value + 1);
@@ -120,11 +126,11 @@ export default function PurchasingModulePage() {
               setSearchParams({ tab: "purchases" });
             }}
             onCancelEdit={() => setSearchParams({ tab: "purchases" })}
-          />
+          /> : <div className="rounded-xl border border-amber-200 bg-white p-8 text-sm text-slate-600">Permission untuk transaksi ini belum diberikan.</div>}
         </div>
 
         <div className={`flex-1 flex-col ${activeTab === "transactions" && subType === "pi" ? "flex" : "hidden"}`}>
-          <CreatePurchaseInvoiceTab 
+          {(editInvoiceId ? canUpdate : canCreate) ? <CreatePurchaseInvoiceTab
             editingInvoiceId={editInvoiceId}
             onSuccess={() => {
               setPurchaseListVersion((value) => value + 1);
@@ -135,7 +141,7 @@ export default function PurchasingModulePage() {
             onCancelEdit={() => {
               setSearchParams({ tab: "purchases" });
             }}
-          />
+          /> : <div className="rounded-xl border border-amber-200 bg-white p-8 text-sm text-slate-600">Permission untuk transaksi ini belum diberikan.</div>}
         </div>
 
         <div className={`flex-1 flex-col ${activeTab === "suppliers" ? "flex" : "hidden"}`}>

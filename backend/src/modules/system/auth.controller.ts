@@ -52,6 +52,9 @@ export class AuthController {
       userAgent: safeUserAgent,
       deviceId: safeDeviceId,
     });
+    const permissions = await this.authService.getEffectivePermissions(
+      result.user.userId,
+    );
 
     res.cookie(SESSION_COOKIE_NAME, result.token, {
       httpOnly: true,
@@ -69,18 +72,23 @@ export class AuthController {
         username: result.user.username,
         fullName: result.user.fullName,
         roleId: result.user.roleId.toString(),
+        permissions,
       },
     });
   }
 
   @Get('me')
   @UseGuards(SessionGuard)
-  getCurrentUser(@Req() req: AuthenticatedRequest) {
+  async getCurrentUser(@Req() req: AuthenticatedRequest) {
+    const permissions = await this.authService.getEffectivePermissions(
+      req.user.userId,
+    );
     return {
       userId: req.user.userId.toString(),
       username: req.user.username,
       fullName: req.user.fullName,
       roleId: req.user.roleId.toString(),
+      permissions,
     };
   }
 

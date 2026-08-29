@@ -23,6 +23,7 @@ import { ProductModule } from './modules/master-data/product/product.module.js';
 import { BrandModule } from './modules/master-data/brand/brand.module.js';
 import { PricingModule } from './modules/pricing/pricing.module.js';
 import { PurchasingModule } from './modules/purchasing/purchasing.module.js';
+import { AuthorizationModule } from './common/authorization/authorization.module.js';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { PurchasingModule } from './modules/purchasing/purchasing.module.js';
       isGlobal: true,
       validate: validateEnvironment,
     }),
+    AuthorizationModule,
     ThrottlerModule.forRoot([
       {
         ttl: 60000,

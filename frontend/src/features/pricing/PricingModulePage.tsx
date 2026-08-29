@@ -5,10 +5,14 @@ import GuestPriceTab from "./components/GuestPriceTab";
 import PriceBrochureTab from "./components/PriceBrochureTab";
 import ImportProductTab from "./components/ImportProductTab";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { hasPermission, useAuthStore } from "@/store/authStore";
 
 type TabType = "guest" | "brochure" | "import";
 
 export default function PricingModulePage() {
+  const user = useAuthStore((state) => state.user);
+  const canExport = hasPermission(user, 'PRICING_EXPORT');
+  const canImport = hasPermission(user, 'MASTER_CREATE') && hasPermission(user, 'MASTER_UPDATE');
   const [searchParams, setSearchParams] = useSearchParams();
   // Membaca tab dari URL (?tab=...), default ke "guest" jika kosong
   const activeTab = (searchParams.get("tab") as TabType) || "guest";
@@ -41,22 +45,22 @@ export default function PricingModulePage() {
       </div>
 
       <div className="flex border-b border-slate-200 mt-4 bg-white px-6 pt-4 rounded-t-xl shadow-sm overflow-x-auto custom-scrollbar shrink-0">
-        <button
+        {canExport && <button
           onClick={() => handleTabClick("guest")}
           className={`flex items-center gap-2 pb-3 px-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap ${
             activeTab === "guest" ? "border-[#326dc8] text-[#326dc8]" : "border-transparent text-slate-500 hover:text-slate-800"
           }`}
         >
           <Store className="w-4 h-4" /> Guest Suggested Price
-        </button>
-        <button
+        </button>}
+        {canImport && <button
           onClick={() => handleTabClick("brochure")}
           className={`flex items-center gap-2 pb-3 px-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap ${
             activeTab === "brochure" ? "border-[#326dc8] text-[#326dc8]" : "border-transparent text-slate-500 hover:text-slate-800"
           }`}
         >
           <FileText className="w-4 h-4" /> Publish Price Brochure
-        </button>
+        </button>}
         <button
           onClick={() => handleTabClick("import")}
           className={`flex items-center gap-2 pb-3 px-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap ${
@@ -69,8 +73,11 @@ export default function PricingModulePage() {
 
       <div className="flex-1 flex flex-col pt-4 overflow-hidden">
         {activeTab === "guest" && <GuestPriceTab onUnsavedChanges={setHasUnsavedChanges} />}
-        {activeTab === "brochure" && <PriceBrochureTab />}
-        {activeTab === "import" && <ImportProductTab />}
+        {activeTab === "brochure" && canExport && <PriceBrochureTab />}
+        {activeTab === "import" && canImport && <ImportProductTab />}
+        {((activeTab === "brochure" && !canExport) || (activeTab === "import" && !canImport)) && (
+          <div className="rounded-xl border border-amber-200 bg-white p-8 text-sm text-slate-600">Permission untuk fitur ini belum diberikan.</div>
+        )}
       </div>
 
       <AlertDialog open={!!pendingTab} onOpenChange={(open) => !open && setPendingTab(null)}>

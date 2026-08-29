@@ -24,19 +24,19 @@ import {
   SavePurchaseReturnDto,
 } from './dto/purchasing.dto.js';
 import { SessionGuard } from '../../common/guards/session.guards.js';
+import { PermissionGuard } from '../../common/guards/permissions.guard.js';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator.js';
+import { PERMISSIONS } from '../../common/authorization/permission-catalog.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import type { Request } from 'express';
 import { PositiveBigIntPipe } from '../../common/pipes/positive-bigint.pipe.js';
-import { RolesGuard } from '../../common/guards/roles.guard.js';
-import { RequireRoles } from '../../common/decorators/roles.decorator.js';
 
 interface AuthRequest extends Request {
   user: { userId: bigint; role: { roleCode: string } };
 }
 
 @Controller('purchasing')
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, PermissionGuard)
 export class PurchasingController {
   constructor(
     private readonly poService: PurchaseOrderService,
@@ -46,8 +46,7 @@ export class PurchasingController {
   ) {}
 
   @Get('invoices/:id/return-context')
-  @UseGuards(RolesGuard)
-  @RequireRoles('ADMIN', 'OWNER', 'SUPER_OWNER')
+  @RequirePermissions(PERMISSIONS.PURCHASE_VIEW)
   async getReturnContext(@Param('id', PositiveBigIntPipe) id: string) {
     return {
       success: true,
@@ -56,15 +55,13 @@ export class PurchasingController {
   }
 
   @Get('invoices/:id/returns')
-  @UseGuards(RolesGuard)
-  @RequireRoles('ADMIN', 'OWNER', 'SUPER_OWNER')
+  @RequirePermissions(PERMISSIONS.PURCHASE_VIEW)
   async getInvoiceReturns(@Param('id', PositiveBigIntPipe) id: string) {
     return { success: true, data: await this.returnService.findByInvoice(id) };
   }
 
   @Post('returns')
-  @UseGuards(RolesGuard)
-  @RequireRoles('ADMIN', 'OWNER', 'SUPER_OWNER')
+  @RequirePermissions(PERMISSIONS.PURCHASE_CREATE)
   async createReturn(
     @Body() dto: SavePurchaseReturnDto,
     @Req() req: AuthRequest,
@@ -77,8 +74,7 @@ export class PurchasingController {
   }
 
   @Put('returns/:id')
-  @UseGuards(RolesGuard)
-  @RequireRoles('ADMIN', 'OWNER', 'SUPER_OWNER')
+  @RequirePermissions(PERMISSIONS.PURCHASE_UPDATE)
   async updateReturn(
     @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: SavePurchaseReturnDto,
@@ -92,8 +88,7 @@ export class PurchasingController {
   }
 
   @Post('returns/:id/ready')
-  @UseGuards(RolesGuard)
-  @RequireRoles('ADMIN', 'OWNER', 'SUPER_OWNER')
+  @RequirePermissions(PERMISSIONS.PURCHASE_APPROVE)
   async readyReturn(
     @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthRequest,
@@ -106,8 +101,7 @@ export class PurchasingController {
   }
 
   @Post('returns/:id/complete')
-  @UseGuards(RolesGuard)
-  @RequireRoles('ADMIN', 'OWNER', 'SUPER_OWNER')
+  @RequirePermissions(PERMISSIONS.PURCHASE_APPROVE)
   async completeReturn(
     @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: CompletePurchaseReturnDto,
@@ -121,8 +115,7 @@ export class PurchasingController {
   }
 
   @Post('returns/:id/cancel')
-  @UseGuards(RolesGuard)
-  @RequireRoles('ADMIN', 'OWNER', 'SUPER_OWNER')
+  @RequirePermissions(PERMISSIONS.PURCHASE_APPROVE)
   async cancelReturn(
     @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthRequest,
@@ -135,15 +128,13 @@ export class PurchasingController {
   }
 
   @Get('returns/:id')
-  @UseGuards(RolesGuard)
-  @RequireRoles('ADMIN', 'OWNER', 'SUPER_OWNER')
+  @RequirePermissions(PERMISSIONS.PURCHASE_VIEW)
   async getReturn(@Param('id', PositiveBigIntPipe) id: string) {
     return { success: true, data: await this.returnService.findById(id) };
   }
 
   @Get('returns/:id/completion-options')
-  @UseGuards(RolesGuard)
-  @RequireRoles('ADMIN', 'OWNER', 'SUPER_OWNER')
+  @RequirePermissions(PERMISSIONS.PURCHASE_VIEW)
   async getReturnCompletionOptions(
     @Param('id', PositiveBigIntPipe) id: string,
   ) {
@@ -154,28 +145,28 @@ export class PurchasingController {
   }
 
   @Get('list/supplier-summaries')
-  @RequirePermissions('PURCHASE_INVOICE_VIEW')
+  @RequirePermissions(PERMISSIONS.PURCHASE_VIEW)
   async getSupplierSummaries() {
     const data = await this.piService.getSupplierSummaries();
     return { success: true, data };
   }
 
   @Get('list/invoices')
-  @RequirePermissions('PURCHASE_INVOICE_VIEW')
+  @RequirePermissions(PERMISSIONS.PURCHASE_VIEW)
   async getInvoices(@Query() query: PurchaseInvoiceListQueryDto) {
     const result = await this.piService.findAll(query);
     return { success: true, ...result };
   }
 
   @Get('list/invoices/:id')
-  @RequirePermissions('PURCHASE_INVOICE_VIEW')
+  @RequirePermissions(PERMISSIONS.PURCHASE_VIEW)
   async getInvoiceDetail(@Param('id', PositiveBigIntPipe) id: string) {
     const data = await this.piService.findById(id);
     return { success: true, data };
   }
 
   @Post('orders')
-  @RequirePermissions('PURCHASE_ORDER_CREATE')
+  @RequirePermissions(PERMISSIONS.PURCHASE_CREATE)
   async createPO(@Body() dto: CreatePurchaseOrderDto, @Req() req: AuthRequest) {
     const result = await this.poService.create(req.user.userId, dto);
     return {
@@ -186,7 +177,7 @@ export class PurchasingController {
   }
 
   @Put('orders/:id')
-  @RequirePermissions('PURCHASE_ORDER_CREATE')
+  @RequirePermissions(PERMISSIONS.PURCHASE_UPDATE)
   async updatePO(
     @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: UpdatePurchaseOrderDto,
@@ -201,21 +192,21 @@ export class PurchasingController {
   }
 
   @Get('orders')
-  @RequirePermissions('PURCHASE_ORDER_VIEW')
+  @RequirePermissions(PERMISSIONS.PURCHASE_VIEW)
   async getPOs(@Query() query: PurchaseOrderListQueryDto) {
     const result = await this.poService.findAll(query);
     return { success: true, ...result };
   }
 
   @Get('orders/:id')
-  @RequirePermissions('PURCHASE_ORDER_VIEW')
+  @RequirePermissions(PERMISSIONS.PURCHASE_VIEW)
   async getPODetail(@Param('id', PositiveBigIntPipe) id: string) {
     const data = await this.poService.findById(id);
     return { success: true, data };
   }
 
   @Post('invoices')
-  @RequirePermissions('PURCHASE_INVOICE_CREATE')
+  @RequirePermissions(PERMISSIONS.PURCHASE_CREATE)
   async createInvoice(
     @Body() dto: CreatePurchaseInvoiceDto,
     @Req() req: AuthRequest,
@@ -229,7 +220,7 @@ export class PurchasingController {
   }
 
   @Put('invoices/:id')
-  @RequirePermissions('PURCHASE_INVOICE_CREATE')
+  @RequirePermissions(PERMISSIONS.PURCHASE_UPDATE)
   async updateInvoice(
     @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: UpdatePurchaseInvoiceDto,
@@ -244,7 +235,7 @@ export class PurchasingController {
   }
 
   @Post('invoices/:id/payments')
-  @RequirePermissions('PURCHASE_INVOICE_CREATE')
+  @RequirePermissions(PERMISSIONS.PURCHASE_UPDATE)
   async addInvoicePayment(
     @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: AddInvoicePaymentDto,
@@ -259,7 +250,7 @@ export class PurchasingController {
   }
 
   @Get('lookups/ready-orders')
-  @RequirePermissions('PURCHASE_INVOICE_CREATE')
+  @RequirePermissions(PERMISSIONS.PURCHASE_CREATE)
   async getReadyOrders() {
     const orders = await this.prisma.purchaseOrder.findMany({
       where: { status: 'READY' },
@@ -291,7 +282,7 @@ export class PurchasingController {
   }
 
   @Get('lookups/financial-accounts')
-  @RequirePermissions('PURCHASE_INVOICE_CREATE')
+  @RequirePermissions(PERMISSIONS.PURCHASE_CREATE)
   async getFinancialAccounts() {
     const accounts = await this.prisma.financialAccount.findMany({
       where: { isActive: true },
@@ -308,7 +299,7 @@ export class PurchasingController {
   }
 
   @Get('lookups/suppliers')
-  @RequirePermissions('PURCHASE_ORDER_CREATE')
+  @RequirePermissions(PERMISSIONS.PURCHASE_CREATE)
   async getSuppliersLookup() {
     const suppliers = await this.prisma.supplier.findMany({
       where: { isActive: true },
@@ -325,7 +316,7 @@ export class PurchasingController {
   }
 
   @Get('lookups/products')
-  @RequirePermissions('PURCHASE_ORDER_CREATE')
+  @RequirePermissions(PERMISSIONS.PURCHASE_CREATE)
   async getProductsLookup() {
     const products = await this.prisma.product.findMany({
       where: { isActive: true },
@@ -356,7 +347,7 @@ export class PurchasingController {
   }
 
   @Get('lookups/supplier-catalog/:supplierId')
-  @RequirePermissions('PURCHASE_ORDER_CREATE')
+  @RequirePermissions(PERMISSIONS.PURCHASE_CREATE)
   async getSupplierCatalog(
     @Param('supplierId', PositiveBigIntPipe) supplierId: string,
   ) {
@@ -380,7 +371,7 @@ export class PurchasingController {
   }
 
   @Get('lookups/supplier-history/:supplierId')
-  @RequirePermissions('PURCHASE_ORDER_CREATE')
+  @RequirePermissions(PERMISSIONS.PURCHASE_CREATE)
   async getSupplierHistory(
     @Param('supplierId', PositiveBigIntPipe) supplierId: string,
   ) {

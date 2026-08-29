@@ -18,7 +18,9 @@ import {
   CategoryQueryDto,
 } from './dto/category.dto.js';
 import { SessionGuard } from '../../../common/guards/session.guards.js';
+import { PermissionGuard } from '../../../common/guards/permissions.guard.js';
 import { RequirePermissions } from '../../../common/decorators/permissions.decorator.js';
+import { PERMISSIONS } from '../../../common/authorization/permission-catalog.js';
 import { PositiveBigIntPipe } from '../../../common/pipes/positive-bigint.pipe.js';
 import type { Request } from 'express';
 
@@ -27,19 +29,19 @@ interface AuthRequest extends Request {
 }
 
 @Controller('categories')
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, PermissionGuard)
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
   @Get()
-  @RequirePermissions('CATEGORY_VIEW')
+  @RequirePermissions(PERMISSIONS.MASTER_VIEW)
   async getAll(@Query() query: CategoryQueryDto) {
     const result = await this.categoryService.findAll(query);
     return { success: true, ...result };
   }
 
   @Post()
-  @RequirePermissions('CATEGORY_CREATE')
+  @RequirePermissions(PERMISSIONS.MASTER_CREATE)
   async create(
     @Body() dto: CreateCategoryDto,
     @Req() req: AuthRequest,
@@ -63,7 +65,7 @@ export class CategoryController {
   }
 
   @Put(':id')
-  @RequirePermissions('CATEGORY_UPDATE')
+  @RequirePermissions(PERMISSIONS.MASTER_UPDATE)
   async update(
     @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: UpdateCategoryDto,
@@ -88,7 +90,7 @@ export class CategoryController {
   // TAMBAHAN: INACTIVATE & REACTIVATE ENDPOINTS
   // =========================================
   @Post(':id/inactivate')
-  @RequirePermissions('CATEGORY_INACTIVATE')
+  @RequirePermissions(PERMISSIONS.MASTER_UPDATE)
   async inactivate(
     @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthRequest,
@@ -108,7 +110,7 @@ export class CategoryController {
   }
 
   @Post(':id/reactivate')
-  @RequirePermissions('CATEGORY_REACTIVATE')
+  @RequirePermissions(PERMISSIONS.MASTER_UPDATE)
   async reactivate(
     @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthRequest,

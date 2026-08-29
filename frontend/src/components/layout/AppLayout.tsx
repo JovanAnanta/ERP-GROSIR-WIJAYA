@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { useAuthStore } from "@/store/authStore";
+import { hasPermission, useAuthStore } from "@/store/authStore";
+import type { AuthUser } from "@/store/authStore";
 import { apiClient } from "@/lib/axios";
 import SessionLockPopup from "./SessionLockPopup";
 import { Button } from "@/components/ui/button";
@@ -35,9 +36,26 @@ const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const ACTIVITY_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
 export default function AppLayout() {
-  const { user, logout, lockSession, isLocked } = useAuthStore();
+  const { user, logout, lockSession, isLocked, hydrate } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const refreshPermissions = useCallback(() => {
+    if (user?.roleId !== "3") return;
+    void apiClient
+      .get<unknown, { success: boolean; data: AuthUser }>("/auth/me")
+      .then((response) => hydrate(response.data))
+      .catch(() => undefined);
+  }, [hydrate, user?.roleId]);
+
+  useEffect(() => {
+    refreshPermissions();
+  }, [location.pathname, refreshPermissions]);
+
+  useEffect(() => {
+    window.addEventListener("focus", refreshPermissions);
+    return () => window.removeEventListener("focus", refreshPermissions);
+  }, [refreshPermissions]);
 
   // =========================================================================
   // ENTERPRISE IDLE DETECTOR (FR-SYS-001)
@@ -145,12 +163,12 @@ export default function AppLayout() {
             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 px-2">
               Menu Utama
             </p>
-            <div
+            {hasPermission(user, "DASHBOARD_VIEW") && <div
               onClick={() => navigate("/dashboard")}
               className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/dashboard") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
             >
               <LayoutDashboard className="w-5 h-5 mr-3 opacity-80" /> Dashboard
-            </div>
+            </div>}
           </div>
 
           {/* GROUP 2: OPERASIONAL TOKO */}
@@ -159,30 +177,30 @@ export default function AppLayout() {
               Operasional
             </p>
 
-            <div 
+            {hasPermission(user, "SALES_VIEW") && <div
               onClick={() => navigate("/sales/customers")}
               className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/sales/customers") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
             >
               <ShoppingCart className="w-5 h-5 mr-3 opacity-80" /> Sales & Customers
-            </div>
+            </div>}
 
-            <div 
+            {hasPermission(user, "PURCHASE_VIEW") && <div
               onClick={() => navigate("/purchasing")}
               className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/purchasing") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
             >
               <PackageOpen className="w-5 h-5 mr-3 opacity-80" /> Purchases & Suppliers
-            </div>
+            </div>}
 
-            <div 
+            {hasPermission(user, "MASTER_VIEW") && <div
               onClick={() => navigate("/catalog")}
               className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/catalog") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
             >
               <Tags className="w-5 h-5 mr-3 opacity-80" /> Catalog & Pricing
-            </div>
+            </div>}
 
             {/* ... Menu Catalog & Pricing yang sudah ada ... */}
 
-            <div 
+            {hasPermission(user, "PRICING_VIEW") && <div
               onClick={() => navigate("/pricing")}
               className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${
                 isActive("/pricing") 
@@ -191,15 +209,15 @@ export default function AppLayout() {
               }`}
             >
               <CircleDollarSign className="w-5 h-5 mr-3 opacity-80" /> Pricing Workspace
-            </div>
+            </div>}
 
-            <div className="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 hover:bg-slate-800 hover:text-white">
+            {hasPermission(user, "INVENTORY_VIEW") && <div className="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 hover:bg-slate-800 hover:text-white">
               <Boxes className="w-5 h-5 mr-3 opacity-80" /> Inventory & Warehouse
-            </div>
+            </div>}
 
-            <div className="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 hover:bg-slate-800 hover:text-white">
+            {hasPermission(user, "FINANCIAL_VIEW") && <div className="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 hover:bg-slate-800 hover:text-white">
               <Wallet className="w-5 h-5 mr-3 opacity-80" /> Finance & Accounting
-            </div>
+            </div>}
           </div>
 
           {/* GROUP 3: PENGATURAN SISTEM */}

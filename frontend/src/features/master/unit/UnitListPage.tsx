@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { unitApi, type Unit, type UnitQueryParams } from "../unit.api";
 import { parseApiError } from "@/utils/error";
-import { useAuthStore } from "@/store/authStore";
+import { hasPermission, useAuthStore } from "@/store/authStore";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,8 @@ import { AxiosError } from "axios";
 
 export default function UnitListPage() {
   const { user } = useAuthStore();
-  const hasEditAccess = user?.roleId === '1' || user?.roleId === '2';
+  const canCreate = hasPermission(user, 'MASTER_CREATE');
+  const canUpdate = hasPermission(user, 'MASTER_UPDATE');
 
   const [units, setUnits] = useState<Unit[]>([]);
   const [totalData, setTotalData] = useState<number>(0);
@@ -148,7 +149,7 @@ export default function UnitListPage() {
           <h2 className="text-xl font-extrabold text-slate-800">Master Satuan (Unit)</h2>
           <p className="text-sm text-slate-500 font-medium">Satuan ukuran barang (PCS, KG, BOX) untuk perhitungan kuantitas.</p>
         </div>
-        {hasEditAccess && (
+        {canCreate && (
           <Button onClick={openCreateForm} className="bg-[#326dc8] hover:bg-[#2858a6] text-white shadow-sm">
             <Plus className="w-4 h-4 mr-2" /> Tambah Satuan
           </Button>
@@ -201,7 +202,7 @@ export default function UnitListPage() {
                   <TableHead className="font-bold text-slate-700 w-1/2">Nama Satuan (Unit)</TableHead>
                   <TableHead className="font-bold text-slate-700 text-center">Total Produk</TableHead>
                   <TableHead className="font-bold text-slate-700 text-center">Status</TableHead>
-                  {hasEditAccess && <TableHead className="font-bold text-slate-700 text-center">Aksi</TableHead>}
+                  {canUpdate && <TableHead className="font-bold text-slate-700 text-center">Aksi</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody className={`transition-opacity duration-200 ${isLoading ? "opacity-40" : "opacity-100"}`}>
@@ -227,7 +228,7 @@ export default function UnitListPage() {
                           {u.isActive ? "Active" : "Inactive"}
                         </Badge>
                       </TableCell>
-                      {hasEditAccess && (
+                      {canUpdate && (
                         <TableCell className="text-center space-x-1">
                           <Button variant="ghost" size="sm" onClick={() => openEditForm(u)} className="h-8 px-2 text-slate-500 hover:text-[#326dc8] hover:bg-blue-50">
                             <Edit2 className="w-4 h-4" />

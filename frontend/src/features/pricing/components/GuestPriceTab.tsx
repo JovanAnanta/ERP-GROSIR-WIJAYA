@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { pricingApi, type PriceData, type PriceQueryParams, type PriceMeta } from "../pricing.api";
 import { parseApiError } from "@/utils/error";
-import { useAuthStore } from "@/store/authStore";
+import { hasPermission, useAuthStore } from "@/store/authStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,7 +13,7 @@ interface GuestPriceTabProps {
 
 export default function GuestPriceTab({ onUnsavedChanges }: GuestPriceTabProps) {
   const { user } = useAuthStore();
-  const hasEditAccess = user?.roleId === '1' || user?.roleId === '2';
+  const hasEditAccess = hasPermission(user, 'PRICING_UPDATE');
 
   const [data, setData] = useState<PriceData[]>([]);
   const [meta, setMeta] = useState<PriceMeta | null>(null);

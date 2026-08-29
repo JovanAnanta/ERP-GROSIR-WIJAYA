@@ -18,7 +18,9 @@ import {
   SupplierQueryDto,
 } from './supplier/dto/supplier.dto.js';
 import { SessionGuard } from '../../common/guards/session.guards.js';
+import { PermissionGuard } from '../../common/guards/permissions.guard.js';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator.js';
+import { PERMISSIONS } from '../../common/authorization/permission-catalog.js';
 import { PositiveBigIntPipe } from '../../common/pipes/positive-bigint.pipe.js';
 import type { Request } from 'express';
 
@@ -27,19 +29,19 @@ interface AuthRequest extends Request {
 }
 
 @Controller('suppliers')
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, PermissionGuard)
 export class SupplierController {
   constructor(private readonly supplierService: SupplierService) {}
 
   @Get()
-  @RequirePermissions('SUPPLIER_VIEW')
+  @RequirePermissions(PERMISSIONS.PURCHASE_VIEW)
   async getAll(@Query() query: SupplierQueryDto) {
     const result = await this.supplierService.findAll(query);
     return { success: true, ...result };
   }
 
   @Post()
-  @RequirePermissions('SUPPLIER_CREATE')
+  @RequirePermissions(PERMISSIONS.PURCHASE_CREATE)
   async create(
     @Body() dto: CreateSupplierDto,
     @Req() req: AuthRequest,
@@ -63,7 +65,7 @@ export class SupplierController {
   }
 
   @Put(':id')
-  @RequirePermissions('SUPPLIER_UPDATE')
+  @RequirePermissions(PERMISSIONS.PURCHASE_UPDATE)
   async update(
     @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: UpdateSupplierDto,
@@ -85,7 +87,7 @@ export class SupplierController {
   }
 
   @Post(':id/inactivate')
-  @RequirePermissions('SUPPLIER_INACTIVATE')
+  @RequirePermissions(PERMISSIONS.PURCHASE_UPDATE)
   async inactivate(
     @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthRequest,
@@ -105,7 +107,7 @@ export class SupplierController {
   }
 
   @Post(':id/reactivate')
-  @RequirePermissions('SUPPLIER_REACTIVATE')
+  @RequirePermissions(PERMISSIONS.PURCHASE_UPDATE)
   async reactivate(
     @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthRequest,

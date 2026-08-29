@@ -11,6 +11,7 @@ import {
   SECURITY_EVENTS,
   writeSecurityLog,
 } from '../logging/business-logger.js';
+import type { PermissionCode } from '../authorization/permission-catalog.js';
 
 @Injectable()
 export class PermissionGuard implements CanActivate {
@@ -20,10 +21,9 @@ export class PermissionGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(
-      PERMISSIONS_KEY,
-      [context.getHandler(), context.getClass()],
-    );
+    const requiredPermissions = this.reflector.getAllAndOverride<
+      PermissionCode[]
+    >(PERMISSIONS_KEY, [context.getHandler(), context.getClass()]);
 
     // Jika endpoint tidak diberi pelindung @RequirePermissions, loloskan
     if (!requiredPermissions || requiredPermissions.length === 0) {
@@ -61,17 +61,26 @@ export class PermissionGuard implements CanActivate {
     }
 
     // Untuk Role lain (Admin), cek ke database apakah role tersebut punya permission yang diminta
-    const hasPermissions = await this.prisma.rolePermission.count({
+    const uniqueRequiredPermissions = [...new Set(requiredPermissions)];
+    const grantedPermissions = await this.prisma.rolePermission.findMany({
       where: {
         roleId: user.roleId,
         permission: {
-          permissionCode: { in: requiredPermissions },
+          permissionCode: { in: uniqueRequiredPermissions },
           isActive: true,
         },
       },
+      select: { permission: { select: { permissionCode: true } } },
     });
+    const grantedCodes = new Set(
+      grantedPermissions.map((mapping) => mapping.permission.permissionCode),
+    );
 
-    if (hasPermissions !== requiredPermissions.length) {
+    if (
+      !uniqueRequiredPermissions.every((permission) =>
+        grantedCodes.has(permission),
+      )
+    ) {
       await writeSecurityLog(this.prisma, {
         userId: user.userId,
         eventType: SECURITY_EVENTS.PERMISSION_DENIED,

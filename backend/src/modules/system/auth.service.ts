@@ -11,6 +11,7 @@ import {
   writeSecurityLog,
 } from '../../common/logging/business-logger.js';
 import type { SecurityLogInput } from '../../common/logging/business-logger.js';
+import type { PermissionCode } from '../../common/authorization/permission-catalog.js';
 
 export interface AuthLoginParams {
   username: string;
@@ -31,6 +32,37 @@ export class AuthService {
     '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.';
 
   constructor(private readonly prisma: PrismaService) {}
+
+  async getEffectivePermissions(
+    userId: bigint,
+  ): Promise<(PermissionCode | '*')[]> {
+    const user = await this.prisma.user.findUnique({
+      where: { userId },
+      select: {
+        role: {
+          select: {
+            roleCode: true,
+            permissions: {
+              where: { permission: { isActive: true } },
+              select: { permission: { select: { permissionCode: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    if (!user) return [];
+    if (
+      user.role.roleCode === 'SUPER_OWNER' ||
+      user.role.roleCode === 'OWNER'
+    ) {
+      return ['*'];
+    }
+
+    return user.role.permissions
+      .map((mapping) => mapping.permission.permissionCode as PermissionCode)
+      .sort();
+  }
 
   private hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 
-import { useAuthStore } from '@/store/authStore';
+import { hasPermission, useAuthStore } from '@/store/authStore';
 import type { AuthUser } from '@/store/authStore';
 import { apiClient } from '@/lib/axios';
 
@@ -86,10 +86,19 @@ export default function App() {
       {/* Rute Terproteksi (Wajib Login) */}
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
+          <Route element={<PermissionRoute permission="DASHBOARD_VIEW" />}>
           <Route path="/dashboard" element={
             <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-100">
               <h2 className="text-2xl font-bold text-slate-800 mb-2">Selamat Datang di Dashboard!</h2>
               <p className="text-slate-500">Anda berhasil login ke sistem ERP Grosir Wijaya.</p>
+            </div>
+          } />
+          </Route>
+
+          <Route path="/access-denied" element={
+            <div className="m-8 rounded-xl border border-amber-200 bg-white p-8 shadow-sm">
+              <h2 className="text-xl font-bold text-slate-800">Akses tidak tersedia</h2>
+              <p className="mt-2 text-sm text-slate-600">Permission akun Anda belum mengizinkan akses ke halaman ini.</p>
             </div>
           } />
 
@@ -114,20 +123,20 @@ export default function App() {
           </Route>
 
           {/* Rute Khusus Sales & Customer */}
-          <Route element={<RoleGuard allowedRoles={['1', '2', '3']} />}>
+          <Route element={<PermissionRoute permission="SALES_VIEW" />}>
             <Route path="/sales/customers" element={<SalesModulePage />} />
           </Route>
 
-          <Route element={<RoleGuard allowedRoles={['1', '2', '3']} />}>
+          <Route element={<PermissionRoute permission="PURCHASE_VIEW" />}>
             <Route path="/purchasing" element={<PurchasingModulePage />} />
           </Route>
 
-          <Route element={<RoleGuard allowedRoles={['1', '2', '3']} />}>
+          <Route element={<PermissionRoute permission="MASTER_VIEW" />}>
             <Route path="/catalog" element={<CatalogModulePage />} />
           </Route>
 
           {/* Rute Pricing Module */}
-          <Route element={<RoleGuard allowedRoles={['1', '2', '3']} />}>
+          <Route element={<PermissionRoute permission="PRICING_VIEW" />}>
             <Route path="/pricing" element={<PricingModulePage />} />
           </Route>
 
@@ -150,6 +159,14 @@ function RoleGuard({ allowedRoles }: { allowedRoles: string[] }) {
   const user = useAuthStore((state) => state.user);
   if (!user || !allowedRoles.includes(user.roleId)) {
     return <Navigate to="/dashboard" replace />;
+  }
+  return <Outlet />;
+}
+
+function PermissionRoute({ permission }: { permission: string }) {
+  const user = useAuthStore((state) => state.user);
+  if (!hasPermission(user, permission)) {
+    return <Navigate to="/access-denied" replace />;
   }
   return <Outlet />;
 }

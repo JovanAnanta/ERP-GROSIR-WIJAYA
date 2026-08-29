@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { brandApi, type Brand, type BrandQueryParams, type BrandMeta } from "../brand.api";
 import { parseApiError } from "@/utils/error";
-import { useAuthStore } from "@/store/authStore";
+import { hasPermission, useAuthStore } from "@/store/authStore";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,8 @@ import { AxiosError } from "axios";
 
 export default function BrandListPage() {
   const { user } = useAuthStore();
-  const hasEditAccess = user?.roleId === '1' || user?.roleId === '2';
+  const canCreate = hasPermission(user, 'MASTER_CREATE');
+  const canUpdate = hasPermission(user, 'MASTER_UPDATE');
 
   const [brands, setBrands] = useState<Brand[]>([]);
   const [meta, setMeta] = useState<BrandMeta | null>(null);
@@ -97,7 +98,7 @@ export default function BrandListPage() {
           <h2 className="text-xl font-extrabold text-slate-800">Master Merek (Brand)</h2>
           <p className="text-sm text-slate-500 font-medium">Kelola nama merek dari barang-barang yang Anda jual.</p>
         </div>
-        {hasEditAccess && (
+        {canCreate && (
           <Button onClick={openCreateForm} className="bg-[#326dc8] hover:bg-[#2858a6] text-white shadow-sm">
             <Plus className="w-4 h-4 mr-2" /> Tambah Merek
           </Button>
@@ -143,7 +144,7 @@ export default function BrandListPage() {
                 <TableHead className="font-bold text-slate-700 w-1/2">Nama Merek</TableHead>
                 <TableHead className="font-bold text-slate-700 text-center">Total Produk</TableHead>
                 <TableHead className="font-bold text-slate-700 text-center">Status</TableHead>
-                {hasEditAccess && <TableHead className="font-bold text-slate-700 text-center">Aksi</TableHead>}
+                {canUpdate && <TableHead className="font-bold text-slate-700 text-center">Aksi</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -163,7 +164,7 @@ export default function BrandListPage() {
                     <TableCell className="text-center">
                       <Badge variant={b.isActive ? "default" : "secondary"} className={b.isActive ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" : ""}>{b.isActive ? "Active" : "Inactive"}</Badge>
                     </TableCell>
-                    {hasEditAccess && (
+                    {canUpdate && (
                       <TableCell className="text-center space-x-2">
                         <Button variant="ghost" size="sm" onClick={() => openEditForm(b)} className="h-8 px-2 text-slate-500 hover:text-[#326dc8]"><Edit2 className="w-4 h-4" /></Button>
                         {b.isActive ? (

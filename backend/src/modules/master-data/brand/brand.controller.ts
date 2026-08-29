@@ -18,7 +18,9 @@ import {
   BrandQueryDto,
 } from './dto/brand.dto.js';
 import { SessionGuard } from '../../../common/guards/session.guards.js';
+import { PermissionGuard } from '../../../common/guards/permissions.guard.js';
 import { RequirePermissions } from '../../../common/decorators/permissions.decorator.js';
+import { PERMISSIONS } from '../../../common/authorization/permission-catalog.js';
 import { PositiveBigIntPipe } from '../../../common/pipes/positive-bigint.pipe.js';
 import type { Request } from 'express';
 
@@ -27,19 +29,19 @@ interface AuthRequest extends Request {
 }
 
 @Controller('brands')
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, PermissionGuard)
 export class BrandController {
   constructor(private readonly brandService: BrandService) {}
 
   @Get()
-  @RequirePermissions('BRAND_VIEW')
+  @RequirePermissions(PERMISSIONS.MASTER_VIEW)
   async getAll(@Query() query: BrandQueryDto) {
     const result = await this.brandService.findAll(query);
     return { success: true, ...result };
   }
 
   @Post()
-  @RequirePermissions('BRAND_CREATE')
+  @RequirePermissions(PERMISSIONS.MASTER_CREATE)
   async create(
     @Body() dto: CreateBrandDto,
     @Req() req: AuthRequest,
@@ -61,7 +63,7 @@ export class BrandController {
   }
 
   @Put(':id')
-  @RequirePermissions('BRAND_UPDATE')
+  @RequirePermissions(PERMISSIONS.MASTER_UPDATE)
   async update(
     @Param('id', PositiveBigIntPipe) id: string,
     @Body() dto: UpdateBrandDto,
@@ -81,7 +83,7 @@ export class BrandController {
   }
 
   @Post(':id/inactivate')
-  @RequirePermissions('BRAND_INACTIVATE')
+  @RequirePermissions(PERMISSIONS.MASTER_UPDATE)
   async inactivate(
     @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthRequest,
@@ -98,7 +100,7 @@ export class BrandController {
   }
 
   @Post(':id/reactivate')
-  @RequirePermissions('BRAND_REACTIVATE')
+  @RequirePermissions(PERMISSIONS.MASTER_UPDATE)
   async reactivate(
     @Param('id', PositiveBigIntPipe) id: string,
     @Req() req: AuthRequest,

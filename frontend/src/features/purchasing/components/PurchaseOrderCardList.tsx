@@ -40,6 +40,7 @@ import PurchaseInvoiceDetailDialog from './PurchaseInvoiceDetailDialog';
 
 interface Props {
   onEditOrder: (purchaseOrderId: string) => void;
+  canUpdate?: boolean;
 }
 
 const EMPTY_META: PurchasePaginationMeta = {
@@ -93,7 +94,7 @@ function escapeHtml(value: unknown): string {
     .replaceAll("'", '&#039;');
 }
 
-export default function PurchaseOrderCardList({ onEditOrder }: Props) {
+export default function PurchaseOrderCardList({ onEditOrder, canUpdate = true }: Props) {
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'HISTORY'>('ACTIVE');
   const [orders, setOrders] = useState<PurchaseOrderListItem[]>([]);
   const [meta, setMeta] = useState<PurchasePaginationMeta>(EMPTY_META);
@@ -262,7 +263,7 @@ export default function PurchaseOrderCardList({ onEditOrder }: Props) {
               </div>
               <div className="flex justify-end gap-1.5 pt-2 border-t border-slate-200">
                 <Button variant="outline" size="sm" onClick={() => void openDetail(order.purchaseOrderId)} className="h-7 text-[11px] font-bold"><Eye className="w-3 h-3 mr-1" />Detail</Button>
-                {!history && <Button size="sm" onClick={() => onEditOrder(order.purchaseOrderId)} className="h-7 text-[11px] font-bold bg-[#326dc8] text-white"><Edit2 className="w-3 h-3 mr-1" />Edit</Button>}
+                {!history && canUpdate && <Button size="sm" onClick={() => onEditOrder(order.purchaseOrderId)} className="h-7 text-[11px] font-bold bg-[#326dc8] text-white"><Edit2 className="w-3 h-3 mr-1" />Edit</Button>}
               </div>
             </article>;
           })}

@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client.js';
 import * as bcrypt from 'bcrypt';
+import { PERMISSION_CATALOG } from '../src/common/authorization/permission-catalog.js';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -90,51 +91,16 @@ async function main(): Promise<void> {
   });
 
   // 3. Master Data Permission (FR-SYS-003)
-  const permissions = [
-    {
-      code: 'DASHBOARD_VIEW',
-      name: 'View Dashboard',
-      module: 'DASHBOARD',
-      action: 'VIEW',
-    },
-    {
-      code: 'MASTER_VIEW',
-      name: 'View Master Data',
-      module: 'MASTER',
-      action: 'VIEW',
-    },
-    {
-      code: 'MASTER_CREATE',
-      name: 'Create Master Data',
-      module: 'MASTER',
-      action: 'CREATE',
-    },
-    {
-      code: 'MASTER_UPDATE',
-      name: 'Update Master Data',
-      module: 'MASTER',
-      action: 'UPDATE',
-    },
-    { code: 'SALES_VIEW', name: 'View Sales', module: 'SALES', action: 'VIEW' },
-    {
-      code: 'SALES_CREATE',
-      name: 'Create Sales',
-      module: 'SALES',
-      action: 'CREATE',
-    },
-    {
-      code: 'SALES_APPROVE',
-      name: 'Approve Sales',
-      module: 'SALES',
-      action: 'APPROVE',
-    },
-  ];
-
   console.log('⏳ Mengisi Master Data Permission...');
-  for (const p of permissions) {
+  for (const p of PERMISSION_CATALOG) {
     await prisma.permission.upsert({
       where: { permissionCode: p.code },
-      update: {},
+      update: {
+        permissionName: p.name,
+        module: p.module,
+        action: p.action,
+        isActive: true,
+      },
       create: {
         permissionCode: p.code,
         permissionName: p.name,

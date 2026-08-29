@@ -4,9 +4,9 @@ import type { Prisma } from '../../../../generated/prisma/client.js';
 import {
   ACTIVITY_TYPES,
   AUDIT_OPERATIONS,
-  changedFields,
   createAuditTransactionId,
 } from '../../../common/logging/business-logger.js';
+import { CONFIGURABLE_PERMISSION_CODES } from '../../../common/authorization/permission-catalog.js';
 
 @Injectable()
 export class RolePermissionService {
@@ -25,13 +25,22 @@ export class RolePermissionService {
 
     // 2. Ambil Semua Master Permission
     const allPermissions = await this.prisma.permission.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        permissionCode: { in: [...CONFIGURABLE_PERMISSION_CODES] },
+      },
       orderBy: [{ module: 'asc' }, { action: 'asc' }],
     });
 
     // 3. Ambil Permission yang saat ini dimiliki Admin
     const adminPerms = await this.prisma.rolePermission.findMany({
-      where: { roleId: adminRole.roleId },
+      where: {
+        roleId: adminRole.roleId,
+        permission: {
+          isActive: true,
+          permissionCode: { in: [...CONFIGURABLE_PERMISSION_CODES] },
+        },
+      },
       select: { permissionId: true },
     });
     const activePermIds = adminPerms.map((p) => p.permissionId.toString());
@@ -71,6 +80,7 @@ export class RolePermissionService {
         where: {
           permissionId: { in: newPermIds.map((id) => BigInt(id)) },
           isActive: true,
+          permissionCode: { in: [...CONFIGURABLE_PERMISSION_CODES] },
         },
       });
       if (validPermissionCount !== newPermIds.length) {
@@ -84,7 +94,13 @@ export class RolePermissionService {
     await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // OPTIMISTIC CONCURRENCY CHECK (Array Validation Approach B)
       const currentDbPerms = await tx.rolePermission.findMany({
-        where: { roleId: adminRole.roleId },
+        where: {
+          roleId: adminRole.roleId,
+          permission: {
+            isActive: true,
+            permissionCode: { in: [...CONFIGURABLE_PERMISSION_CODES] },
+          },
+        },
       });
       const currentDbPermIds = currentDbPerms
         .map((p) => p.permissionId.toString())
@@ -98,9 +114,22 @@ export class RolePermissionService {
         );
       }
 
-      // 1. Hapus semua mapping permission lama
+      if (
+        JSON.stringify(currentDbPermIds) ===
+        JSON.stringify([...newPermIds].sort())
+      ) {
+        return;
+      }
+
+      // Hanya mapping katalog aktif yang dikelola halaman ini. Mapping historis
+      // yang sudah nonaktif tetap dipertahankan untuk menjaga auditability.
       await tx.rolePermission.deleteMany({
-        where: { roleId: adminRole.roleId },
+        where: {
+          roleId: adminRole.roleId,
+          permission: {
+            permissionCode: { in: [...CONFIGURABLE_PERMISSION_CODES] },
+          },
+        },
       });
 
       // 2. Insert mapping permission baru
@@ -129,25 +158,39 @@ export class RolePermissionService {
         },
       });
 
-      // 4. Tulis Audit Log
-      await tx.auditLog.create({
-        data: {
-          userId: actorId,
-          action: AUDIT_OPERATIONS.UPDATE,
-          transactionId,
-          module: 'SYSTEM',
-          source: 'Updated via Role Permission',
-          entityType: 'ROLE',
-          entityId: adminRole.roleId,
-          changedFields: changedFields(
-            { permissionIds: expectedOldIds },
-            { permissionIds: [...newPermIds].sort() },
-          ),
-          ipAddress: ip,
-          userAgent: ua,
-          createdAt: now,
-        },
+      const previousIds = new Set(expectedOldIds);
+      const nextIds = new Set(newPermIds);
+      const changedIds = [
+        ...expectedOldIds.filter((id) => !nextIds.has(id)),
+        ...newPermIds.filter((id) => !previousIds.has(id)),
+      ];
+      const changedPermissions = await tx.permission.findMany({
+        where: { permissionId: { in: changedIds.map((id) => BigInt(id)) } },
+        select: { permissionId: true, permissionCode: true },
       });
+
+      // FR-SYS-003: satu audit record untuk setiap permission yang berubah,
+      // semuanya memakai transactionId yang sama.
+      for (const permission of changedPermissions) {
+        const id = permission.permissionId.toString();
+        const enabled = nextIds.has(id);
+        await tx.auditLog.create({
+          data: {
+            userId: actorId,
+            action: AUDIT_OPERATIONS.UPDATE,
+            transactionId,
+            module: 'SYSTEM',
+            source: 'Updated via Role Permission',
+            entityType: 'ROLE_PERMISSION',
+            entityId: permission.permissionId,
+            entityNumber: permission.permissionCode,
+            changedFields: { enabled: { before: !enabled, after: enabled } },
+            ipAddress: ip,
+            userAgent: ua,
+            createdAt: now,
+          },
+        });
+      }
     });
   }
 }
