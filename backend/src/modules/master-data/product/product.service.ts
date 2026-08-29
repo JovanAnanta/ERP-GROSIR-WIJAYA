@@ -12,6 +12,14 @@ import type {
   ProductUnit,
 } from '../../../../generated/prisma/client.js';
 import { ImportProductsPayloadDto } from './dto/product.dto.js';
+import {
+  ACTIVITY_TYPES,
+  AUDIT_OPERATIONS,
+  changedFields,
+  createAuditTransactionId,
+  writeActivityLog,
+  writeAuditLog,
+} from '../../../common/logging/business-logger.js';
 
 interface FormattableProductUnit {
   isParent: boolean;
@@ -135,6 +143,7 @@ export class ProductService {
 
     return await this.prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
+        const transactionId = createAuditTransactionId();
         const categoryId = await this.resolveCategory(
           tx,
           userId,
@@ -161,6 +170,7 @@ export class ProductService {
         });
 
         let parentProductUnitId: bigint | null = null;
+        const createdUnits: ProductUnit[] = [];
 
         const orderedUnits = [
           parents[0],
@@ -197,11 +207,15 @@ export class ProductService {
               createdAt: new Date(),
             },
           });
+          createdUnits.push(pu);
           if (pu.isParent) parentProductUnitId = pu.productUnitId;
         }
 
+        let createdStock: Awaited<
+          ReturnType<typeof tx.inventoryStock.create>
+        > | null = null;
         if (parentProductUnitId) {
-          await tx.inventoryStock.create({
+          createdStock = await tx.inventoryStock.create({
             data: {
               productId: product.productId,
               productUnitId: parentProductUnitId,
@@ -212,16 +226,75 @@ export class ProductService {
           });
         }
 
-        await tx.activityLog.create({
-          data: {
-            userId,
-            activityType: 'CREATE_PRODUCT',
-            entityType: 'PRODUCT',
-            entityId: product.productId,
-            description: `Membuat Produk Baru: ${product.productName}`,
-            createdAt: new Date(),
-          },
+        await writeActivityLog(tx, {
+          userId,
+          activityType: ACTIVITY_TYPES.CREATE,
+          module: 'PRODUCT',
+          entityType: 'PRODUCT',
+          entityId: product.productId,
+          entityNumber: product.productName,
+          description: `Membuat produk ${product.productName}`,
         });
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'PRODUCT',
+          operation: AUDIT_OPERATIONS.CREATE,
+          entityType: 'PRODUCT',
+          entityId: product.productId,
+          entityNumber: product.productName,
+          source: 'Created via Product Master',
+          changedFields: changedFields(null, product, [
+            'productName',
+            'categoryId',
+            'brandId',
+            'minimumInventoryQty',
+            'isActive',
+          ]),
+        });
+        await Promise.all([
+          ...createdUnits.map((unit) =>
+            writeAuditLog(tx, {
+              userId,
+              transactionId,
+              module: 'PRODUCT',
+              operation: AUDIT_OPERATIONS.CREATE,
+              entityType: 'PRODUCT_UNIT',
+              entityId: unit.productUnitId,
+              entityNumber: product.productName,
+              source: 'Created via Product Master',
+              changedFields: changedFields(null, unit, [
+                'productId',
+                'unitId',
+                'parentProductUnitId',
+                'conversionFactor',
+                'displayOrder',
+                'isParent',
+                'isActive',
+              ]),
+            }),
+          ),
+          ...(createdStock
+            ? [
+                writeAuditLog(tx, {
+                  userId,
+                  transactionId,
+                  module: 'INVENTORY',
+                  operation: AUDIT_OPERATIONS.CREATE,
+                  entityType: 'INVENTORY_STOCK',
+                  entityId: createdStock.inventoryStockId,
+                  entityNumber: product.productName,
+                  source: 'Initialized via Product Master',
+                  changedFields: changedFields(null, createdStock, [
+                    'productId',
+                    'productUnitId',
+                    'actualQty',
+                    'availableQty',
+                  ]),
+                }),
+              ]
+            : []),
+        ]);
         return product;
       },
     );
@@ -249,6 +322,7 @@ export class ProductService {
 
     return await this.prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
+        const transactionId = createAuditTransactionId();
         const categoryId = await this.resolveCategory(
           tx,
           userId,
@@ -323,8 +397,12 @@ export class ProductService {
                   HttpStatus.BAD_REQUEST,
                 );
               }
-              await tx.productUnit.update({
-                where: { productUnitId: BigInt(unitInput.productUnitId) },
+              const productUnitId = BigInt(unitInput.productUnitId);
+              const beforeUnit = await tx.productUnit.findUniqueOrThrow({
+                where: { productUnitId },
+              });
+              const changedUnit = await tx.productUnit.update({
+                where: { productUnitId },
                 data: {
                   unitId,
                   parentProductUnitId: isParentFlag
@@ -338,9 +416,27 @@ export class ProductService {
                   updatedAt: new Date(),
                 },
               });
+              await writeAuditLog(tx, {
+                userId,
+                transactionId,
+                module: 'PRODUCT',
+                operation: AUDIT_OPERATIONS.UPDATE,
+                entityType: 'PRODUCT_UNIT',
+                entityId: productUnitId,
+                entityNumber: updated.productName,
+                source: 'Updated via Product Master',
+                changedFields: changedFields(beforeUnit, changedUnit, [
+                  'unitId',
+                  'parentProductUnitId',
+                  'conversionFactor',
+                  'displayOrder',
+                  'isParent',
+                  'isActive',
+                ]),
+              });
             } else {
               if (isActiveFlag) {
-                await tx.productUnit.create({
+                const newUnit = await tx.productUnit.create({
                   data: {
                     productId,
                     unitId,
@@ -355,20 +451,54 @@ export class ProductService {
                     createdAt: new Date(),
                   },
                 });
+                await writeAuditLog(tx, {
+                  userId,
+                  transactionId,
+                  module: 'PRODUCT',
+                  operation: AUDIT_OPERATIONS.CREATE,
+                  entityType: 'PRODUCT_UNIT',
+                  entityId: newUnit.productUnitId,
+                  entityNumber: updated.productName,
+                  source: 'Created via Product Master',
+                  changedFields: changedFields(null, newUnit, [
+                    'productId',
+                    'unitId',
+                    'parentProductUnitId',
+                    'conversionFactor',
+                    'displayOrder',
+                    'isParent',
+                    'isActive',
+                  ]),
+                });
               }
             }
           }
         }
 
-        await tx.activityLog.create({
-          data: {
-            userId,
-            activityType: 'UPDATE_PRODUCT',
-            entityType: 'PRODUCT',
-            entityId: productId,
-            description: `Memperbarui Produk: ${updated.productName}`,
-            createdAt: new Date(),
-          },
+        await writeActivityLog(tx, {
+          userId,
+          activityType: ACTIVITY_TYPES.UPDATE,
+          module: 'PRODUCT',
+          entityType: 'PRODUCT',
+          entityId: productId,
+          entityNumber: updated.productName,
+          description: `Memperbarui produk ${updated.productName}`,
+        });
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'PRODUCT',
+          operation: AUDIT_OPERATIONS.UPDATE,
+          entityType: 'PRODUCT',
+          entityId: productId,
+          entityNumber: updated.productName,
+          source: 'Updated via Product Master',
+          changedFields: changedFields(existing, updated, [
+            'productName',
+            'categoryId',
+            'brandId',
+            'minimumInventoryQty',
+          ]),
         });
         return updated;
       },
@@ -380,9 +510,39 @@ export class ProductService {
     productId: bigint,
     status: boolean,
   ): Promise<void> {
-    await this.prisma.product.update({
-      where: { productId },
-      data: { isActive: status, updatedBy: userId, updatedAt: new Date() },
+    await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.product.findUnique({ where: { productId } });
+      if (!existing)
+        throw new HttpException(
+          'Produk tidak ditemukan.',
+          HttpStatus.NOT_FOUND,
+        );
+      const updated = await tx.product.update({
+        where: { productId },
+        data: { isActive: status, updatedBy: userId, updatedAt: new Date() },
+      });
+      if (existing.isActive === updated.isActive) return;
+      const transactionId = createAuditTransactionId();
+      await writeActivityLog(tx, {
+        userId,
+        activityType: ACTIVITY_TYPES.UPDATE,
+        module: 'PRODUCT',
+        entityType: 'PRODUCT',
+        entityId: productId,
+        entityNumber: updated.productName,
+        description: `${status ? 'Mengaktifkan kembali' : 'Menonaktifkan'} produk ${updated.productName}`,
+      });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'PRODUCT',
+        operation: AUDIT_OPERATIONS.UPDATE,
+        entityType: 'PRODUCT',
+        entityId: productId,
+        entityNumber: updated.productName,
+        source: 'Updated via Product Master',
+        changedFields: changedFields(existing, updated, ['isActive']),
+      });
     });
   }
 
@@ -506,6 +666,7 @@ export class ProductService {
         let createdCount = 0;
         let updatedCount = 0;
         const now = new Date();
+        const transactionId = createAuditTransactionId();
 
         // 1. IN-MEMORY CACHING: Tarik semua Master Data ke RAM untuk mencegah N+1 Query Problem!
         const catMap = new Map<string, bigint>();
@@ -591,7 +752,7 @@ export class ProductService {
 
           if (existingProduct) {
             // UPDATE INFORMASI DASAR
-            await tx.product.update({
+            const importedProduct = await tx.product.update({
               where: { productId: existingProduct.productId },
               data: {
                 categoryId,
@@ -600,6 +761,21 @@ export class ProductService {
                 updatedBy: userId,
                 updatedAt: now,
               },
+            });
+            await writeAuditLog(tx, {
+              userId,
+              transactionId,
+              module: 'PRODUCT',
+              operation: AUDIT_OPERATIONS.UPDATE,
+              entityType: 'PRODUCT',
+              entityId: importedProduct.productId,
+              entityNumber: importedProduct.productName,
+              source: 'Updated via Product Import',
+              changedFields: changedFields(existingProduct, importedProduct, [
+                'categoryId',
+                'brandId',
+                'minimumInventoryQty',
+              ]),
             });
             targetProductId = existingProduct.productId;
 
@@ -655,6 +831,23 @@ export class ProductService {
                 createdBy: userId,
                 createdAt: now,
               },
+            });
+            await writeAuditLog(tx, {
+              userId,
+              transactionId,
+              module: 'PRODUCT',
+              operation: AUDIT_OPERATIONS.CREATE,
+              entityType: 'PRODUCT',
+              entityId: newProd.productId,
+              entityNumber: newProd.productName,
+              source: 'Created via Product Import',
+              changedFields: changedFields(null, newProd, [
+                'productName',
+                'categoryId',
+                'brandId',
+                'minimumInventoryQty',
+                'isActive',
+              ]),
             });
             targetProductId = newProd.productId;
             createdCount++;
@@ -741,14 +934,13 @@ export class ProductService {
         }
 
         // Catat Activity Log Massal
-        await tx.activityLog.create({
-          data: {
-            userId,
-            activityType: 'MASS_IMPORT_PRODUCT',
-            entityType: 'PRODUCT',
-            description: `Import Massal: ${createdCount} produk baru, ${updatedCount} produk diperbarui dari file.`,
-            createdAt: now,
-          },
+        await writeActivityLog(tx, {
+          userId,
+          activityType: ACTIVITY_TYPES.IMPORT,
+          module: 'PRODUCT',
+          entityType: 'PRODUCT',
+          description: `Import produk: ${createdCount} baru dan ${updatedCount} diperbarui`,
+          metadata: { createdCount, updatedCount },
         });
 
         return { createdCount, updatedCount };

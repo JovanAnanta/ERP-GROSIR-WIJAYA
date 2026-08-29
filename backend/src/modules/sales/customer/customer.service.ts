@@ -6,6 +6,12 @@ import {
   CustomerQueryDto,
 } from './dto/customer.dto.js';
 import type { Prisma, Customer } from '../../../../generated/prisma/client.js';
+import {
+  ACTIVITY_TYPES,
+  AUDIT_OPERATIONS,
+  changedFields as buildChangedFields,
+  createAuditTransactionId,
+} from '../../../common/logging/business-logger.js';
 
 // Type khusus untuk mengakali Schema yang mungkin belum memiliki typing sempurna
 type FinancialSummaryData = {
@@ -91,11 +97,13 @@ export class CustomerService {
         });
 
         const now = new Date();
+        const transactionId = createAuditTransactionId();
 
         await tx.activityLog.create({
           data: {
             userId,
-            activityType: 'CREATE_CUSTOMER',
+            activityType: ACTIVITY_TYPES.CREATE,
+            module: 'CUSTOMER',
             entityType: 'CUSTOMER',
             entityId: customer.customerId,
             description: `Membuat Customer Baru: ${customer.customerName}`,
@@ -107,13 +115,17 @@ export class CustomerService {
           data: {
             userId,
             action: 'CREATE',
+            transactionId,
+            module: 'CUSTOMER',
+            source: 'Created via Customer Master',
             entityType: 'CUSTOMER',
             entityId: customer.customerId,
-            changedFields: {
-              customerName: { new: customer.customerName },
-              phone: { new: customer.phone },
-              address: { new: customer.address },
-            },
+            changedFields: buildChangedFields(null, customer, [
+              'customerName',
+              'phone',
+              'address',
+              'isActive',
+            ]),
             ipAddress: ip,
             userAgent: ua,
             createdAt: now,
@@ -169,6 +181,7 @@ export class CustomerService {
         });
 
         const now = new Date();
+        const transactionId = createAuditTransactionId();
         const changedFields: Record<string, AuditFieldChange> = {};
 
         if (existing.customerName !== updated.customerName) {
@@ -191,7 +204,8 @@ export class CustomerService {
           await tx.activityLog.create({
             data: {
               userId,
-              activityType: 'UPDATE_CUSTOMER',
+              activityType: ACTIVITY_TYPES.UPDATE,
+              module: 'CUSTOMER',
               entityType: 'CUSTOMER',
               entityId: customerId,
               description: `Memperbarui data Customer: ${updated.customerName}`,
@@ -203,9 +217,16 @@ export class CustomerService {
             data: {
               userId,
               action: 'UPDATE',
+              transactionId,
+              module: 'CUSTOMER',
+              source: 'Updated via Customer Master',
               entityType: 'CUSTOMER',
               entityId: customerId,
-              changedFields: changedFields,
+              changedFields: buildChangedFields(existing, updated, [
+                'customerName',
+                'phone',
+                'address',
+              ]),
               ipAddress: ip,
               userAgent: ua,
               createdAt: now,
@@ -261,10 +282,12 @@ export class CustomerService {
       });
 
       const now = new Date();
+      const transactionId = createAuditTransactionId();
       await tx.activityLog.create({
         data: {
           userId,
-          activityType: 'INACTIVATE_CUSTOMER',
+          activityType: ACTIVITY_TYPES.UPDATE,
+          module: 'CUSTOMER',
           entityType: 'CUSTOMER',
           entityId: customerId,
           description: `Menonaktifkan Customer: ${customer.customerName}`,
@@ -275,10 +298,17 @@ export class CustomerService {
       await tx.auditLog.create({
         data: {
           userId,
-          action: 'INACTIVATE',
+          action: AUDIT_OPERATIONS.UPDATE,
+          transactionId,
+          module: 'CUSTOMER',
+          source: 'Updated via Customer Master',
           entityType: 'CUSTOMER',
           entityId: customerId,
-          changedFields: { isActive: { old: true, new: false } },
+          changedFields: buildChangedFields(
+            customer,
+            { ...customer, isActive: false },
+            ['isActive'],
+          ),
           ipAddress: ip,
           userAgent: ua,
           createdAt: now,
@@ -317,10 +347,12 @@ export class CustomerService {
       });
 
       const now = new Date();
+      const transactionId = createAuditTransactionId();
       await tx.activityLog.create({
         data: {
           userId,
-          activityType: 'REACTIVATE_CUSTOMER',
+          activityType: ACTIVITY_TYPES.UPDATE,
+          module: 'CUSTOMER',
           entityType: 'CUSTOMER',
           entityId: customerId,
           description: `Mengaktifkan kembali Customer: ${customer.customerName}`,
@@ -331,10 +363,17 @@ export class CustomerService {
       await tx.auditLog.create({
         data: {
           userId,
-          action: 'REACTIVATE',
+          action: AUDIT_OPERATIONS.UPDATE,
+          transactionId,
+          module: 'CUSTOMER',
+          source: 'Updated via Customer Master',
           entityType: 'CUSTOMER',
           entityId: customerId,
-          changedFields: { isActive: { old: false, new: true } },
+          changedFields: buildChangedFields(
+            customer,
+            { ...customer, isActive: true },
+            ['isActive'],
+          ),
           ipAddress: ip,
           userAgent: ua,
           createdAt: now,

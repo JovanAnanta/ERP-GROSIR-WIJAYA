@@ -13,6 +13,13 @@ import {
   generateFifoLayerNumber,
   recordInitialFifoIn,
 } from './fifo-ledger.utils.js';
+import {
+  ACTIVITY_TYPES,
+  AUDIT_OPERATIONS,
+  changedFields,
+  createAuditTransactionId,
+  writeAuditLog,
+} from '../../common/logging/business-logger.js';
 
 const ACTIVE_RETURN_STATUSES = ['READY', 'COMPLETED'] as const;
 const PURCHASE_RETURN_FULL_INCLUDE = {
@@ -252,6 +259,10 @@ export class PurchaseReturnService {
           details: { create: details },
         },
       });
+      const transactionId = createAuditTransactionId();
+      const createdDetails = await tx.purchaseReturnDetail.findMany({
+        where: { purchaseReturnId: created.purchaseReturnId },
+      });
       await this.log(
         tx,
         created.purchaseReturnId,
@@ -262,9 +273,43 @@ export class PurchaseReturnService {
         {
           operation: 'INSERT',
           before: null,
-          after: { status: 'DRAFT', resolutionType: dto.resolutionType },
+          after: {
+            purchaseInvoiceId: created.purchaseInvoiceId,
+            supplierId: created.supplierId,
+            status: created.status,
+            resolutionType: created.resolutionType,
+            returnDate: created.returnDate,
+            expectedResolutionDate: created.expectedResolutionDate,
+            returnTotal: created.returnTotal,
+            inventoryCostTotal: created.inventoryCostTotal,
+            reason: created.reason,
+            note: created.note,
+          },
         },
+        transactionId,
       );
+      for (const detail of createdDetails)
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'PURCHASE',
+          operation: AUDIT_OPERATIONS.CREATE,
+          entityType: 'PURCHASE_RETURN_DETAIL',
+          entityId: detail.purchaseReturnDetailId,
+          entityNumber: number,
+          source: 'Created via Purchase Return',
+          changedFields: changedFields(null, detail, [
+            'purchaseInvoiceDetailId',
+            'productUnitId',
+            'fifoLayerId',
+            'quantity',
+            'baseQuantity',
+            'unitCost',
+            'fifoUnitCost',
+            'inventoryCostSubtotal',
+            'subtotal',
+          ]),
+        });
       if (dto.status === 'READY') {
         await this.markReadyInTransaction(tx, created.purchaseReturnId, userId);
       }
@@ -278,6 +323,7 @@ export class PurchaseReturnService {
       await this.lockReturn(tx, returnId);
       const existing = await tx.purchaseReturn.findUnique({
         where: { purchaseReturnId: returnId },
+        include: { details: true },
       });
       if (!existing)
         throw new HttpException(
@@ -300,7 +346,8 @@ export class PurchaseReturnService {
       await tx.purchaseReturnDetail.deleteMany({
         where: { purchaseReturnId: returnId },
       });
-      await tx.purchaseReturn.update({
+      const transactionId = createAuditTransactionId();
+      const updated = await tx.purchaseReturn.update({
         where: { purchaseReturnId: returnId },
         data: {
           resolutionType: dto.resolutionType,
@@ -321,6 +368,7 @@ export class PurchaseReturnService {
           updatedBy: userId,
           details: { create: details },
         },
+        include: { details: true },
       });
       await this.log(
         tx,
@@ -338,13 +386,61 @@ export class PurchaseReturnService {
             note: existing.note,
           },
           after: {
-            resolutionType: dto.resolutionType,
-            returnDate: dto.returnDate,
-            reason: dto.reason.trim(),
-            note: dto.note?.trim() || null,
+            resolutionType: updated.resolutionType,
+            returnDate: updated.returnDate,
+            expectedResolutionDate: updated.expectedResolutionDate,
+            returnTotal: updated.returnTotal,
+            inventoryCostTotal: updated.inventoryCostTotal,
+            reason: updated.reason,
+            note: updated.note,
           },
         },
+        transactionId,
       );
+      for (const detail of existing.details)
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'PURCHASE',
+          operation: AUDIT_OPERATIONS.DELETE,
+          entityType: 'PURCHASE_RETURN_DETAIL',
+          entityId: detail.purchaseReturnDetailId,
+          entityNumber: existing.purchaseReturnNumber,
+          source: 'Replaced via Purchase Return Update',
+          changedFields: changedFields(detail, null, [
+            'purchaseInvoiceDetailId',
+            'productUnitId',
+            'fifoLayerId',
+            'quantity',
+            'baseQuantity',
+            'unitCost',
+            'fifoUnitCost',
+            'inventoryCostSubtotal',
+            'subtotal',
+          ]),
+        });
+      for (const detail of updated.details)
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'PURCHASE',
+          operation: AUDIT_OPERATIONS.CREATE,
+          entityType: 'PURCHASE_RETURN_DETAIL',
+          entityId: detail.purchaseReturnDetailId,
+          entityNumber: existing.purchaseReturnNumber,
+          source: 'Replaced via Purchase Return Update',
+          changedFields: changedFields(null, detail, [
+            'purchaseInvoiceDetailId',
+            'productUnitId',
+            'fifoLayerId',
+            'quantity',
+            'baseQuantity',
+            'unitCost',
+            'fifoUnitCost',
+            'inventoryCostSubtotal',
+            'subtotal',
+          ]),
+        });
       if (dto.status === 'READY')
         await this.markReadyInTransaction(tx, returnId, userId);
       return this.findByIdInTransaction(tx, returnId);
@@ -395,6 +491,7 @@ export class PurchaseReturnService {
       );
     }
     const now = new Date();
+    const transactionId = createAuditTransactionId();
     let inventoryCostTotal = new Prisma.Decimal(0);
     for (const detail of purchaseReturn.details) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`RETURN_FIFO:${detail.fifoLayerId.toString()}`}))`;
@@ -480,7 +577,7 @@ export class PurchaseReturnService {
           createdBy: userId,
         },
       });
-      await tx.fifoLayerTransaction.create({
+      const fifoTransaction = await tx.fifoLayerTransaction.create({
         data: {
           fifoLayerId: layer.fifoLayerId,
           inventoryMovementId: movement.inventoryMovementId,
@@ -493,23 +590,105 @@ export class PurchaseReturnService {
           createdBy: userId,
         },
       });
-      await tx.fifoLayer.update({
+      const updatedLayer = await tx.fifoLayer.update({
         where: { fifoLayerId: layer.fifoLayerId },
         data: {
           remainingQty: { decrement: detail.baseQuantity },
           remainingCost: { decrement: cost },
         },
       });
-      await tx.inventoryStock.update({
+      const updatedStock = await tx.inventoryStock.update({
         where: { inventoryStockId: stock.inventoryStockId },
         data: {
           actualQty: { decrement: detail.baseQuantity },
           availableQty: { decrement: detail.baseQuantity },
         },
       });
-      await tx.purchaseReturnDetail.update({
+      const updatedDetail = await tx.purchaseReturnDetail.update({
         where: { purchaseReturnDetailId: detail.purchaseReturnDetailId },
         data: { fifoUnitCost: effectiveCost, inventoryCostSubtotal: cost },
+      });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'INVENTORY',
+        operation: AUDIT_OPERATIONS.CREATE,
+        entityType: 'INVENTORY_MOVEMENT',
+        entityId: movement.inventoryMovementId,
+        entityNumber: purchaseReturn.purchaseReturnNumber,
+        source: 'Created via Purchase Return',
+        changedFields: changedFields(null, movement, [
+          'movementNumber',
+          'productUnitId',
+          'direction',
+          'quantity',
+          'movementType',
+          'originType',
+          'originId',
+          'movementDate',
+        ]),
+      });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'FIFO',
+        operation: AUDIT_OPERATIONS.CREATE,
+        entityType: 'FIFO_LAYER_TRANSACTION',
+        entityId: fifoTransaction.fifoLayerTransactionId,
+        entityNumber: purchaseReturn.purchaseReturnNumber,
+        source: 'Created via Purchase Return',
+        changedFields: changedFields(null, fifoTransaction, [
+          'fifoLayerId',
+          'inventoryMovementId',
+          'quantity',
+          'direction',
+          'unitCost',
+          'totalCost',
+          'quantityBefore',
+          'quantityAfter',
+        ]),
+      });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'FIFO',
+        operation: AUDIT_OPERATIONS.UPDATE,
+        entityType: 'FIFO_LAYER',
+        entityId: layer.fifoLayerId,
+        entityNumber: layer.fifoLayerNumber,
+        source: 'Updated via Purchase Return',
+        changedFields: changedFields(layer, updatedLayer, [
+          'remainingQty',
+          'remainingCost',
+        ]),
+      });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'INVENTORY',
+        operation: AUDIT_OPERATIONS.UPDATE,
+        entityType: 'INVENTORY_STOCK',
+        entityId: stock.inventoryStockId,
+        entityNumber: purchaseReturn.purchaseReturnNumber,
+        source: 'Updated via Purchase Return',
+        changedFields: changedFields(stock, updatedStock, [
+          'actualQty',
+          'availableQty',
+        ]),
+      });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'PURCHASE',
+        operation: AUDIT_OPERATIONS.UPDATE,
+        entityType: 'PURCHASE_RETURN_DETAIL',
+        entityId: detail.purchaseReturnDetailId,
+        entityNumber: purchaseReturn.purchaseReturnNumber,
+        source: 'Updated via Purchase Return',
+        changedFields: changedFields(detail, updatedDetail, [
+          'fifoUnitCost',
+          'inventoryCostSubtotal',
+        ]),
       });
       inventoryCostTotal = inventoryCostTotal.add(cost);
     }
@@ -529,12 +708,14 @@ export class PurchaseReturnService {
         before: { status: 'DRAFT' },
         after: { status: 'READY' },
       },
+      transactionId,
     );
   }
 
   async complete(userId: bigint, id: string, dto: CompletePurchaseReturnDto) {
     return this.prisma.$transaction(async (tx) => {
       const returnId = BigInt(id);
+      const transactionId = createAuditTransactionId();
       await this.lockReturn(tx, returnId);
       const purchaseReturn = await tx.purchaseReturn.findUnique({
         where: { purchaseReturnId: returnId },
@@ -588,7 +769,7 @@ export class PurchaseReturnService {
               createdBy: userId,
             },
           });
-          await recordInitialFifoIn(tx, {
+          const fifoTransaction = await recordInitialFifoIn(tx, {
             fifoLayerId: replacementLayer.fifoLayerId,
             inventoryMovementId: movement.inventoryMovementId,
             quantity: detail.baseQuantity,
@@ -604,12 +785,87 @@ export class PurchaseReturnService {
               'Inventory stock tidak ditemukan.',
               HttpStatus.CONFLICT,
             );
-          await tx.inventoryStock.update({
+          const updatedStock = await tx.inventoryStock.update({
             where: { inventoryStockId: stock.inventoryStockId },
             data: {
               actualQty: { increment: detail.baseQuantity },
               availableQty: { increment: detail.baseQuantity },
             },
+          });
+          await writeAuditLog(tx, {
+            userId,
+            transactionId,
+            module: 'INVENTORY',
+            operation: AUDIT_OPERATIONS.CREATE,
+            entityType: 'INVENTORY_MOVEMENT',
+            entityId: movement.inventoryMovementId,
+            entityNumber: purchaseReturn.purchaseReturnNumber,
+            source: 'Created via Purchase Return Replacement',
+            changedFields: changedFields(null, movement, [
+              'movementNumber',
+              'productUnitId',
+              'direction',
+              'quantity',
+              'movementType',
+              'originType',
+              'originId',
+              'movementDate',
+            ]),
+          });
+          await writeAuditLog(tx, {
+            userId,
+            transactionId,
+            module: 'FIFO',
+            operation: AUDIT_OPERATIONS.CREATE,
+            entityType: 'FIFO_LAYER',
+            entityId: replacementLayer.fifoLayerId,
+            entityNumber: replacementLayer.fifoLayerNumber,
+            source: 'Created via Purchase Return Replacement',
+            changedFields: changedFields(null, replacementLayer, [
+              'productUnitId',
+              'originType',
+              'originInventoryMovementId',
+              'originId',
+              'originalQty',
+              'remainingQty',
+              'unitCost',
+              'originalCost',
+              'remainingCost',
+            ]),
+          });
+          await writeAuditLog(tx, {
+            userId,
+            transactionId,
+            module: 'FIFO',
+            operation: AUDIT_OPERATIONS.CREATE,
+            entityType: 'FIFO_LAYER_TRANSACTION',
+            entityId: fifoTransaction.fifoLayerTransactionId,
+            entityNumber: replacementLayer.fifoLayerNumber,
+            source: 'Created via Purchase Return Replacement',
+            changedFields: changedFields(null, fifoTransaction, [
+              'fifoLayerId',
+              'inventoryMovementId',
+              'quantity',
+              'direction',
+              'unitCost',
+              'totalCost',
+              'quantityBefore',
+              'quantityAfter',
+            ]),
+          });
+          await writeAuditLog(tx, {
+            userId,
+            transactionId,
+            module: 'INVENTORY',
+            operation: AUDIT_OPERATIONS.UPDATE,
+            entityType: 'INVENTORY_STOCK',
+            entityId: stock.inventoryStockId,
+            entityNumber: purchaseReturn.purchaseReturnNumber,
+            source: 'Updated via Purchase Return Replacement',
+            changedFields: changedFields(stock, updatedStock, [
+              'actualQty',
+              'availableQty',
+            ]),
           });
         }
       } else if (
@@ -631,12 +887,15 @@ export class PurchaseReturnService {
         const remaining = invoice.outstandingAmount.sub(
           purchaseReturn.returnTotal,
         );
-        await tx.purchaseInvoice.update({
+        const updatedInvoice = await tx.purchaseInvoice.update({
           where: { purchaseInvoiceId: invoice.purchaseInvoiceId },
           data: {
             outstandingAmount: remaining,
             statusPayment: remaining.equals(0) ? 'PAID' : invoice.statusPayment,
           },
+        });
+        const summaryBefore = await tx.supplierFinancialSummary.findUnique({
+          where: { supplierId: purchaseReturn.supplierId },
         });
         const summary = await tx.supplierFinancialSummary.updateMany({
           where: {
@@ -654,7 +913,10 @@ export class PurchaseReturnService {
             'Saldo hutang supplier tidak konsisten.',
             HttpStatus.CONFLICT,
           );
-        await tx.supplierAccountTransaction.create({
+        const summaryAfter = await tx.supplierFinancialSummary.findUnique({
+          where: { supplierId: purchaseReturn.supplierId },
+        });
+        const supplierTransaction = await tx.supplierAccountTransaction.create({
           data: {
             transactionNumber: `SAT-PR-${returnId}`,
             supplierId: purchaseReturn.supplierId,
@@ -667,6 +929,55 @@ export class PurchaseReturnService {
             note: purchaseReturn.note,
             createdBy: userId,
           },
+        });
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'PURCHASE',
+          operation: AUDIT_OPERATIONS.UPDATE,
+          entityType: 'PURCHASE_INVOICE',
+          entityId: invoice.purchaseInvoiceId,
+          entityNumber: invoice.purchaseInvoiceNumber,
+          source: 'Updated via Purchase Return Deduction',
+          changedFields: changedFields(invoice, updatedInvoice, [
+            'outstandingAmount',
+            'statusPayment',
+          ]),
+        });
+        if (summaryBefore && summaryAfter) {
+          await writeAuditLog(tx, {
+            userId,
+            transactionId,
+            module: 'FINANCIAL',
+            operation: AUDIT_OPERATIONS.UPDATE,
+            entityType: 'SUPPLIER_FINANCIAL_SUMMARY',
+            entityId: summaryBefore.supplierFinancialId,
+            entityNumber: purchaseReturn.purchaseReturnNumber,
+            source: 'Updated via Purchase Return Deduction',
+            changedFields: changedFields(summaryBefore, summaryAfter, [
+              'outstandingAmount',
+              'currentAmount',
+            ]),
+          });
+        }
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'FINANCIAL',
+          operation: AUDIT_OPERATIONS.CREATE,
+          entityType: 'SUPPLIER_ACCOUNT_TRANSACTION',
+          entityId: supplierTransaction.supplierAccountTransactionId,
+          entityNumber: supplierTransaction.transactionNumber,
+          source: 'Created via Purchase Return Deduction',
+          changedFields: changedFields(null, supplierTransaction, [
+            'supplierId',
+            'transactionType',
+            'direction',
+            'amount',
+            'referenceType',
+            'referenceId',
+            'transactionDate',
+          ]),
         });
       } else if (purchaseReturn.resolutionType === 'NEXT_INVOICE_DEDUCTION') {
         if (!dto.appliedPurchaseInvoiceId) {
@@ -709,7 +1020,7 @@ export class PurchaseReturnService {
             'Akun kas/bank tidak valid.',
             HttpStatus.BAD_REQUEST,
           );
-        await tx.financialAccount.update({
+        const updatedAccount = await tx.financialAccount.update({
           where: { financialAccountId: accountId },
           data: {
             currentBalance: { increment: purchaseReturn.returnTotal },
@@ -717,28 +1028,62 @@ export class PurchaseReturnService {
             updatedBy: userId,
           },
         });
-        await tx.financialAccountTransaction.create({
-          data: {
-            transactionNumber:
-              await this.generateFinancialTransactionNumber(tx),
-            financialAccountId: accountId,
-            transactionType: 'PURCHASE_RETURN_CASHBACK',
-            paymentMethod: dto.paymentMethod,
-            direction: 'IN',
-            amount: purchaseReturn.returnTotal,
-            referenceType: 'PURCHASE_RETURN',
-            referenceId: returnId,
-            transactionDate: now,
-            note: purchaseReturn.note,
-            createdBy: userId,
-          },
-        });
+        const financialTransaction =
+          await tx.financialAccountTransaction.create({
+            data: {
+              transactionNumber:
+                await this.generateFinancialTransactionNumber(tx),
+              financialAccountId: accountId,
+              transactionType: 'PURCHASE_RETURN_CASHBACK',
+              paymentMethod: dto.paymentMethod,
+              direction: 'IN',
+              amount: purchaseReturn.returnTotal,
+              referenceType: 'PURCHASE_RETURN',
+              referenceId: returnId,
+              transactionDate: now,
+              note: purchaseReturn.note,
+              createdBy: userId,
+            },
+          });
         await tx.purchaseReturn.update({
           where: { purchaseReturnId: returnId },
           data: { financialAccountId: accountId },
         });
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'FINANCIAL',
+          operation: AUDIT_OPERATIONS.UPDATE,
+          entityType: 'FINANCIAL_ACCOUNT',
+          entityId: account.financialAccountId,
+          entityNumber: account.accountName,
+          source: 'Updated via Purchase Return Cashback',
+          changedFields: changedFields(account, updatedAccount, [
+            'currentBalance',
+          ]),
+        });
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'FINANCIAL',
+          operation: AUDIT_OPERATIONS.CREATE,
+          entityType: 'FINANCIAL_ACCOUNT_TRANSACTION',
+          entityId: financialTransaction.financialAccountTransactionId,
+          entityNumber: financialTransaction.transactionNumber,
+          source: 'Created via Purchase Return Cashback',
+          changedFields: changedFields(null, financialTransaction, [
+            'financialAccountId',
+            'transactionType',
+            'paymentMethod',
+            'direction',
+            'amount',
+            'referenceType',
+            'referenceId',
+            'transactionDate',
+          ]),
+        });
       }
-      await tx.purchaseReturn.update({
+      const completedReturn = await tx.purchaseReturn.update({
         where: { purchaseReturnId: returnId },
         data: { status: 'COMPLETED', updatedBy: userId },
       });
@@ -751,9 +1096,18 @@ export class PurchaseReturnService {
         'Menyelesaikan Purchase Return',
         {
           operation: 'UPDATE',
-          before: { status: 'READY' },
-          after: { status: 'COMPLETED' },
+          before: {
+            status: purchaseReturn.status,
+            appliedPurchaseInvoiceId: purchaseReturn.appliedPurchaseInvoiceId,
+            financialAccountId: purchaseReturn.financialAccountId,
+          },
+          after: {
+            status: completedReturn.status,
+            appliedPurchaseInvoiceId: completedReturn.appliedPurchaseInvoiceId,
+            financialAccountId: completedReturn.financialAccountId,
+          },
         },
+        transactionId,
       );
       return this.findByIdInTransaction(tx, returnId);
     });
@@ -762,6 +1116,7 @@ export class PurchaseReturnService {
   async cancel(userId: bigint, id: string) {
     return this.prisma.$transaction(async (tx) => {
       const returnId = BigInt(id);
+      const transactionId = createAuditTransactionId();
       await this.lockReturn(tx, returnId);
       const purchaseReturn = await tx.purchaseReturn.findUnique({
         where: { purchaseReturnId: returnId },
@@ -803,7 +1158,7 @@ export class PurchaseReturnService {
               createdBy: userId,
             },
           });
-          await tx.fifoLayerTransaction.create({
+          const fifoTransaction = await tx.fifoLayerTransaction.create({
             data: {
               fifoLayerId: layer.fifoLayerId,
               inventoryMovementId: movement.inventoryMovementId,
@@ -816,7 +1171,7 @@ export class PurchaseReturnService {
               createdBy: userId,
             },
           });
-          await tx.fifoLayer.update({
+          const updatedLayer = await tx.fifoLayer.update({
             where: { fifoLayerId: layer.fifoLayerId },
             data: {
               remainingQty: { increment: detail.baseQuantity },
@@ -831,16 +1186,84 @@ export class PurchaseReturnService {
               'Inventory stock tidak ditemukan.',
               HttpStatus.CONFLICT,
             );
-          await tx.inventoryStock.update({
+          const updatedStock = await tx.inventoryStock.update({
             where: { inventoryStockId: stock.inventoryStockId },
             data: {
               actualQty: { increment: detail.baseQuantity },
               availableQty: { increment: detail.baseQuantity },
             },
           });
+          await writeAuditLog(tx, {
+            userId,
+            transactionId,
+            module: 'INVENTORY',
+            operation: AUDIT_OPERATIONS.CREATE,
+            entityType: 'INVENTORY_MOVEMENT',
+            entityId: movement.inventoryMovementId,
+            entityNumber: purchaseReturn.purchaseReturnNumber,
+            source: 'Created via Purchase Return Cancellation',
+            changedFields: changedFields(null, movement, [
+              'movementNumber',
+              'productUnitId',
+              'direction',
+              'quantity',
+              'movementType',
+              'originType',
+              'originId',
+              'movementDate',
+            ]),
+          });
+          await writeAuditLog(tx, {
+            userId,
+            transactionId,
+            module: 'FIFO',
+            operation: AUDIT_OPERATIONS.CREATE,
+            entityType: 'FIFO_LAYER_TRANSACTION',
+            entityId: fifoTransaction.fifoLayerTransactionId,
+            entityNumber: layer.fifoLayerNumber,
+            source: 'Created via Purchase Return Cancellation',
+            changedFields: changedFields(null, fifoTransaction, [
+              'fifoLayerId',
+              'inventoryMovementId',
+              'quantity',
+              'direction',
+              'unitCost',
+              'totalCost',
+              'quantityBefore',
+              'quantityAfter',
+            ]),
+          });
+          await writeAuditLog(tx, {
+            userId,
+            transactionId,
+            module: 'FIFO',
+            operation: AUDIT_OPERATIONS.UPDATE,
+            entityType: 'FIFO_LAYER',
+            entityId: layer.fifoLayerId,
+            entityNumber: layer.fifoLayerNumber,
+            source: 'Updated via Purchase Return Cancellation',
+            changedFields: changedFields(layer, updatedLayer, [
+              'remainingQty',
+              'remainingCost',
+            ]),
+          });
+          await writeAuditLog(tx, {
+            userId,
+            transactionId,
+            module: 'INVENTORY',
+            operation: AUDIT_OPERATIONS.UPDATE,
+            entityType: 'INVENTORY_STOCK',
+            entityId: stock.inventoryStockId,
+            entityNumber: purchaseReturn.purchaseReturnNumber,
+            source: 'Updated via Purchase Return Cancellation',
+            changedFields: changedFields(stock, updatedStock, [
+              'actualQty',
+              'availableQty',
+            ]),
+          });
         }
       }
-      await tx.purchaseReturn.update({
+      const cancelledReturn = await tx.purchaseReturn.update({
         where: { purchaseReturnId: returnId },
         data: { status: 'CANCELLED', updatedBy: userId },
       });
@@ -854,8 +1277,9 @@ export class PurchaseReturnService {
         {
           operation: 'UPDATE',
           before: { status: purchaseReturn.status },
-          after: { status: 'CANCELLED' },
+          after: { status: cancelledReturn.status },
         },
+        transactionId,
       );
       return { success: true };
     });
@@ -1086,13 +1510,22 @@ export class PurchaseReturnService {
     userId: bigint,
     action: string,
     description: string,
-    auditChanges: Prisma.InputJsonValue,
+    auditChanges: {
+      operation: string;
+      before: Record<string, unknown> | null;
+      after: Record<string, unknown> | null;
+    },
+    transactionId = createAuditTransactionId(),
   ) {
     const now = new Date();
     await tx.activityLog.create({
       data: {
         userId,
-        activityType: action,
+        activityType:
+          action === 'CREATE_RETURN'
+            ? ACTIVITY_TYPES.CREATE
+            : ACTIVITY_TYPES.UPDATE,
+        module: 'PURCHASE',
         entityType: 'PURCHASE_RETURN',
         entityId: id,
         entityNumber: number,
@@ -1103,11 +1536,20 @@ export class PurchaseReturnService {
     await tx.auditLog.create({
       data: {
         userId,
-        action,
+        action:
+          action === 'CREATE_RETURN'
+            ? AUDIT_OPERATIONS.CREATE
+            : AUDIT_OPERATIONS.UPDATE,
+        transactionId,
+        module: 'PURCHASE',
+        source:
+          action === 'CREATE_RETURN'
+            ? 'Created via Purchase Return'
+            : 'Updated via Purchase Return',
         entityType: 'PURCHASE_RETURN',
         entityId: id,
         entityNumber: number,
-        changedFields: auditChanges,
+        changedFields: changedFields(auditChanges.before, auditChanges.after),
         createdAt: now,
       },
     });

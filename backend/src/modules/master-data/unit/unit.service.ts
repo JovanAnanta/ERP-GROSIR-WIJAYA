@@ -2,6 +2,14 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service.js';
 import { CreateUnitDto, UpdateUnitDto, UnitQueryDto } from './dto/unit.dto.js';
 import type { Prisma, Unit } from '../../../../generated/prisma/client.js';
+import {
+  ACTIVITY_TYPES,
+  AUDIT_OPERATIONS,
+  changedFields,
+  createAuditTransactionId,
+  writeActivityLog,
+  writeAuditLog,
+} from '../../../common/logging/business-logger.js';
 
 @Injectable()
 export class UnitService {
@@ -62,15 +70,26 @@ export class UnitService {
           },
         });
 
-        await tx.activityLog.create({
-          data: {
-            userId,
-            activityType: 'CREATE_UNIT',
-            entityType: 'UNIT',
-            entityId: unit.unitId,
-            description: `Membuat Master Unit Baru: ${unit.unitName}`,
-            createdAt: new Date(),
-          },
+        const transactionId = createAuditTransactionId();
+        await writeActivityLog(tx, {
+          userId,
+          activityType: ACTIVITY_TYPES.CREATE,
+          module: 'MASTER_DATA',
+          entityType: 'UNIT',
+          entityId: unit.unitId,
+          entityNumber: unit.unitName,
+          description: `Membuat unit ${unit.unitName}`,
+        });
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'MASTER_DATA',
+          operation: AUDIT_OPERATIONS.CREATE,
+          entityType: 'UNIT',
+          entityId: unit.unitId,
+          entityNumber: unit.unitName,
+          source: 'Created via Unit Master',
+          changedFields: changedFields(null, unit, ['unitName', 'isActive']),
         });
 
         return unit;
@@ -116,15 +135,26 @@ export class UnitService {
         });
 
         if (existing.unitName !== updated.unitName) {
-          await tx.activityLog.create({
-            data: {
-              userId,
-              activityType: 'UPDATE_UNIT',
-              entityType: 'UNIT',
-              entityId: unitId,
-              description: `Memperbarui Unit: ${existing.unitName} menjadi ${updated.unitName}`,
-              createdAt: new Date(),
-            },
+          const transactionId = createAuditTransactionId();
+          await writeActivityLog(tx, {
+            userId,
+            activityType: ACTIVITY_TYPES.UPDATE,
+            module: 'MASTER_DATA',
+            entityType: 'UNIT',
+            entityId: unitId,
+            entityNumber: updated.unitName,
+            description: `Memperbarui unit ${updated.unitName}`,
+          });
+          await writeAuditLog(tx, {
+            userId,
+            transactionId,
+            module: 'MASTER_DATA',
+            operation: AUDIT_OPERATIONS.UPDATE,
+            entityType: 'UNIT',
+            entityId: unitId,
+            entityNumber: updated.unitName,
+            source: 'Updated via Unit Master',
+            changedFields: changedFields(existing, updated, ['unitName']),
           });
         }
 
@@ -152,15 +182,28 @@ export class UnitService {
         data: { isActive: false, updatedBy: userId, updatedAt: new Date() },
       });
 
-      await tx.activityLog.create({
-        data: {
-          userId,
-          activityType: 'INACTIVATE_UNIT',
-          entityType: 'UNIT',
-          entityId: unitId,
-          description: `Menonaktifkan Unit: ${unit.unitName}`,
-          createdAt: new Date(),
-        },
+      const transactionId = createAuditTransactionId();
+      await writeActivityLog(tx, {
+        userId,
+        activityType: ACTIVITY_TYPES.UPDATE,
+        module: 'MASTER_DATA',
+        entityType: 'UNIT',
+        entityId: unitId,
+        entityNumber: unit.unitName,
+        description: `Menonaktifkan unit ${unit.unitName}`,
+      });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'MASTER_DATA',
+        operation: AUDIT_OPERATIONS.UPDATE,
+        entityType: 'UNIT',
+        entityId: unitId,
+        entityNumber: unit.unitName,
+        source: 'Updated via Unit Master',
+        changedFields: changedFields(unit, { ...unit, isActive: false }, [
+          'isActive',
+        ]),
       });
     });
   }
@@ -184,15 +227,28 @@ export class UnitService {
         data: { isActive: true, updatedBy: userId, updatedAt: new Date() },
       });
 
-      await tx.activityLog.create({
-        data: {
-          userId,
-          activityType: 'REACTIVATE_UNIT',
-          entityType: 'UNIT',
-          entityId: unitId,
-          description: `Mengaktifkan kembali Unit: ${unit.unitName}`,
-          createdAt: new Date(),
-        },
+      const transactionId = createAuditTransactionId();
+      await writeActivityLog(tx, {
+        userId,
+        activityType: ACTIVITY_TYPES.UPDATE,
+        module: 'MASTER_DATA',
+        entityType: 'UNIT',
+        entityId: unitId,
+        entityNumber: unit.unitName,
+        description: `Mengaktifkan kembali unit ${unit.unitName}`,
+      });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'MASTER_DATA',
+        operation: AUDIT_OPERATIONS.UPDATE,
+        entityType: 'UNIT',
+        entityId: unitId,
+        entityNumber: unit.unitName,
+        source: 'Updated via Unit Master',
+        changedFields: changedFields(unit, { ...unit, isActive: true }, [
+          'isActive',
+        ]),
       });
     });
   }

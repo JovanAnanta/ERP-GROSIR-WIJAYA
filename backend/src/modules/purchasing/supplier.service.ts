@@ -6,6 +6,12 @@ import {
   SupplierQueryDto,
 } from './supplier/dto/supplier.dto.js';
 import type { Prisma, Supplier } from '../../../generated/prisma/client.js';
+import {
+  ACTIVITY_TYPES,
+  AUDIT_OPERATIONS,
+  changedFields as buildChangedFields,
+  createAuditTransactionId,
+} from '../../common/logging/business-logger.js';
 
 type FinancialSummaryData = {
   outstandingAmount?: number | string | Prisma.Decimal;
@@ -85,11 +91,13 @@ export class SupplierService {
         });
 
         const now = new Date();
+        const transactionId = createAuditTransactionId();
 
         await tx.activityLog.create({
           data: {
             userId,
-            activityType: 'CREATE_SUPPLIER',
+            activityType: ACTIVITY_TYPES.CREATE,
+            module: 'SUPPLIER',
             entityType: 'SUPPLIER',
             entityId: supplier.supplierId,
             description: `Membuat Supplier Baru: ${supplier.supplierName}`,
@@ -101,13 +109,19 @@ export class SupplierService {
           data: {
             userId,
             action: 'CREATE',
+            transactionId,
+            module: 'SUPPLIER',
+            source: 'Created via Supplier Master',
             entityType: 'SUPPLIER',
             entityId: supplier.supplierId,
-            changedFields: {
-              supplierName: { new: supplier.supplierName },
-              phone: { new: supplier.phone },
-              address: { new: supplier.address },
-            },
+            changedFields: buildChangedFields(null, supplier, [
+              'supplierName',
+              'phone',
+              'email',
+              'address',
+              'picName',
+              'isActive',
+            ]),
             ipAddress: ip,
             userAgent: ua,
             createdAt: now,
@@ -161,6 +175,7 @@ export class SupplierService {
         });
 
         const now = new Date();
+        const transactionId = createAuditTransactionId();
         const changedFields: Record<string, AuditFieldChange> = {};
 
         if (existing.supplierName !== updated.supplierName) {
@@ -183,7 +198,8 @@ export class SupplierService {
           await tx.activityLog.create({
             data: {
               userId,
-              activityType: 'UPDATE_SUPPLIER',
+              activityType: ACTIVITY_TYPES.UPDATE,
+              module: 'SUPPLIER',
               entityType: 'SUPPLIER',
               entityId: supplierId,
               description: `Memperbarui data Supplier: ${updated.supplierName}`,
@@ -195,9 +211,18 @@ export class SupplierService {
             data: {
               userId,
               action: 'UPDATE',
+              transactionId,
+              module: 'SUPPLIER',
+              source: 'Updated via Supplier Master',
               entityType: 'SUPPLIER',
               entityId: supplierId,
-              changedFields: changedFields,
+              changedFields: buildChangedFields(existing, updated, [
+                'supplierName',
+                'phone',
+                'email',
+                'address',
+                'picName',
+              ]),
               ipAddress: ip,
               userAgent: ua,
               createdAt: now,
@@ -237,10 +262,12 @@ export class SupplierService {
       });
 
       const now = new Date();
+      const transactionId = createAuditTransactionId();
       await tx.activityLog.create({
         data: {
           userId,
-          activityType: 'INACTIVATE_SUPPLIER',
+          activityType: ACTIVITY_TYPES.UPDATE,
+          module: 'SUPPLIER',
           entityType: 'SUPPLIER',
           entityId: supplierId,
           description: `Menonaktifkan Supplier: ${supplier.supplierName}`,
@@ -251,10 +278,17 @@ export class SupplierService {
       await tx.auditLog.create({
         data: {
           userId,
-          action: 'INACTIVATE',
+          action: AUDIT_OPERATIONS.UPDATE,
+          transactionId,
+          module: 'SUPPLIER',
+          source: 'Updated via Supplier Master',
           entityType: 'SUPPLIER',
           entityId: supplierId,
-          changedFields: { isActive: { old: true, new: false } },
+          changedFields: buildChangedFields(
+            supplier,
+            { ...supplier, isActive: false },
+            ['isActive'],
+          ),
           ipAddress: ip,
           userAgent: ua,
           createdAt: now,
@@ -290,10 +324,12 @@ export class SupplierService {
       });
 
       const now = new Date();
+      const transactionId = createAuditTransactionId();
       await tx.activityLog.create({
         data: {
           userId,
-          activityType: 'REACTIVATE_SUPPLIER',
+          activityType: ACTIVITY_TYPES.UPDATE,
+          module: 'SUPPLIER',
           entityType: 'SUPPLIER',
           entityId: supplierId,
           description: `Mengaktifkan kembali Supplier: ${supplier.supplierName}`,
@@ -304,10 +340,17 @@ export class SupplierService {
       await tx.auditLog.create({
         data: {
           userId,
-          action: 'REACTIVATE',
+          action: AUDIT_OPERATIONS.UPDATE,
+          transactionId,
+          module: 'SUPPLIER',
+          source: 'Updated via Supplier Master',
           entityType: 'SUPPLIER',
           entityId: supplierId,
-          changedFields: { isActive: { old: false, new: true } },
+          changedFields: buildChangedFields(
+            supplier,
+            { ...supplier, isActive: true },
+            ['isActive'],
+          ),
           ipAddress: ip,
           userAgent: ua,
           createdAt: now,

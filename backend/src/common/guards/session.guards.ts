@@ -13,6 +13,7 @@ import {
   SESSION_COOKIE_NAME,
   SESSION_IDLE_TTL_MS,
 } from '../../modules/system/auth.constants.js';
+import { SECURITY_EVENTS } from '../logging/business-logger.js';
 
 interface CookieRequest extends Request {
   cookies: Record<string, string | undefined>;
@@ -24,6 +25,32 @@ interface CookieRequest extends Request {
 export class SessionGuard implements CanActivate {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async logUnauthorized(
+    request: CookieRequest,
+    description: string,
+    userId?: bigint,
+  ) {
+    const delegate = (
+      this.prisma as unknown as {
+        securityLog?: {
+          create: (args: { data: Record<string, unknown> }) => Promise<unknown>;
+        };
+      }
+    ).securityLog;
+    if (!delegate) return;
+    await delegate.create({
+      data: {
+        userId,
+        eventType: SECURITY_EVENTS.UNAUTHORIZED_API_ACCESS,
+        ipAddress: request.ip ?? request.socket?.remoteAddress ?? 'UNKNOWN_IP',
+        description,
+        reference:
+          `${request.method ?? 'UNKNOWN'} ${request.originalUrl ?? request.url ?? ''}`.trim(),
+        success: false,
+      },
+    });
+  }
+
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<CookieRequest>();
 
@@ -31,6 +58,7 @@ export class SessionGuard implements CanActivate {
     const token = cookies[SESSION_COOKIE_NAME];
 
     if (typeof token !== 'string' || !token) {
+      await this.logUnauthorized(request, 'Request API tanpa session cookie');
       throw new HttpException(
         'Session tidak valid. Silakan Login kembali.',
         HttpStatus.UNAUTHORIZED,
@@ -45,6 +73,11 @@ export class SessionGuard implements CanActivate {
     });
 
     if (!session || !session.user || session.revokedAt !== null) {
+      await this.logUnauthorized(
+        request,
+        'Request API menggunakan session yang tidak valid atau telah dicabut',
+        session?.userId,
+      );
       throw new HttpException(
         'Session tidak valid atau telah berakhir. Silakan Login kembali.',
         HttpStatus.UNAUTHORIZED,
@@ -53,6 +86,11 @@ export class SessionGuard implements CanActivate {
 
     // PERBAIKAN: Mengecek truthiness untuk menghindari kegagalan konversi Boolean(1)
     if (!session.user.isActive) {
+      await this.logUnauthorized(
+        request,
+        'Request API menggunakan akun yang tidak aktif',
+        session.userId,
+      );
       throw new HttpException(
         'User telah dinonaktifkan. Hubungi Super Owner.',
         HttpStatus.FORBIDDEN,
@@ -69,6 +107,11 @@ export class SessionGuard implements CanActivate {
         where: { sessionId: session.sessionId, revokedAt: null },
         data: { revokedAt: now, revokeReason: 'Absolute session expired' },
       });
+      await this.logUnauthorized(
+        request,
+        'Request API menggunakan session yang telah kedaluwarsa',
+        session.userId,
+      );
       throw new HttpException(
         'Session telah berakhir. Silakan Login kembali.',
         HttpStatus.UNAUTHORIZED,
@@ -88,6 +131,11 @@ export class SessionGuard implements CanActivate {
       data: { lastActivityAt: now },
     });
     if (touched.count !== 1) {
+      await this.logUnauthorized(
+        request,
+        'Session dicabut ketika request sedang diverifikasi',
+        session.userId,
+      );
       throw new HttpException(
         'Session tidak valid atau telah berakhir. Silakan Login kembali.',
         HttpStatus.UNAUTHORIZED,

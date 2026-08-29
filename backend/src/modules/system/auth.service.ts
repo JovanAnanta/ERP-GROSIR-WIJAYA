@@ -4,6 +4,13 @@ import * as crypto from 'crypto';
 import { PrismaService } from '../../database/prisma.service.js';
 import type { User, Prisma } from '../../../generated/prisma/client.js';
 import { SESSION_ABSOLUTE_TTL_MS } from './auth.constants.js';
+import {
+  ACTIVITY_TYPES,
+  SECURITY_EVENTS,
+  writeActivityLog,
+  writeSecurityLog,
+} from '../../common/logging/business-logger.js';
+import type { SecurityLogInput } from '../../common/logging/business-logger.js';
 
 export interface AuthLoginParams {
   username: string;
@@ -31,21 +38,21 @@ export class AuthService {
 
   private async logSecurityEvent(
     userId: bigint | null,
-    eventType: string,
+    eventType: SecurityLogInput['eventType'],
     ipAddress: string,
     userAgent: string,
     success: boolean,
-    failureReason: string | null = null,
+    description: string,
+    reference?: string,
   ): Promise<void> {
-    await this.prisma.securityLog.create({
-      data: {
-        userId,
-        eventType,
-        ipAddress,
-        userAgent,
-        success,
-        failureReason,
-      },
+    void userAgent;
+    await writeSecurityLog(this.prisma, {
+      userId: userId ?? undefined,
+      eventType,
+      ipAddress,
+      success,
+      description,
+      reference,
     });
   }
 
@@ -67,15 +74,29 @@ export class AuthService {
       });
 
       if (lockEvent) {
-        const unlockEvent = await this.prisma.securityLog.findFirst({
-          where: {
-            userId: user.userId,
-            eventType: 'ACCOUNT_UNLOCKED',
-            createdAt: { gte: lockEvent.createdAt },
-          },
-        });
+        const [unlockActivity, legacyUnlockEvent] = await Promise.all([
+          this.prisma.activityLog.findFirst({
+            where: {
+              userId: user.userId,
+              activityType: ACTIVITY_TYPES.UPDATE,
+              entityType: 'USER',
+              metadata: {
+                path: ['securityAction'],
+                equals: 'ACCOUNT_UNLOCKED',
+              },
+              createdAt: { gte: lockEvent.createdAt },
+            },
+          }),
+          this.prisma.securityLog.findFirst({
+            where: {
+              userId: user.userId,
+              eventType: 'ACCOUNT_UNLOCKED',
+              createdAt: { gte: lockEvent.createdAt },
+            },
+          }),
+        ]);
 
-        if (!unlockEvent) {
+        if (!unlockActivity && !legacyUnlockEvent) {
           // PERBAIKAN: Hitung persis sisa menit untuk dilempar ke Frontend
           const remainingMs =
             lockEvent.createdAt.getTime() + 10 * 60 * 1000 - Date.now();
@@ -83,11 +104,12 @@ export class AuthService {
 
           await this.logSecurityEvent(
             user.userId,
-            'LOGIN_ATTEMPT_BLOCKED',
+            SECURITY_EVENTS.LOGIN_FAILED,
             dto.ip,
             dto.userAgent,
             false,
             'Akun masih dalam masa penguncian otomatis',
+            user.username,
           );
           throw new HttpException(
             `Akun terkunci. Coba lagi dalam ${remainingMins} menit.`,
@@ -103,11 +125,12 @@ export class AuthService {
     if (!user) {
       await this.logSecurityEvent(
         null,
-        'LOGIN_ATTEMPT',
+        SECURITY_EVENTS.LOGIN_FAILED,
         dto.ip,
         dto.userAgent,
         false,
         'Username tidak ditemukan',
+        dto.username,
       );
       throw new HttpException(
         'Username atau Password salah.',
@@ -118,11 +141,12 @@ export class AuthService {
     if (!user.isActive) {
       await this.logSecurityEvent(
         user.userId,
-        'LOGIN_ATTEMPT',
+        SECURITY_EVENTS.LOGIN_FAILED,
         dto.ip,
         dto.userAgent,
         false,
         'Akun User dinonaktifkan',
+        user.username,
       );
       throw new HttpException(
         'User telah dinonaktifkan. Hubungi Super Owner.',
@@ -134,48 +158,63 @@ export class AuthService {
     if (!isPasswordValid) {
       const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000);
 
-      // PERBAIKAN: Cari kapan terakhir kali dia SUKSES login atau DI-UNLOCK
-      const lastResetEvent = await this.prisma.securityLog.findFirst({
+      const lastUnlockActivity = await this.prisma.activityLog.findFirst({
         where: {
           userId: user.userId,
-          eventType: { in: ['LOGIN_SUCCESS', 'ACCOUNT_UNLOCKED'] },
+          activityType: ACTIVITY_TYPES.UPDATE,
+          entityType: 'USER',
+          metadata: {
+            path: ['securityAction'],
+            equals: 'ACCOUNT_UNLOCKED',
+          },
           createdAt: { gte: fifteenMinsAgo },
         },
         orderBy: { createdAt: 'desc' },
       });
 
-      // Sistem HANYA menghitung kegagalan SETELAH dia terakhir kali sukses
-      const countFromTime = lastResetEvent
-        ? lastResetEvent.createdAt
-        : fifteenMinsAgo;
+      const resetTimes = [
+        fifteenMinsAgo,
+        ...(user.lastLoginAt && user.lastLoginAt >= fifteenMinsAgo
+          ? [user.lastLoginAt]
+          : []),
+        ...(lastUnlockActivity ? [lastUnlockActivity.createdAt] : []),
+      ];
+      const countFromTime = new Date(
+        Math.max(...resetTimes.map((value) => value.getTime())),
+      );
 
       const failedCount = await this.prisma.securityLog.count({
         where: {
           userId: user.userId,
-          eventType: 'LOGIN_ATTEMPT',
+          eventType: { in: ['LOGIN_ATTEMPT', SECURITY_EVENTS.LOGIN_FAILED] },
           success: false,
-          failureReason: 'Password salah',
+          OR: [
+            { failureReason: 'Password salah' },
+            { description: 'Password salah' },
+          ],
           createdAt: { gte: countFromTime },
         },
       });
 
       await this.logSecurityEvent(
         user.userId,
-        'LOGIN_ATTEMPT',
+        SECURITY_EVENTS.LOGIN_FAILED,
         dto.ip,
         dto.userAgent,
         false,
         'Password salah',
+        user.username,
       );
 
       if (failedCount + 1 >= 10) {
         await this.logSecurityEvent(
           user.userId,
-          'ACCOUNT_LOCKED',
+          SECURITY_EVENTS.ACCOUNT_LOCKED,
           dto.ip,
           dto.userAgent,
           false,
           '10x gagal login dalam 15 menit',
+          user.username,
         );
         throw new HttpException(
           'Akun terkunci. Coba lagi dalam 10 menit.',
@@ -196,7 +235,7 @@ export class AuthService {
     const expiresAt = new Date(now.getTime() + SESSION_ABSOLUTE_TTL_MS);
 
     await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      await tx.userSession.updateMany({
+      const revokedSessions = await tx.userSession.updateMany({
         where: { userId: user.userId, revokedAt: null },
         data: { revokedAt: now, revokeReason: 'Login from another device' },
       });
@@ -218,16 +257,23 @@ export class AuthService {
         data: { lastLoginAt: now, lastLoginIp: dto.ip },
       });
 
-      await tx.securityLog.create({
-        data: {
-          userId: user.userId,
-          eventType: 'LOGIN_SUCCESS',
-          ipAddress: dto.ip,
-          userAgent: dto.userAgent,
-          success: true,
-          failureReason: null,
-        },
+      await writeActivityLog(tx, {
+        userId: user.userId,
+        activityType: ACTIVITY_TYPES.LOGIN,
+        module: 'SYSTEM',
+        entityType: 'USER',
+        entityId: user.userId,
+        entityNumber: user.username,
+        description: `Login user ${user.username}`,
       });
+      if (revokedSessions.count > 0)
+        await writeSecurityLog(tx, {
+          userId: user.userId,
+          eventType: SECURITY_EVENTS.CONCURRENT_LOGIN,
+          ipAddress: dto.ip,
+          description: 'Session sebelumnya dihentikan karena login baru',
+          reference: user.username,
+        });
     });
 
     return { token: plainToken, user };
@@ -245,15 +291,15 @@ export class AuthService {
           data: { revokedAt: new Date(), revokeReason: 'User Logout' },
         });
 
-        await tx.securityLog.create({
-          data: {
-            userId: session.userId,
-            eventType: 'LOGOUT',
-            ipAddress: ip,
-            userAgent: userAgent,
-            success: true,
-            failureReason: null,
-          },
+        void ip;
+        void userAgent;
+        await writeActivityLog(tx, {
+          userId: session.userId,
+          activityType: ACTIVITY_TYPES.LOGOUT,
+          module: 'SYSTEM',
+          entityType: 'USER',
+          entityId: session.userId,
+          description: 'Logout user',
         });
       });
     }
@@ -311,47 +357,45 @@ export class AuthService {
       // LOGIKA 3x KESEMPATAN KHUSUS UNLOCK POPUP
       const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000);
 
-      const lastResetEvent = await this.prisma.securityLog.findFirst({
-        where: {
-          userId: session.userId,
-          eventType: { in: ['LOGIN_SUCCESS', 'SESSION_UNLOCK'] },
-          createdAt: { gte: fifteenMinsAgo },
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      const countFromTime = lastResetEvent
-        ? lastResetEvent.createdAt
-        : fifteenMinsAgo;
+      const countFromTime =
+        session.lastActivityAt >= fifteenMinsAgo
+          ? session.lastActivityAt
+          : fifteenMinsAgo;
 
       // Hitung khusus kegagalan UNLOCK
       const failedCount = await this.prisma.securityLog.count({
         where: {
           userId: session.userId,
-          eventType: 'UNLOCK_FAILED',
+          eventType: { in: ['UNLOCK_FAILED', SECURITY_EVENTS.LOGIN_FAILED] },
           success: false,
+          OR: [
+            { failureReason: 'Password salah saat unlock' },
+            { description: 'Password salah saat membuka session' },
+          ],
           createdAt: { gte: countFromTime },
         },
       });
 
       await this.logSecurityEvent(
         session.userId,
-        'UNLOCK_FAILED',
+        SECURITY_EVENTS.LOGIN_FAILED,
         ip,
         userAgent,
         false,
-        'Password salah saat unlock',
+        'Password salah saat membuka session',
+        session.user.username,
       );
 
       // JIKA GAGAL 3x, KUNCI AKUN & CABUT SESI (TENDANG)
       if (failedCount + 1 >= 3) {
         await this.logSecurityEvent(
           session.userId,
-          'ACCOUNT_LOCKED',
+          SECURITY_EVENTS.ACCOUNT_LOCKED,
           ip,
           userAgent,
           false,
           '3x gagal unlock dalam 15 menit',
+          session.user.username,
         );
 
         await this.prisma.userSession.update({
@@ -382,14 +426,8 @@ export class AuthService {
       data: { lastActivityAt: now },
     });
 
-    await this.logSecurityEvent(
-      session.userId,
-      'SESSION_UNLOCK',
-      ip,
-      userAgent,
-      true,
-      null,
-    );
+    void ip;
+    void userAgent;
 
     return { success: true };
   }

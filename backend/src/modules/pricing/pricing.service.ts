@@ -2,6 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
 import { PriceQueryDto, UpdatePriceDto } from './dto/pricing.dto.js';
 import type { Prisma } from '../../../generated/prisma/client.js';
+import {
+  ACTIVITY_TYPES,
+  AUDIT_OPERATIONS,
+  changedFields,
+  createAuditTransactionId,
+} from '../../common/logging/business-logger.js';
 
 @Injectable()
 export class PricingService {
@@ -82,6 +88,7 @@ export class PricingService {
       async (tx: Prisma.TransactionClient) => {
         let updatedCount = 0;
         const now = new Date();
+        const transactionId = createAuditTransactionId();
 
         for (const item of dto.updates) {
           const productUnitId = BigInt(item.productUnitId);
@@ -91,8 +98,9 @@ export class PricingService {
           const oldPrice = existing ? Number(existing.suggestedPrice) : 0;
 
           if (oldPrice !== item.price) {
+            let saved;
             if (existing) {
-              await tx.guestSuggestedPrice.update({
+              saved = await tx.guestSuggestedPrice.update({
                 where: { guestPriceId: existing.guestPriceId },
                 data: {
                   suggestedPrice: item.price,
@@ -101,7 +109,7 @@ export class PricingService {
                 },
               });
             } else {
-              await tx.guestSuggestedPrice.create({
+              saved = await tx.guestSuggestedPrice.create({
                 data: {
                   productUnitId,
                   suggestedPrice: item.price,
@@ -114,12 +122,21 @@ export class PricingService {
             await tx.auditLog.create({
               data: {
                 userId,
-                action: 'UPDATE_PRICE',
+                action: existing
+                  ? AUDIT_OPERATIONS.UPDATE
+                  : AUDIT_OPERATIONS.CREATE,
+                transactionId,
+                module: 'PRICE',
+                source: existing
+                  ? 'Updated via Guest Pricing'
+                  : 'Created via Guest Pricing',
                 entityType: 'GUEST_PRICE',
-                entityId: productUnitId,
-                changedFields: {
-                  suggestedPrice: { old: oldPrice, new: item.price },
-                },
+                entityId: saved.guestPriceId,
+                entityNumber: productUnitId.toString(),
+                changedFields: changedFields(existing, saved, [
+                  'productUnitId',
+                  'suggestedPrice',
+                ]),
                 ipAddress: ip,
                 userAgent: ua,
                 createdAt: now,
@@ -133,7 +150,8 @@ export class PricingService {
           await tx.activityLog.create({
             data: {
               userId,
-              activityType: 'UPDATE_GUEST_PRICE',
+              activityType: ACTIVITY_TYPES.UPDATE,
+              module: 'PRICE',
               entityType: 'GUEST_PRICE',
               description: `Memperbarui ${updatedCount} harga Guest.`,
               createdAt: now,

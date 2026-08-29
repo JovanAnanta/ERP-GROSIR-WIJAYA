@@ -6,6 +6,13 @@ import {
   UpdatePurchaseOrderDto,
 } from './dto/purchasing.dto.js';
 import { Prisma } from '../../../generated/prisma/client.js';
+import {
+  ACTIVITY_TYPES,
+  AUDIT_OPERATIONS,
+  changedFields,
+  createAuditTransactionId,
+  writeAuditLog,
+} from '../../common/logging/business-logger.js';
 
 @Injectable()
 export class PurchaseOrderService {
@@ -103,17 +110,55 @@ export class PurchaseOrderService {
         },
         include: { details: true },
       });
+      const transactionId = createAuditTransactionId();
 
       await tx.activityLog.create({
         data: {
           userId,
-          activityType: 'CREATE_PO',
+          activityType: ACTIVITY_TYPES.CREATE,
+          module: 'PURCHASE',
           entityType: 'PURCHASE_ORDER',
           entityId: order.purchaseOrderId,
+          entityNumber: poNumber,
           description: `Membuat Purchase Order: ${poNumber}`,
           createdAt: now,
         },
       });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'PURCHASE',
+        operation: AUDIT_OPERATIONS.CREATE,
+        entityType: 'PURCHASE_ORDER',
+        entityId: order.purchaseOrderId,
+        entityNumber: poNumber,
+        source: 'Created via Purchase Order',
+        changedFields: changedFields(null, order, [
+          'purchaseOrderNumber',
+          'supplierId',
+          'orderDate',
+          'expectedDate',
+          'status',
+          'note',
+        ]),
+      });
+      for (const detail of order.details) {
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'PURCHASE',
+          operation: AUDIT_OPERATIONS.CREATE,
+          entityType: 'PURCHASE_ORDER_DETAIL',
+          entityId: detail.purchaseOrderDetailId,
+          entityNumber: poNumber,
+          source: 'Created via Purchase Order',
+          changedFields: changedFields(null, detail, [
+            'productUnitId',
+            'quantity',
+            'note',
+          ]),
+        });
+      }
 
       return order;
     });
@@ -140,6 +185,7 @@ export class PurchaseOrderService {
 
       const existing = await tx.purchaseOrder.findUnique({
         where: { purchaseOrderId: id },
+        include: { details: true },
       });
       if (!existing)
         throw new HttpException(
@@ -181,17 +227,70 @@ export class PurchaseOrderService {
         },
         include: { details: true },
       });
+      const transactionId = createAuditTransactionId();
 
       await tx.activityLog.create({
         data: {
           userId,
-          activityType: 'UPDATE_PO',
+          activityType: ACTIVITY_TYPES.UPDATE,
+          module: 'PURCHASE',
           entityType: 'PURCHASE_ORDER',
           entityId: id,
+          entityNumber: existing.purchaseOrderNumber,
           description: `Memperbarui Purchase Order: ${existing.purchaseOrderNumber}`,
           createdAt: now,
         },
       });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'PURCHASE',
+        operation: AUDIT_OPERATIONS.UPDATE,
+        entityType: 'PURCHASE_ORDER',
+        entityId: id,
+        entityNumber: existing.purchaseOrderNumber,
+        source: 'Updated via Purchase Order',
+        changedFields: changedFields(existing, updated, [
+          'supplierId',
+          'expectedDate',
+          'status',
+          'note',
+        ]),
+      });
+      for (const detail of existing.details) {
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'PURCHASE',
+          operation: AUDIT_OPERATIONS.DELETE,
+          entityType: 'PURCHASE_ORDER_DETAIL',
+          entityId: detail.purchaseOrderDetailId,
+          entityNumber: existing.purchaseOrderNumber,
+          source: 'Replaced via Purchase Order Update',
+          changedFields: changedFields(detail, null, [
+            'productUnitId',
+            'quantity',
+            'note',
+          ]),
+        });
+      }
+      for (const detail of updated.details) {
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'PURCHASE',
+          operation: AUDIT_OPERATIONS.CREATE,
+          entityType: 'PURCHASE_ORDER_DETAIL',
+          entityId: detail.purchaseOrderDetailId,
+          entityNumber: existing.purchaseOrderNumber,
+          source: 'Replaced via Purchase Order Update',
+          changedFields: changedFields(null, detail, [
+            'productUnitId',
+            'quantity',
+            'note',
+          ]),
+        });
+      }
 
       return updated;
     });

@@ -13,6 +13,7 @@ import { AuthModule } from './modules/system/auth.module.js';
 import { UserModule } from './modules/system/user/user.module.js';
 import { RolePermissionModule } from './modules/system/role-permission/role-permission.module.js';
 import { SystemConfigurationModule } from './modules/system/system-configuration/system-configuration.module.js';
+import { SystemLogModule } from './modules/system/logs/system-log.module.js';
 
 import { CustomerModule } from './modules/sales/customer/customer.module.js';
 import { SupplierModule } from './modules/purchasing/supplier.module.js';
@@ -40,6 +41,7 @@ import { PurchasingModule } from './modules/purchasing/purchasing.module.js';
     UserModule,
     RolePermissionModule,
     SystemConfigurationModule,
+    SystemLogModule,
     CustomerModule,
     SupplierModule,
     CategoryModule,

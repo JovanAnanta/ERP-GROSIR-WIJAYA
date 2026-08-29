@@ -250,7 +250,7 @@ export default function PurchaseInvoiceCardList({ onEditInvoice }: Props) {
       <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3 shrink-0">
         <div className="flex items-center gap-2">
           {selectedSupplier && (
-            <Button variant="ghost" size="sm" onClick={() => setSelectedSupplier(null)} className="h-8 px-2 text-slate-600 hover:bg-slate-100">
+            <Button variant="ghost" size="sm" onClick={() => setSelectedSupplier(null)} className="h-8 px-2 text-[#326dc8] hover:bg-slate-100 font-bold">
               <ArrowLeft className="w-4 h-4 mr-1"/> Kembali ke List Supplier
             </Button>
           )}

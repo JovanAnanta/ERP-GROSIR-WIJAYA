@@ -6,6 +6,12 @@ import {
   BrandQueryDto,
 } from './dto/brand.dto.js';
 import type { Prisma, Brand } from '../../../../generated/prisma/client.js';
+import {
+  ACTIVITY_TYPES,
+  AUDIT_OPERATIONS,
+  changedFields as buildChangedFields,
+  createAuditTransactionId,
+} from '../../../common/logging/business-logger.js';
 
 type AuditFieldChange = {
   old: string | boolean | null;
@@ -70,10 +76,12 @@ export class BrandService {
         });
 
         const now = new Date();
+        const transactionId = createAuditTransactionId();
         await tx.activityLog.create({
           data: {
             userId,
-            activityType: 'CREATE_BRAND',
+            activityType: ACTIVITY_TYPES.CREATE,
+            module: 'MASTER_DATA',
             entityType: 'BRAND',
             entityId: brand.brandId,
             description: `Membuat Merek Baru: ${brand.brandName}`,
@@ -85,9 +93,15 @@ export class BrandService {
           data: {
             userId,
             action: 'CREATE',
+            transactionId,
+            module: 'MASTER_DATA',
+            source: 'Created via Brand Master',
             entityType: 'BRAND',
             entityId: brand.brandId,
-            changedFields: { brandName: { new: brand.brandName } },
+            changedFields: buildChangedFields(null, brand, [
+              'brandName',
+              'isActive',
+            ]),
             ipAddress: ip,
             userAgent: ua,
             createdAt: now,
@@ -135,6 +149,7 @@ export class BrandService {
         });
 
         const now = new Date();
+        const transactionId = createAuditTransactionId();
         const changedFields: Record<string, AuditFieldChange> = {};
         if (existing.brandName !== updated.brandName)
           changedFields.brandName = {
@@ -146,7 +161,8 @@ export class BrandService {
           await tx.activityLog.create({
             data: {
               userId,
-              activityType: 'UPDATE_BRAND',
+              activityType: ACTIVITY_TYPES.UPDATE,
+              module: 'MASTER_DATA',
               entityType: 'BRAND',
               entityId: brandId,
               description: `Memperbarui Merek: ${updated.brandName}`,
@@ -158,9 +174,14 @@ export class BrandService {
             data: {
               userId,
               action: 'UPDATE',
+              transactionId,
+              module: 'MASTER_DATA',
+              source: 'Updated via Brand Master',
               entityType: 'BRAND',
               entityId: brandId,
-              changedFields: changedFields,
+              changedFields: buildChangedFields(existing, updated, [
+                'brandName',
+              ]),
               ipAddress: ip,
               userAgent: ua,
               createdAt: now,
@@ -194,10 +215,12 @@ export class BrandService {
         data: { isActive: false, updatedBy: userId, updatedAt: new Date() },
       });
       const now = new Date();
+      const transactionId = createAuditTransactionId();
       await tx.activityLog.create({
         data: {
           userId,
-          activityType: 'INACTIVATE_BRAND',
+          activityType: ACTIVITY_TYPES.UPDATE,
+          module: 'MASTER_DATA',
           entityType: 'BRAND',
           entityId: brandId,
           description: `Menonaktifkan Merek: ${brand.brandName}`,
@@ -207,10 +230,17 @@ export class BrandService {
       await tx.auditLog.create({
         data: {
           userId,
-          action: 'INACTIVATE',
+          action: AUDIT_OPERATIONS.UPDATE,
+          transactionId,
+          module: 'MASTER_DATA',
+          source: 'Updated via Brand Master',
           entityType: 'BRAND',
           entityId: brandId,
-          changedFields: { isActive: { old: true, new: false } },
+          changedFields: buildChangedFields(
+            brand,
+            { ...brand, isActive: false },
+            ['isActive'],
+          ),
           ipAddress: ip,
           userAgent: ua,
           createdAt: now,
@@ -240,10 +270,12 @@ export class BrandService {
         data: { isActive: true, updatedBy: userId, updatedAt: new Date() },
       });
       const now = new Date();
+      const transactionId = createAuditTransactionId();
       await tx.activityLog.create({
         data: {
           userId,
-          activityType: 'REACTIVATE_BRAND',
+          activityType: ACTIVITY_TYPES.UPDATE,
+          module: 'MASTER_DATA',
           entityType: 'BRAND',
           entityId: brandId,
           description: `Mengaktifkan kembali Merek: ${brand.brandName}`,
@@ -253,10 +285,17 @@ export class BrandService {
       await tx.auditLog.create({
         data: {
           userId,
-          action: 'REACTIVATE',
+          action: AUDIT_OPERATIONS.UPDATE,
+          transactionId,
+          module: 'MASTER_DATA',
+          source: 'Updated via Brand Master',
           entityType: 'BRAND',
           entityId: brandId,
-          changedFields: { isActive: { old: false, new: true } },
+          changedFields: buildChangedFields(
+            brand,
+            { ...brand, isActive: true },
+            ['isActive'],
+          ),
           ipAddress: ip,
           userAgent: ua,
           createdAt: now,

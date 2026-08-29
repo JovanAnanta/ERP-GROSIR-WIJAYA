@@ -11,6 +11,7 @@ import LoginPage from '@/features/auth/LoginPage';
 import UserManagementPage from '@/features/system/user/UserManagementPage';
 import RolePermissionPage from '@/features/system/role-permission/RolePermissionPage';
 import SystemConfigurationPage from '@/features/system/system-configuration/SystemConfigurationPage';
+import SystemLogsPage from '@/features/system/logs/SystemLogsPage';
 import CatalogModulePage from '@/features/master/CatalogModulePage';
 import PricingModulePage from '@/features/pricing/PricingModulePage'; // <--- Import PricingModulePage
 
@@ -100,6 +101,11 @@ export default function App() {
           {/* Rute Role & Permission (Eksklusif Super Owner) */}
           <Route element={<RoleGuard allowedRoles={['1']} />}>
             <Route path="/system/role-permissions" element={<RolePermissionPage />} />
+          </Route>
+
+          {/* Log sistem bersifat read-only untuk Super Owner dan Owner */}
+          <Route element={<RoleGuard allowedRoles={['1', '2']} />}>
+            <Route path="/system/logs" element={<SystemLogsPage />} />
           </Route>
 
           {/* Rute System Configuration (Eksklusif Super Owner) */}

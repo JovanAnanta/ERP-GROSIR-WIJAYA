@@ -6,6 +6,16 @@ import type {
   Prisma,
 } from '../../../../generated/prisma/client.js';
 import * as bcrypt from 'bcrypt';
+import {
+  ACTIVITY_TYPES,
+  AUDIT_OPERATIONS,
+  SECURITY_EVENTS,
+  changedFields as buildChangedFields,
+  createAuditTransactionId,
+  writeActivityLog,
+  writeAuditLog,
+  writeSecurityLog,
+} from '../../../common/logging/business-logger.js';
 
 export type CurrentUserWithRole = User & { role: Role };
 
@@ -63,12 +73,20 @@ export class UserService {
     ua: string,
   ): Promise<void> {
     const now = new Date();
+    const transactionId = createAuditTransactionId();
+    const normalizedActivity =
+      activityType === 'CREATE'
+        ? ACTIVITY_TYPES.CREATE
+        : activityType === 'RESET_PASSWORD'
+          ? ACTIVITY_TYPES.RESET_PASSWORD
+          : ACTIVITY_TYPES.UPDATE;
 
     // 1. Activity Log (Operasional Sehari-hari)
     await tx.activityLog.create({
       data: {
         userId: currentUser.userId,
-        activityType: activityType,
+        activityType: normalizedActivity,
+        module: 'SYSTEM',
         entityType: 'USER',
         entityId: entityId,
         description: description,
@@ -81,7 +99,13 @@ export class UserService {
       await tx.auditLog.create({
         data: {
           userId: currentUser.userId,
-          action: activityType,
+          action:
+            activityType === 'CREATE'
+              ? AUDIT_OPERATIONS.CREATE
+              : AUDIT_OPERATIONS.UPDATE,
+          transactionId,
+          module: 'SYSTEM',
+          source: 'Changed via User Management',
           entityType: 'USER',
           entityId: entityId ?? BigInt(0),
           changedFields: changedFields as Prisma.InputJsonValue,
@@ -144,7 +168,12 @@ export class UserService {
           'CREATE',
           `Membuat user baru: ${newUser.username}`,
           newUser.userId,
-          { username: newUser.username, role: targetRole.roleCode },
+          buildChangedFields(null, newUser, [
+            'username',
+            'fullName',
+            'roleId',
+            'isActive',
+          ]),
           ip,
           ua,
         );
@@ -211,14 +240,11 @@ export class UserService {
           },
         });
 
-        const changedFields = {
-          fullName: { old: existingUser.fullName, new: updatedUser.fullName },
-          roleId: {
-            old: existingUser.roleId.toString(),
-            new: updatedUser.roleId.toString(),
-          },
-          isActive: { old: existingUser.isActive, new: updatedUser.isActive },
-        };
+        const changedFields = buildChangedFields(existingUser, updatedUser, [
+          'fullName',
+          'roleId',
+          'isActive',
+        ]);
 
         await this.writeLogs(
           tx,
@@ -275,10 +301,19 @@ export class UserService {
         'DISABLE',
         `Menonaktifkan user: ${target.username}`,
         targetUserId,
-        { isActive: { old: true, new: false } },
+        buildChangedFields(target, { ...target, isActive: false }, [
+          'isActive',
+        ]),
         ip,
         ua,
       );
+      await writeSecurityLog(tx, {
+        userId: targetUserId,
+        eventType: SECURITY_EVENTS.USER_INACTIVATED,
+        ipAddress: ip,
+        description: `User ${target.username} dinonaktifkan oleh ${currentUser.username}`,
+        reference: target.username,
+      });
     });
   }
 
@@ -328,10 +363,17 @@ export class UserService {
         'RESET_PASSWORD',
         `Merubah password user: ${target.username}`,
         targetUserId,
-        { password: 'RESET' },
+        { authenticationCredential: { before: 'EXISTING', after: 'RESET' } },
         ip,
         ua,
       );
+      await writeSecurityLog(tx, {
+        userId: targetUserId,
+        eventType: SECURITY_EVENTS.PASSWORD_RESET,
+        ipAddress: ip,
+        description: `Password user ${target.username} direset oleh ${currentUser.username}`,
+        reference: target.username,
+      });
     });
   }
 
@@ -355,16 +397,14 @@ export class UserService {
         data: { revokedAt: new Date(), revokeReason: 'Force Logout by Admin' },
       });
 
-      await this.writeLogs(
-        tx,
-        currentUser,
-        'FORCE_LOGOUT',
-        `Force logout user: ${target.username}`,
-        targetUserId,
-        { session: 'KILLED' },
-        ip,
-        ua,
-      );
+      void ua;
+      await writeSecurityLog(tx, {
+        userId: targetUserId,
+        eventType: SECURITY_EVENTS.FORCED_LOGOUT,
+        ipAddress: ip,
+        description: `Session user ${target.username} dihentikan oleh ${currentUser.username}`,
+        reference: target.username,
+      });
     });
   }
 
@@ -383,32 +423,46 @@ export class UserService {
     this.checkPermission(currentUser, target.role.roleCode, 'UNLOCK_SESSION');
 
     await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const now = new Date();
+      const transactionId = createAuditTransactionId();
+      const sessions = await tx.userSession.findMany({
+        where: { userId: targetUserId, revokedAt: null },
+      });
       await tx.userSession.updateMany({
         where: { userId: targetUserId, revokedAt: null },
-        data: { lastActivityAt: new Date() },
+        data: { lastActivityAt: now },
       });
 
-      // PERBAIKAN FR-007: Log ini secara otomatis mengangkat sanksi "ACCOUNT_LOCKED" 10 menit
-      await tx.securityLog.create({
-        data: {
-          userId: targetUserId,
-          eventType: 'ACCOUNT_UNLOCKED',
+      await writeActivityLog(tx, {
+        userId: currentUser.userId,
+        activityType: ACTIVITY_TYPES.UPDATE,
+        module: 'SYSTEM',
+        entityType: 'USER',
+        entityId: targetUserId,
+        entityNumber: target.username,
+        description: `Membuka kunci akun ${target.username}`,
+        metadata: { securityAction: 'ACCOUNT_UNLOCKED' },
+      });
+      for (const session of sessions) {
+        await writeAuditLog(tx, {
+          userId: currentUser.userId,
+          transactionId,
+          module: 'SYSTEM',
+          operation: AUDIT_OPERATIONS.UPDATE,
+          entityType: 'USER_SESSION',
+          entityId: session.sessionId,
+          entityNumber: target.username,
+          source: 'Updated via User Management',
+          changedFields: buildChangedFields(
+            session,
+            { ...session, lastActivityAt: now },
+            ['lastActivityAt'],
+          ),
           ipAddress: ip,
-          userAgent: ua,
-          success: true,
-        },
-      });
+        });
+      }
 
-      await this.writeLogs(
-        tx,
-        currentUser,
-        'UNLOCK_SESSION',
-        `Membuka session dan kunci akun user: ${target.username}`,
-        targetUserId,
-        { session: 'UNLOCKED' },
-        ip,
-        ua,
-      );
+      void ua;
     });
   }
   // =========================================================================

@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   CircleDollarSign,
   Settings,
+  FileClock,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -216,21 +217,28 @@ export default function AppLayout() {
               </div>
 
               {user?.roleId === "1" && (
-                <>
-                  <div
-                    onClick={() => navigate("/system/role-permissions")}
-                    className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/system/role-permissions") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
-                  >
-                    <ShieldCheck className="w-5 h-5 mr-3 opacity-80" /> Role & Permission
-                  </div>
+                <div
+                  onClick={() => navigate("/system/role-permissions")}
+                  className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/system/role-permissions") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
+                >
+                  <ShieldCheck className="w-5 h-5 mr-3 opacity-80" /> Role & Permission
+                </div>
+              )}
 
-                  <div
-                    onClick={() => navigate("/system/configuration")}
-                    className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/system/configuration") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
-                  >
-                    <Settings className="w-5 h-5 mr-3 opacity-80" /> System Configuration
-                  </div>
-                </>
+              <div
+                onClick={() => navigate("/system/logs")}
+                className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/system/logs") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
+              >
+                <FileClock className="w-5 h-5 mr-3 opacity-80" /> System Logs
+              </div>
+
+              {user?.roleId === "1" && (
+                <div
+                  onClick={() => navigate("/system/configuration")}
+                  className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/system/configuration") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
+                >
+                  <Settings className="w-5 h-5 mr-3 opacity-80" /> System Configuration
+                </div>
               )}
             </div>
           )}
@@ -246,8 +254,10 @@ export default function AppLayout() {
                 ? "User Management"
                 : isActive("/system/role-permissions")
                   ? "Role & Permission"
-                  : isActive("/system/configuration")
-                    ? "System Configuration"
+                  : isActive("/system/logs")
+                    ? "System Logs"
+                    : isActive("/system/configuration")
+                      ? "System Configuration"
                     : isActive("/sales/customers")
                       ? "Sales & Customers"
                     : "Dashboard"

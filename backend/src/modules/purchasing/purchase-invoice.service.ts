@@ -18,6 +18,13 @@ import {
   generateFifoLayerNumber,
   recordInitialFifoIn,
 } from './fifo-ledger.utils.js';
+import {
+  ACTIVITY_TYPES,
+  AUDIT_OPERATIONS,
+  changedFields,
+  createAuditTransactionId,
+  writeAuditLog,
+} from '../../common/logging/business-logger.js';
 
 type CreatedInvoiceWithDetails = Prisma.PurchaseInvoiceGetPayload<{
   include: {
@@ -158,6 +165,7 @@ export class PurchaseInvoiceService {
       const supplierId = BigInt(dto.supplierId);
       const poId = dto.purchaseOrderId ? BigInt(dto.purchaseOrderId) : null;
       const now = new Date();
+      const transactionId = createAuditTransactionId();
 
       const invoiceTotal = new Prisma.Decimal(dto.invoiceTotal);
       await this.validateInvoiceReferences(tx, dto);
@@ -217,21 +225,40 @@ export class PurchaseInvoiceService {
         dto.priceHistoryAction,
         userId,
         now,
+        transactionId,
       );
 
       if (dto.status === 'COMPLETED') {
-        await this._processInventory(tx, invoice, userId, now);
+        await this._processInventory(tx, invoice, userId, now, transactionId);
         await this._processFinance(
           tx,
           invoice,
           dto.payments || [],
           userId,
           now,
+          transactionId,
         );
-        if (poId) await this._processPO(tx, poId, userId, now);
+        if (poId)
+          await this._processPO(
+            tx,
+            poId,
+            userId,
+            now,
+            transactionId,
+            invoiceNumber,
+          );
       }
 
-      await this._processLogs(tx, invoice, dto, userId, now, 'CREATE');
+      await this._processLogs(
+        tx,
+        invoice,
+        dto,
+        userId,
+        now,
+        'CREATE',
+        undefined,
+        transactionId,
+      );
       return invoice;
     });
   }
@@ -246,6 +273,7 @@ export class PurchaseInvoiceService {
     return await this.prisma.$transaction(async (tx) => {
       const existing = await tx.purchaseInvoice.findUnique({
         where: { purchaseInvoiceId: id },
+        include: { details: true },
       });
       if (!existing)
         throw new HttpException('Faktur tidak ditemukan', HttpStatus.NOT_FOUND);
@@ -258,6 +286,7 @@ export class PurchaseInvoiceService {
       const supplierId = BigInt(dto.supplierId);
       const poId = dto.purchaseOrderId ? BigInt(dto.purchaseOrderId) : null;
       const now = new Date();
+      const transactionId = createAuditTransactionId();
 
       await this.validateInvoiceReferences(tx, dto);
 
@@ -323,21 +352,40 @@ export class PurchaseInvoiceService {
         dto.priceHistoryAction,
         userId,
         now,
+        transactionId,
       );
 
       if (dto.status === 'COMPLETED') {
-        await this._processInventory(tx, updated, userId, now);
+        await this._processInventory(tx, updated, userId, now, transactionId);
         await this._processFinance(
           tx,
           updated,
           dto.payments || [],
           userId,
           now,
+          transactionId,
         );
-        if (poId) await this._processPO(tx, poId, userId, now);
+        if (poId)
+          await this._processPO(
+            tx,
+            poId,
+            userId,
+            now,
+            transactionId,
+            updated.purchaseInvoiceNumber,
+          );
       }
 
-      await this._processLogs(tx, updated, dto, userId, now, 'UPDATE');
+      await this._processLogs(
+        tx,
+        updated,
+        dto,
+        userId,
+        now,
+        'UPDATE',
+        existing,
+        transactionId,
+      );
       return updated;
     });
   }
@@ -381,7 +429,6 @@ export class PurchaseInvoiceService {
       const financialAccountId = BigInt(dto.financialAccountId);
       const financialAccount = await tx.financialAccount.findUnique({
         where: { financialAccountId },
-        select: { isActive: true },
       });
       if (!financialAccount?.isActive) {
         throw new HttpException(
@@ -397,7 +444,7 @@ export class PurchaseInvoiceService {
         );
       }
 
-      await tx.purchaseInvoicePayment.create({
+      const payment = await tx.purchaseInvoicePayment.create({
         data: {
           purchaseInvoiceId: id,
           financialAccountId,
@@ -410,7 +457,7 @@ export class PurchaseInvoiceService {
         },
       });
 
-      await tx.financialAccount.update({
+      const updatedFinancialAccount = await tx.financialAccount.update({
         where: { financialAccountId },
         data: {
           currentBalance: { decrement: payAmt },
@@ -423,7 +470,7 @@ export class PurchaseInvoiceService {
         tx,
         financialAccountId,
       );
-      await tx.financialAccountTransaction.create({
+      const financialTransaction = await tx.financialAccountTransaction.create({
         data: {
           transactionNumber,
           financialAccountId,
@@ -439,6 +486,9 @@ export class PurchaseInvoiceService {
         },
       });
 
+      const summaryBefore = await tx.supplierFinancialSummary.findUnique({
+        where: { supplierId: invoice.supplierId },
+      });
       const updatedSummary = await tx.supplierFinancialSummary.updateMany({
         where: {
           supplierId: invoice.supplierId,
@@ -457,6 +507,9 @@ export class PurchaseInvoiceService {
           HttpStatus.CONFLICT,
         );
       }
+      const summaryAfter = await tx.supplierFinancialSummary.findUnique({
+        where: { supplierId: invoice.supplierId },
+      });
 
       const newPaidAmount = invoice.paidAmount.add(payAmt);
       const newOutstanding = invoice.outstandingAmount.sub(payAmt);
@@ -464,7 +517,7 @@ export class PurchaseInvoiceService {
         ? PurchaseInvoicePaymentStatus.PAID
         : PurchaseInvoicePaymentStatus.PARTIAL;
 
-      await tx.purchaseInvoice.update({
+      const updatedInvoice = await tx.purchaseInvoice.update({
         where: { purchaseInvoiceId: id },
         data: {
           paidAmount: newPaidAmount,
@@ -475,10 +528,12 @@ export class PurchaseInvoiceService {
         },
       });
 
+      const transactionId = createAuditTransactionId();
       await tx.activityLog.create({
         data: {
           userId,
-          activityType: 'PAYMENT_PI',
+          activityType: ACTIVITY_TYPES.UPDATE,
+          module: 'PURCHASE',
           entityType: 'PURCHASE_INVOICE',
           entityId: id,
           entityNumber: invoice.purchaseInvoiceNumber,
@@ -487,18 +542,90 @@ export class PurchaseInvoiceService {
         },
       });
 
-      await tx.auditLog.create({
-        data: {
-          userId,
-          action: 'PAYMENT',
-          entityType: 'PURCHASE_INVOICE',
-          entityId: id,
-          entityNumber: invoice.purchaseInvoiceNumber,
-          changedFields: JSON.stringify(dto),
-          reason: `Update Payment dari Dashboard`,
-          createdAt: now,
-        },
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'PURCHASE',
+        operation: AUDIT_OPERATIONS.UPDATE,
+        entityType: 'PURCHASE_INVOICE',
+        entityId: id,
+        entityNumber: invoice.purchaseInvoiceNumber,
+        source: 'Updated via Purchase Invoice Payment',
+        changedFields: changedFields(invoice, updatedInvoice, [
+          'paidAmount',
+          'outstandingAmount',
+          'statusPayment',
+        ]),
       });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'PURCHASE',
+        operation: AUDIT_OPERATIONS.CREATE,
+        entityType: 'PURCHASE_INVOICE_PAYMENT',
+        entityId: payment.purchasePaymentId,
+        entityNumber: invoice.purchaseInvoiceNumber,
+        source: 'Created via Purchase Invoice Payment',
+        changedFields: changedFields(null, payment, [
+          'financialAccountId',
+          'paymentAmount',
+          'paymentMethod',
+          'paymentDate',
+          'referenceNumber',
+          'note',
+        ]),
+      });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'FINANCIAL',
+        operation: AUDIT_OPERATIONS.UPDATE,
+        entityType: 'FINANCIAL_ACCOUNT',
+        entityId: financialAccountId,
+        entityNumber: financialAccount.accountName,
+        source: 'Updated via Purchase Invoice Payment',
+        changedFields: changedFields(
+          financialAccount,
+          updatedFinancialAccount,
+          ['currentBalance'],
+        ),
+      });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'FINANCIAL',
+        operation: AUDIT_OPERATIONS.CREATE,
+        entityType: 'FINANCIAL_ACCOUNT_TRANSACTION',
+        entityId: financialTransaction.financialAccountTransactionId,
+        entityNumber: financialTransaction.transactionNumber,
+        source: 'Created via Purchase Invoice Payment',
+        changedFields: changedFields(null, financialTransaction, [
+          'financialAccountId',
+          'transactionType',
+          'paymentMethod',
+          'direction',
+          'amount',
+          'referenceType',
+          'referenceId',
+          'transactionDate',
+        ]),
+      });
+      if (summaryBefore && summaryAfter) {
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'FINANCIAL',
+          operation: AUDIT_OPERATIONS.UPDATE,
+          entityType: 'SUPPLIER_FINANCIAL_SUMMARY',
+          entityId: summaryBefore.supplierFinancialId,
+          entityNumber: invoice.purchaseInvoiceNumber,
+          source: 'Updated via Purchase Invoice Payment',
+          changedFields: changedFields(summaryBefore, summaryAfter, [
+            'outstandingAmount',
+            'currentAmount',
+          ]),
+        });
+      }
 
       return { success: true };
     });
@@ -690,6 +817,7 @@ export class PurchaseInvoiceService {
     invoice: CreatedInvoiceWithDetails,
     userId: bigint,
     now: Date,
+    transactionId: string,
   ) {
     for (const detail of invoice.details) {
       const selectedUnit = detail.productUnit;
@@ -741,7 +869,7 @@ export class PurchaseInvoiceService {
         },
       });
 
-      await recordInitialFifoIn(tx, {
+      const fifoTransaction = await recordInitialFifoIn(tx, {
         fifoLayerId: layer.fifoLayerId,
         inventoryMovementId: movement.inventoryMovementId,
         quantity: parentQty,
@@ -754,26 +882,101 @@ export class PurchaseInvoiceService {
       const stock = await tx.inventoryStock.findFirst({
         where: { productUnitId: parentUnit.productUnitId },
       });
-      if (stock) {
-        await tx.inventoryStock.update({
-          where: { inventoryStockId: stock.inventoryStockId },
-          data: {
-            actualQty: { increment: parentQty },
-            availableQty: { increment: parentQty },
-            updatedAt: now,
-          },
-        });
-      } else {
-        await tx.inventoryStock.create({
-          data: {
-            productId: parentUnit.productId,
-            productUnitId: parentUnit.productUnitId,
-            actualQty: parentQty,
-            availableQty: parentQty,
-            updatedAt: now,
-          },
-        });
-      }
+      const savedStock = stock
+        ? await tx.inventoryStock.update({
+            where: { inventoryStockId: stock.inventoryStockId },
+            data: {
+              actualQty: { increment: parentQty },
+              availableQty: { increment: parentQty },
+              updatedAt: now,
+            },
+          })
+        : await tx.inventoryStock.create({
+            data: {
+              productId: parentUnit.productId,
+              productUnitId: parentUnit.productUnitId,
+              actualQty: parentQty,
+              availableQty: parentQty,
+              updatedAt: now,
+            },
+          });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'INVENTORY',
+        operation: AUDIT_OPERATIONS.CREATE,
+        entityType: 'INVENTORY_MOVEMENT',
+        entityId: movement.inventoryMovementId,
+        entityNumber: invoice.purchaseInvoiceNumber,
+        source: 'Created via Purchase Invoice',
+        changedFields: changedFields(null, movement, [
+          'movementNumber',
+          'productUnitId',
+          'direction',
+          'quantity',
+          'movementType',
+          'originType',
+          'originId',
+          'movementDate',
+        ]),
+      });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'FIFO',
+        operation: AUDIT_OPERATIONS.CREATE,
+        entityType: 'FIFO_LAYER',
+        entityId: layer.fifoLayerId,
+        entityNumber: layer.fifoLayerNumber,
+        source: 'Created via Purchase Invoice',
+        changedFields: changedFields(null, layer, [
+          'fifoLayerNumber',
+          'productUnitId',
+          'originType',
+          'originId',
+          'originalQty',
+          'remainingQty',
+          'unitCost',
+          'originalCost',
+          'remainingCost',
+        ]),
+      });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'FIFO',
+        operation: AUDIT_OPERATIONS.CREATE,
+        entityType: 'FIFO_LAYER_TRANSACTION',
+        entityId: fifoTransaction.fifoLayerTransactionId,
+        entityNumber: layer.fifoLayerNumber,
+        source: 'Created via Purchase Invoice',
+        changedFields: changedFields(null, fifoTransaction, [
+          'fifoLayerId',
+          'inventoryMovementId',
+          'quantity',
+          'direction',
+          'unitCost',
+          'totalCost',
+          'quantityBefore',
+          'quantityAfter',
+        ]),
+      });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'INVENTORY',
+        operation: stock ? AUDIT_OPERATIONS.UPDATE : AUDIT_OPERATIONS.CREATE,
+        entityType: 'INVENTORY_STOCK',
+        entityId: savedStock.inventoryStockId,
+        entityNumber: invoice.purchaseInvoiceNumber,
+        source: 'Updated via Purchase Invoice',
+        changedFields: changedFields(stock, savedStock, [
+          'productId',
+          'productUnitId',
+          'actualQty',
+          'availableQty',
+        ]),
+      });
     }
   }
 
@@ -784,6 +987,7 @@ export class PurchaseInvoiceService {
     payments: (PurchasePaymentDto | AddInvoicePaymentDto)[],
     userId: bigint,
     now: Date,
+    transactionId: string,
   ) {
     if (payments && payments.length > 0) {
       for (const p of payments) {
@@ -791,7 +995,7 @@ export class PurchaseInvoiceService {
         const pDate =
           'paymentDate' in p && p.paymentDate ? new Date(p.paymentDate) : now;
 
-        await tx.purchaseInvoicePayment.create({
+        const payment = await tx.purchaseInvoicePayment.create({
           data: {
             purchaseInvoiceId: invoice.purchaseInvoiceId,
             financialAccountId: BigInt(p.financialAccountId),
@@ -802,7 +1006,10 @@ export class PurchaseInvoiceService {
             createdBy: userId,
           },
         });
-        await tx.financialAccount.update({
+        const accountBefore = await tx.financialAccount.findUniqueOrThrow({
+          where: { financialAccountId: BigInt(p.financialAccountId) },
+        });
+        const accountAfter = await tx.financialAccount.update({
           where: { financialAccountId: BigInt(p.financialAccountId) },
           data: {
             currentBalance: { decrement: amt },
@@ -814,7 +1021,7 @@ export class PurchaseInvoiceService {
           tx,
           BigInt(p.financialAccountId),
         );
-        await tx.financialAccountTransaction.create({
+        const accountTransaction = await tx.financialAccountTransaction.create({
           data: {
             transactionNumber,
             financialAccountId: BigInt(p.financialAccountId),
@@ -828,10 +1035,64 @@ export class PurchaseInvoiceService {
             createdBy: userId,
           },
         });
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'PURCHASE',
+          operation: AUDIT_OPERATIONS.CREATE,
+          entityType: 'PURCHASE_INVOICE_PAYMENT',
+          entityId: payment.purchasePaymentId,
+          entityNumber: invoice.purchaseInvoiceNumber,
+          source: 'Created via Purchase Invoice',
+          changedFields: changedFields(null, payment, [
+            'financialAccountId',
+            'paymentAmount',
+            'paymentMethod',
+            'paymentDate',
+            'referenceNumber',
+          ]),
+        });
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'FINANCIAL',
+          operation: AUDIT_OPERATIONS.UPDATE,
+          entityType: 'FINANCIAL_ACCOUNT',
+          entityId: accountAfter.financialAccountId,
+          entityNumber: invoice.purchaseInvoiceNumber,
+          source: 'Updated via Purchase Invoice',
+          changedFields: changedFields(accountBefore, accountAfter, [
+            'currentBalance',
+          ]),
+        });
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'FINANCIAL',
+          operation: AUDIT_OPERATIONS.CREATE,
+          entityType: 'FINANCIAL_ACCOUNT_TRANSACTION',
+          entityId: accountTransaction.financialAccountTransactionId,
+          entityNumber: accountTransaction.transactionNumber,
+          source: 'Created via Purchase Invoice',
+          changedFields: changedFields(null, accountTransaction, [
+            'transactionNumber',
+            'financialAccountId',
+            'transactionType',
+            'paymentMethod',
+            'direction',
+            'amount',
+            'referenceType',
+            'referenceId',
+            'transactionDate',
+          ]),
+        });
       }
     }
     if (invoice.outstandingAmount.greaterThan(0)) {
-      await tx.supplierFinancialSummary.upsert({
+      const summaryBefore = await tx.supplierFinancialSummary.findUnique({
+        where: { supplierId: invoice.supplierId },
+      });
+      const summaryAfter = await tx.supplierFinancialSummary.upsert({
         where: { supplierId: invoice.supplierId },
         update: {
           outstandingAmount: { increment: invoice.outstandingAmount },
@@ -846,6 +1107,24 @@ export class PurchaseInvoiceService {
           updatedAt: now,
         },
       });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'PURCHASE',
+        operation: summaryBefore
+          ? AUDIT_OPERATIONS.UPDATE
+          : AUDIT_OPERATIONS.CREATE,
+        entityType: 'SUPPLIER_FINANCIAL_SUMMARY',
+        entityId: summaryAfter.supplierFinancialId,
+        entityNumber: invoice.purchaseInvoiceNumber,
+        source: 'Updated via Purchase Invoice',
+        changedFields: changedFields(summaryBefore, summaryAfter, [
+          'supplierId',
+          'outstandingAmount',
+          'currentAmount',
+          'overdueAmount',
+        ]),
+      });
     }
   }
 
@@ -855,6 +1134,7 @@ export class PurchaseInvoiceService {
     action: 'MERGE' | 'REWRITE' | 'IGNORE',
     userId: bigint,
     now: Date,
+    transactionId: string,
   ) {
     for (const detail of invoice.details) {
       const prodId = detail.productUnit.productId;
@@ -862,8 +1142,8 @@ export class PurchaseInvoiceService {
       const exists = await tx.productSupplier.findFirst({
         where: { productId: prodId, supplierId: invoice.supplierId },
       });
-      if (!exists)
-        await tx.productSupplier.create({
+      if (!exists) {
+        const productSupplier = await tx.productSupplier.create({
           data: {
             productId: prodId,
             supplierId: invoice.supplierId,
@@ -871,6 +1151,22 @@ export class PurchaseInvoiceService {
             createdBy: userId,
           },
         });
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'SUPPLIER',
+          operation: AUDIT_OPERATIONS.CREATE,
+          entityType: 'PRODUCT_SUPPLIER',
+          entityId: productSupplier.productSupplierId,
+          entityNumber: invoice.purchaseInvoiceNumber,
+          source: 'Created via Purchase Invoice',
+          changedFields: changedFields(null, productSupplier, [
+            'productId',
+            'supplierId',
+            'isActive',
+          ]),
+        });
+      }
     }
     if (action === 'IGNORE') return;
     if (action === 'REWRITE')
@@ -879,7 +1175,15 @@ export class PurchaseInvoiceService {
       });
 
     for (const detail of invoice.details) {
-      await tx.supplierSuggestedCost.upsert({
+      const costBefore = await tx.supplierSuggestedCost.findUnique({
+        where: {
+          supplierId_productUnitId: {
+            supplierId: invoice.supplierId,
+            productUnitId: detail.productUnitId,
+          },
+        },
+      });
+      const costAfter = await tx.supplierSuggestedCost.upsert({
         where: {
           supplierId_productUnitId: {
             supplierId: invoice.supplierId,
@@ -898,6 +1202,23 @@ export class PurchaseInvoiceService {
           createdBy: userId,
         },
       });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'PRICE',
+        operation: costBefore
+          ? AUDIT_OPERATIONS.UPDATE
+          : AUDIT_OPERATIONS.CREATE,
+        entityType: 'SUPPLIER_SUGGESTED_COST',
+        entityId: costAfter.supplierCostId,
+        entityNumber: invoice.purchaseInvoiceNumber,
+        source: 'Updated via Purchase Invoice',
+        changedFields: changedFields(costBefore, costAfter, [
+          'supplierId',
+          'productUnitId',
+          'suggestedCost',
+        ]),
+      });
     }
   }
 
@@ -906,14 +1227,30 @@ export class PurchaseInvoiceService {
     poId: bigint,
     userId: bigint,
     now: Date,
+    transactionId: string,
+    invoiceNumber: string,
   ) {
-    await tx.purchaseOrder.update({
+    const before = await tx.purchaseOrder.findUniqueOrThrow({
+      where: { purchaseOrderId: poId },
+    });
+    const after = await tx.purchaseOrder.update({
       where: { purchaseOrderId: poId },
       data: {
         status: PurchaseOrderStatus.COMPLETED,
         updatedBy: userId,
         updatedAt: now,
       },
+    });
+    await writeAuditLog(tx, {
+      userId,
+      transactionId,
+      module: 'PURCHASE',
+      operation: AUDIT_OPERATIONS.UPDATE,
+      entityType: 'PURCHASE_ORDER',
+      entityId: poId,
+      entityNumber: before.purchaseOrderNumber,
+      source: `Completed via Purchase Invoice ${invoiceNumber}`,
+      changedFields: changedFields(before, after, ['status']),
     });
   }
 
@@ -924,13 +1261,17 @@ export class PurchaseInvoiceService {
     userId: bigint,
     now: Date,
     method: 'CREATE' | 'UPDATE',
+    before?: Prisma.PurchaseInvoiceGetPayload<{ include: { details: true } }>,
+    transactionId = createAuditTransactionId(),
   ) {
     const actionDesc =
       dto.status === 'COMPLETED' ? 'Menyelesaikan' : 'Membuat Draft';
     await tx.activityLog.create({
       data: {
         userId,
-        activityType: `${method}_PI`,
+        activityType:
+          method === 'CREATE' ? ACTIVITY_TYPES.CREATE : ACTIVITY_TYPES.UPDATE,
+        module: 'PURCHASE',
         entityType: 'PURCHASE_INVOICE',
         entityId: invoice.purchaseInvoiceId,
         entityNumber: invoice.purchaseInvoiceNumber,
@@ -938,17 +1279,74 @@ export class PurchaseInvoiceService {
         createdAt: now,
       },
     });
-    await tx.auditLog.create({
-      data: {
-        userId,
-        action: method,
-        entityType: 'PURCHASE_INVOICE',
-        entityId: invoice.purchaseInvoiceId,
-        entityNumber: invoice.purchaseInvoiceNumber,
-        changedFields: JSON.stringify(dto),
-        reason: `Generated via Purchasing Module`,
-        createdAt: now,
-      },
+    await writeAuditLog(tx, {
+      userId,
+      transactionId,
+      module: 'PURCHASE',
+      operation:
+        method === 'CREATE' ? AUDIT_OPERATIONS.CREATE : AUDIT_OPERATIONS.UPDATE,
+      entityType: 'PURCHASE_INVOICE',
+      entityId: invoice.purchaseInvoiceId,
+      entityNumber: invoice.purchaseInvoiceNumber,
+      source:
+        method === 'CREATE'
+          ? 'Created via Purchase Invoice'
+          : 'Updated via Purchase Invoice',
+      changedFields: changedFields(before ?? null, invoice, [
+        'purchaseInvoiceNumber',
+        'supplierId',
+        'purchaseOrderId',
+        'invoiceDate',
+        'dueDate',
+        'invoiceTotal',
+        'discountAmount',
+        'statusPayment',
+        'paidAmount',
+        'outstandingAmount',
+        'status',
+        'note',
+      ]),
     });
+    for (const detail of before?.details ?? []) {
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'PURCHASE',
+        operation: AUDIT_OPERATIONS.DELETE,
+        entityType: 'PURCHASE_INVOICE_DETAIL',
+        entityId: detail.purchaseInvoiceDetailId,
+        entityNumber: invoice.purchaseInvoiceNumber,
+        source: 'Replaced via Purchase Invoice Update',
+        changedFields: changedFields(detail, null, [
+          'productUnitId',
+          'quantity',
+          'unitCost',
+          'subtotal',
+          'note',
+        ]),
+      });
+    }
+    for (const detail of invoice.details) {
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'PURCHASE',
+        operation: AUDIT_OPERATIONS.CREATE,
+        entityType: 'PURCHASE_INVOICE_DETAIL',
+        entityId: detail.purchaseInvoiceDetailId,
+        entityNumber: invoice.purchaseInvoiceNumber,
+        source:
+          method === 'CREATE'
+            ? 'Created via Purchase Invoice'
+            : 'Replaced via Purchase Invoice Update',
+        changedFields: changedFields(null, detail, [
+          'productUnitId',
+          'quantity',
+          'unitCost',
+          'subtotal',
+          'note',
+        ]),
+      });
+    }
   }
 }

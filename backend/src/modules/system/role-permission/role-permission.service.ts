@@ -1,6 +1,12 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service.js';
 import type { Prisma } from '../../../../generated/prisma/client.js';
+import {
+  ACTIVITY_TYPES,
+  AUDIT_OPERATIONS,
+  changedFields,
+  createAuditTransactionId,
+} from '../../../common/logging/business-logger.js';
 
 @Injectable()
 export class RolePermissionService {
@@ -108,12 +114,14 @@ export class RolePermissionService {
       }
 
       const now = new Date();
+      const transactionId = createAuditTransactionId();
 
       // 3. Tulis Activity Log
       await tx.activityLog.create({
         data: {
           userId: actorId,
-          activityType: 'ROLE_PERMISSION_UPDATED',
+          activityType: ACTIVITY_TYPES.UPDATE,
+          module: 'SYSTEM',
           entityType: 'ROLE',
           entityId: adminRole.roleId,
           description: `Memperbarui permission untuk role ADMIN`,
@@ -125,13 +133,16 @@ export class RolePermissionService {
       await tx.auditLog.create({
         data: {
           userId: actorId,
-          action: 'ROLE_PERMISSION_UPDATED',
+          action: AUDIT_OPERATIONS.UPDATE,
+          transactionId,
+          module: 'SYSTEM',
+          source: 'Updated via Role Permission',
           entityType: 'ROLE',
           entityId: adminRole.roleId,
-          changedFields: {
-            oldIds: expectedOldIds,
-            newIds: [...newPermIds].sort(),
-          },
+          changedFields: changedFields(
+            { permissionIds: expectedOldIds },
+            { permissionIds: [...newPermIds].sort() },
+          ),
           ipAddress: ip,
           userAgent: ua,
           createdAt: now,

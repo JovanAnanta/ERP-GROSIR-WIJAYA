@@ -29,8 +29,8 @@ export async function recordInitialFifoIn(
     totalCost: Prisma.Decimal;
     createdBy: bigint;
   },
-): Promise<void> {
-  await tx.fifoLayerTransaction.create({
+) {
+  return tx.fifoLayerTransaction.create({
     data: {
       fifoLayerId: input.fifoLayerId,
       inventoryMovementId: input.inventoryMovementId,

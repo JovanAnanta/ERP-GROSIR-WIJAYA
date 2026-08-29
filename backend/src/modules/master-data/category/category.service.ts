@@ -6,6 +6,12 @@ import {
   CategoryQueryDto,
 } from './dto/category.dto.js';
 import type { Prisma, Category } from '../../../../generated/prisma/client.js';
+import {
+  ACTIVITY_TYPES,
+  AUDIT_OPERATIONS,
+  changedFields as buildChangedFields,
+  createAuditTransactionId,
+} from '../../../common/logging/business-logger.js';
 
 type AuditFieldChange = {
   old: string | boolean | null;
@@ -71,11 +77,13 @@ export class CategoryService {
         });
 
         const now = new Date();
+        const transactionId = createAuditTransactionId();
 
         await tx.activityLog.create({
           data: {
             userId,
-            activityType: 'CREATE_CATEGORY',
+            activityType: ACTIVITY_TYPES.CREATE,
+            module: 'MASTER_DATA',
             entityType: 'CATEGORY',
             entityId: category.categoryId,
             description: `Membuat Kategori Baru: ${category.categoryName}`,
@@ -87,9 +95,15 @@ export class CategoryService {
           data: {
             userId,
             action: 'CREATE',
+            transactionId,
+            module: 'MASTER_DATA',
+            source: 'Created via Category Master',
             entityType: 'CATEGORY',
             entityId: category.categoryId,
-            changedFields: { categoryName: { new: category.categoryName } },
+            changedFields: buildChangedFields(null, category, [
+              'categoryName',
+              'isActive',
+            ]),
             ipAddress: ip,
             userAgent: ua,
             createdAt: now,
@@ -142,6 +156,7 @@ export class CategoryService {
         });
 
         const now = new Date();
+        const transactionId = createAuditTransactionId();
         const changedFields: Record<string, AuditFieldChange> = {};
 
         if (existing.categoryName !== updated.categoryName) {
@@ -155,7 +170,8 @@ export class CategoryService {
           await tx.activityLog.create({
             data: {
               userId,
-              activityType: 'UPDATE_CATEGORY',
+              activityType: ACTIVITY_TYPES.UPDATE,
+              module: 'MASTER_DATA',
               entityType: 'CATEGORY',
               entityId: categoryId,
               description: `Memperbarui data Kategori: ${updated.categoryName}`,
@@ -167,9 +183,14 @@ export class CategoryService {
             data: {
               userId,
               action: 'UPDATE',
+              transactionId,
+              module: 'MASTER_DATA',
+              source: 'Updated via Category Master',
               entityType: 'CATEGORY',
               entityId: categoryId,
-              changedFields: changedFields,
+              changedFields: buildChangedFields(existing, updated, [
+                'categoryName',
+              ]),
               ipAddress: ip,
               userAgent: ua,
               createdAt: now,
@@ -212,10 +233,12 @@ export class CategoryService {
       });
 
       const now = new Date();
+      const transactionId = createAuditTransactionId();
       await tx.activityLog.create({
         data: {
           userId,
-          activityType: 'INACTIVATE_CATEGORY',
+          activityType: ACTIVITY_TYPES.UPDATE,
+          module: 'MASTER_DATA',
           entityType: 'CATEGORY',
           entityId: categoryId,
           description: `Menonaktifkan Kategori: ${category.categoryName}`,
@@ -226,10 +249,17 @@ export class CategoryService {
       await tx.auditLog.create({
         data: {
           userId,
-          action: 'INACTIVATE',
+          action: AUDIT_OPERATIONS.UPDATE,
+          transactionId,
+          module: 'MASTER_DATA',
+          source: 'Updated via Category Master',
           entityType: 'CATEGORY',
           entityId: categoryId,
-          changedFields: { isActive: { old: true, new: false } },
+          changedFields: buildChangedFields(
+            category,
+            { ...category, isActive: false },
+            ['isActive'],
+          ),
           ipAddress: ip,
           userAgent: ua,
           createdAt: now,
@@ -268,10 +298,12 @@ export class CategoryService {
       });
 
       const now = new Date();
+      const transactionId = createAuditTransactionId();
       await tx.activityLog.create({
         data: {
           userId,
-          activityType: 'REACTIVATE_CATEGORY',
+          activityType: ACTIVITY_TYPES.UPDATE,
+          module: 'MASTER_DATA',
           entityType: 'CATEGORY',
           entityId: categoryId,
           description: `Mengaktifkan kembali Kategori: ${category.categoryName}`,
@@ -282,10 +314,17 @@ export class CategoryService {
       await tx.auditLog.create({
         data: {
           userId,
-          action: 'REACTIVATE',
+          action: AUDIT_OPERATIONS.UPDATE,
+          transactionId,
+          module: 'MASTER_DATA',
+          source: 'Updated via Category Master',
           entityType: 'CATEGORY',
           entityId: categoryId,
-          changedFields: { isActive: { old: false, new: true } },
+          changedFields: buildChangedFields(
+            category,
+            { ...category, isActive: true },
+            ['isActive'],
+          ),
           ipAddress: ip,
           userAgent: ua,
           createdAt: now,

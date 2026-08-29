@@ -5,6 +5,12 @@ import type {
   Prisma,
   SystemConfiguration,
 } from '../../../../generated/prisma/client.js';
+import {
+  ACTIVITY_TYPES,
+  AUDIT_OPERATIONS,
+  changedFields,
+  createAuditTransactionId,
+} from '../../../common/logging/business-logger.js';
 
 export interface ConfigResponse extends SystemConfiguration {
   currency: string;
@@ -79,29 +85,42 @@ export class SystemConfigurationService {
         });
 
       const now = new Date();
+      const transactionId = createAuditTransactionId();
 
       await tx.activityLog.create({
         data: {
           userId,
-          activityType: 'SYSTEM_CONFIG_UPDATED',
+          activityType: ACTIVITY_TYPES.CHANGE_CONFIGURATION,
+          module: 'SYSTEM',
           entityType: 'CONFIGURATION',
           description: `Memperbarui System Configuration`,
           createdAt: now,
         },
       });
 
-      const changedFieldsPayload: Record<string, unknown> = {
-        oldName: existing?.companyName ?? '',
-        newName: savedConfig.companyName,
-      };
-
       await tx.auditLog.create({
         data: {
           userId,
-          action: 'UPDATE_CONFIG',
+          action: existing ? AUDIT_OPERATIONS.UPDATE : AUDIT_OPERATIONS.CREATE,
+          transactionId,
+          module: 'SYSTEM',
+          source: existing
+            ? 'Updated via Company Identity'
+            : 'Created via Company Identity',
           entityType: 'CONFIGURATION',
           entityId: BigInt(1),
-          changedFields: changedFieldsPayload as Prisma.InputJsonValue,
+          changedFields: changedFields(existing, savedConfig, [
+            'companyName',
+            'address',
+            'phone',
+            'logoBase64',
+            'receiptHeader1',
+            'receiptHeader2',
+            'receiptHeader3',
+            'receiptFooter1',
+            'receiptFooter2',
+            'receiptFooter3',
+          ]),
           ipAddress: ip,
           userAgent: ua,
           createdAt: now,
