@@ -87,16 +87,21 @@ model User {
   /**
    * INVENTORY
    */
-  createdFifoLayers                 FifoLayer[]                 @relation("FifoLayerCreatedBy")
-  createdFifoLayerTransactions      FifoLayerTransaction[]      @relation("FifoLayerTransactionCreatedBy")
-  createdInventoryTransformations   InventoryTransformation[]   @relation("InventoryTransformationCreatedBy")
-  createdInventoryMovements         InventoryMovement[]         @relation("InventoryMovementCreatedBy")
-  createdInventoryAdjustments       InventoryAdjustment[]       @relation("InventoryAdjustmentCreatedBy")
-  approvedInventoryAdjustments      InventoryAdjustment[]       @relation("InventoryAdjustmentApprovedBy")
-  createdInventoryAdjustmentDetails InventoryAdjustmentDetail[] @relation("InventoryAdjustmentDetailCreatedBy")
-  createdStockOpnames               StockOpname[]               @relation("StockOpnameCreatedBy")
-  approvedStockOpnames              StockOpname[]               @relation("StockOpnameApprovedBy")
-  createdStockOpnameDetails         StockOpnameDetail[]         @relation("StockOpnameDetailCreatedBy")
+  createdFifoLayers                     FifoLayer[]                     @relation("FifoLayerCreatedBy")
+  createdFifoLayerTransactions          FifoLayerTransaction[]          @relation("FifoLayerTransactionCreatedBy")
+  createdInventoryTransformations       InventoryTransformation[]       @relation("InventoryTransformationCreatedBy")
+  createdInventoryTransformationDetails InventoryTransformationDetail[] @relation("InventoryTransformationDetailCreatedBy")
+  createdInventoryMovements             InventoryMovement[]             @relation("InventoryMovementCreatedBy")
+  createdInventoryAdjustments           InventoryAdjustment[]           @relation("InventoryAdjustmentCreatedBy")
+  approvedInventoryAdjustments          InventoryAdjustment[]           @relation("InventoryAdjustmentApprovedBy")
+  updatedInventoryAdjustments           InventoryAdjustment[]           @relation("InventoryAdjustmentUpdatedBy")
+  cancelledInventoryAdjustments         InventoryAdjustment[]           @relation("InventoryAdjustmentCancelledBy")
+  createdInventoryAdjustmentDetails     InventoryAdjustmentDetail[]     @relation("InventoryAdjustmentDetailCreatedBy")
+  createdStockOpnames                   StockOpname[]                   @relation("StockOpnameCreatedBy")
+  approvedStockOpnames                  StockOpname[]                   @relation("StockOpnameApprovedBy")
+  updatedStockOpnames                   StockOpname[]                   @relation("StockOpnameUpdatedBy")
+  cancelledStockOpnames                 StockOpname[]                   @relation("StockOpnameCancelledBy")
+  createdStockOpnameDetails             StockOpnameDetail[]             @relation("StockOpnameDetailCreatedBy")
 
   /**
    * SALES
@@ -335,6 +340,8 @@ model ProductUnit {
    */
   fifoLayers                 FifoLayer[]
   inventoryMovements         InventoryMovement[]
+  transformationSources      InventoryTransformationDetail[] @relation("TransformationSourceUnit")
+  transformationResults      InventoryTransformationDetail[] @relation("TransformationResultUnit")
   inventoryAdjustmentDetails InventoryAdjustmentDetail[]
   stockOpnameDetails         StockOpnameDetail[]
   inventoryStocks            InventoryStock[]
@@ -378,6 +385,7 @@ model Supplier {
   purchaseOrders      PurchaseOrder[]
   purchaseInvoices    PurchaseInvoice[]
   purchaseReturns     PurchaseReturn[]
+  stockOpnames        StockOpname[]
   financialSummary    SupplierFinancialSummary?
   accountTransactions SupplierAccountTransaction[]
 
@@ -809,6 +817,7 @@ enum FifoLayerOriginType {
   OPENING_BALANCE
   TRANSFORMATION
   INVENTORY_FOUND
+  INVENTORY_ADJUSTMENT
 }
 
 enum TransactionDirection {
@@ -874,11 +883,41 @@ model InventoryTransformation {
   createdAt            DateTime @default(now()) @map("created_at")
   createdBy            BigInt   @map("created_by")
 
-  createdByUser User                @relation("InventoryTransformationCreatedBy", fields: [createdBy], references: [userId])
+  createdByUser User                            @relation("InventoryTransformationCreatedBy", fields: [createdBy], references: [userId])
   movements     InventoryMovement[]
+  details       InventoryTransformationDetail[]
 
   @@index([createdBy])
   @@map("inventory_transformation")
+}
+
+model InventoryTransformationDetail {
+  transformationDetailId BigInt   @id @default(autoincrement()) @map("transformation_detail_id")
+  transformationId       BigInt   @map("transformation_id")
+  lineNumber             Int      @map("line_number")
+  sourceProductUnitId    BigInt   @map("source_product_unit_id")
+  sourceQuantity         Decimal  @map("source_quantity") @db.Decimal(18, 3)
+  resultProductUnitId    BigInt   @map("result_product_unit_id")
+  resultQuantity         Decimal  @map("result_quantity") @db.Decimal(18, 3)
+  sourceCostTotal        Decimal  @map("source_cost_total") @db.Decimal(18, 2)
+  suggestedUnitCost      Decimal  @map("suggested_unit_cost") @db.Decimal(18, 2)
+  appliedUnitCost        Decimal  @map("applied_unit_cost") @db.Decimal(18, 2)
+  resultCostTotal        Decimal  @map("result_cost_total") @db.Decimal(18, 2)
+  valuationVariance      Decimal  @map("valuation_variance") @db.Decimal(18, 2)
+  note                   String?  @db.VarChar(255)
+  createdAt              DateTime @default(now()) @map("created_at")
+  createdBy              BigInt   @map("created_by")
+
+  transformation    InventoryTransformation @relation(fields: [transformationId], references: [transformationId], onDelete: Restrict)
+  sourceProductUnit ProductUnit             @relation("TransformationSourceUnit", fields: [sourceProductUnitId], references: [productUnitId])
+  resultProductUnit ProductUnit             @relation("TransformationResultUnit", fields: [resultProductUnitId], references: [productUnitId])
+  createdByUser     User                    @relation("InventoryTransformationDetailCreatedBy", fields: [createdBy], references: [userId])
+
+  @@unique([transformationId, lineNumber])
+  @@index([sourceProductUnitId])
+  @@index([resultProductUnitId])
+  @@index([createdBy])
+  @@map("inventory_transformation_detail")
 }
 
 model InventoryMovement {
@@ -890,6 +929,7 @@ model InventoryMovement {
   movementType        String               @map("movement_type") @db.VarChar(50)
   originType          String               @map("origin_type") @db.VarChar(50)
   originId            BigInt               @map("origin_id")
+  originNumber        String               @map("origin_number") @db.VarChar(30)
   transformationId    BigInt?              @map("transformation_id")
   movementDate        DateTime             @map("movement_date")
   note                String?              @db.VarChar(255)
@@ -904,6 +944,8 @@ model InventoryMovement {
   consumedLayers  FifoLayerTransaction[] @relation("MovementConsumedLayers")
 
   @@index([productUnitId])
+  @@index([originType, originId])
+  @@index([originType, originNumber])
   @@index([transformationId])
   @@index([createdBy])
   @@map("inventory_movement")
@@ -916,17 +958,28 @@ model InventoryAdjustment {
   reason           String    @db.VarChar(255)
   status           String    @db.VarChar(20) // DRAFT / APPROVED / CANCELLED
   note             String?   @db.VarChar(255)
+  sourceType       String    @default("MANUAL") @map("source_type") @db.VarChar(30)
+  stockOpnameId    BigInt?   @unique @map("stock_opname_id")
   createdAt        DateTime  @default(now()) @map("created_at")
   createdBy        BigInt    @map("created_by")
+  updatedAt        DateTime? @updatedAt @map("updated_at")
+  updatedBy        BigInt?   @map("updated_by")
   approvedAt       DateTime? @map("approved_at")
   approvedBy       BigInt?   @map("approved_by")
+  cancelledAt      DateTime? @map("cancelled_at")
+  cancelledBy      BigInt?   @map("cancelled_by")
 
-  createdByUser  User                        @relation("InventoryAdjustmentCreatedBy", fields: [createdBy], references: [userId])
-  approvedByUser User?                       @relation("InventoryAdjustmentApprovedBy", fields: [approvedBy], references: [userId])
-  details        InventoryAdjustmentDetail[]
+  createdByUser   User                        @relation("InventoryAdjustmentCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser   User?                       @relation("InventoryAdjustmentUpdatedBy", fields: [updatedBy], references: [userId])
+  approvedByUser  User?                       @relation("InventoryAdjustmentApprovedBy", fields: [approvedBy], references: [userId])
+  cancelledByUser User?                       @relation("InventoryAdjustmentCancelledBy", fields: [cancelledBy], references: [userId])
+  stockOpname     StockOpname?                @relation(fields: [stockOpnameId], references: [stockOpnameId])
+  details         InventoryAdjustmentDetail[]
 
   @@index([createdBy])
   @@index([approvedBy])
+  @@index([updatedBy])
+  @@index([cancelledBy])
   @@map("inventory_adjustment")
 }
 
@@ -936,6 +989,10 @@ model InventoryAdjustmentDetail {
   productUnitId      BigInt   @map("product_unit_id")
   direction          String   @map("direction") @db.VarChar(10) // IN / OUT
   quantity           Decimal  @db.Decimal(18, 3)
+  quantityBefore     Decimal? @map("quantity_before") @db.Decimal(18, 3)
+  quantityAfter      Decimal? @map("quantity_after") @db.Decimal(18, 3)
+  unitCost           Decimal? @map("unit_cost") @db.Decimal(18, 2)
+  totalCost          Decimal? @map("total_cost") @db.Decimal(18, 2)
   note               String?  @db.VarChar(255)
   createdAt          DateTime @default(now()) @map("created_at")
   createdBy          BigInt   @map("created_by")
@@ -953,20 +1010,32 @@ model InventoryAdjustmentDetail {
 model StockOpname {
   stockOpnameId     BigInt    @id @default(autoincrement()) @map("stock_opname_id")
   stockOpnameNumber String    @unique @map("stock_opname_number") @db.VarChar(30)
+  supplierId        BigInt?   @map("supplier_id")
   opnameDate        DateTime  @map("opname_date")
-  status            String    @db.VarChar(20) // DRAFT / COUNTING / REVIEW / APPROVED / CANCELLED
+  status            String    @db.VarChar(20) // DRAFT / APPROVED / CANCELLED
   note              String?   @db.VarChar(255)
   createdAt         DateTime  @default(now()) @map("created_at")
   createdBy         BigInt    @map("created_by")
+  updatedAt         DateTime? @updatedAt @map("updated_at")
+  updatedBy         BigInt?   @map("updated_by")
   approvedAt        DateTime? @map("approved_at")
   approvedBy        BigInt?   @map("approved_by")
+  cancelledAt       DateTime? @map("cancelled_at")
+  cancelledBy       BigInt?   @map("cancelled_by")
 
-  createdByUser  User                @relation("StockOpnameCreatedBy", fields: [createdBy], references: [userId])
-  approvedByUser User?               @relation("StockOpnameApprovedBy", fields: [approvedBy], references: [userId])
-  details        StockOpnameDetail[]
+  createdByUser   User                 @relation("StockOpnameCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser   User?                @relation("StockOpnameUpdatedBy", fields: [updatedBy], references: [userId])
+  approvedByUser  User?                @relation("StockOpnameApprovedBy", fields: [approvedBy], references: [userId])
+  cancelledByUser User?                @relation("StockOpnameCancelledBy", fields: [cancelledBy], references: [userId])
+  details         StockOpnameDetail[]
+  adjustment      InventoryAdjustment?
+  supplier        Supplier?            @relation(fields: [supplierId], references: [supplierId])
 
   @@index([createdBy])
   @@index([approvedBy])
+  @@index([updatedBy])
+  @@index([cancelledBy])
+  @@index([supplierId])
   @@map("stock_opname")
 }
 
@@ -976,7 +1045,9 @@ model StockOpnameDetail {
   productUnitId       BigInt   @map("product_unit_id")
   systemQty           Decimal  @map("system_qty") @db.Decimal(18, 3)
   countedQty          Decimal  @map("counted_qty") @db.Decimal(18, 3)
+  packedQty           Decimal  @default(0) @map("packed_qty") @db.Decimal(18, 3)
   varianceQty         Decimal  @map("variance_qty") @db.Decimal(18, 3)
+  unitCost            Decimal? @map("unit_cost") @db.Decimal(18, 2)
   note                String?  @db.VarChar(255)
   createdAt           DateTime @default(now()) @map("created_at")
   createdBy           BigInt   @map("created_by")
@@ -997,13 +1068,14 @@ model InventoryStock {
   productUnitId    BigInt   @map("product_unit_id")
   actualQty        Decimal  @map("actual_qty") @db.Decimal(18, 3)
   availableQty     Decimal  @map("available_qty") @db.Decimal(18, 3)
+  packedQty        Decimal  @default(0) @map("packed_qty") @db.Decimal(18, 3)
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   product     Product     @relation(fields: [productId], references: [productId])
   productUnit ProductUnit @relation(fields: [productUnitId], references: [productUnitId])
 
+  @@unique([productUnitId])
   @@index([productId])
-  @@index([productUnitId])
   @@map("inventory_stock")
 }
 

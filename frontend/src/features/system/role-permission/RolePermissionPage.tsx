@@ -126,7 +126,7 @@ export default function RolePermissionPage() {
           <p className="text-slate-500 text-sm mt-1">Konfigurasi hak akses (Permission) untuk Role ADMIN.</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {!isEditing ? (
             <Button onClick={() => setIsEditing(true)} disabled={isLoading} className="bg-slate-900 text-white hover:bg-slate-800">
               <Edit2 className="w-4 h-4 mr-2" /> Edit Permission

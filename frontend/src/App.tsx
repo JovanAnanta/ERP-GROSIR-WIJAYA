@@ -18,6 +18,7 @@ import PricingModulePage from '@/features/pricing/PricingModulePage'; // <--- Im
 // TAMBAHKAN IMPORT INI DI SINI
 import SalesModulePage from '@/features/sales/SalesModulePage';
 import PurchasingModulePage from '@/features/purchasing/PurchasingModulePage';
+import InventoryModulePage from '@/features/inventory/InventoryModulePage';
 
 // Guard Component: Melindungi halaman yang butuh login
 function ProtectedRoute() {
@@ -64,6 +65,31 @@ export default function App() {
       active = false;
     };
   }, [hydrate, markUnauthenticated]);
+
+  useEffect(() => {
+    const preventNumberWheel = (event: WheelEvent) => {
+      const target = event.target as HTMLInputElement | null;
+      if (target?.type === 'number' && document.activeElement === target) {
+        event.preventDefault();
+        target.blur();
+      }
+    };
+    const selectZero = (event: FocusEvent) => {
+      const target = event.target as HTMLInputElement | null;
+      if (target?.type === 'number' && Number(target.value) === 0) {
+        target.select();
+      }
+    };
+    document.addEventListener('wheel', preventNumberWheel, {
+      capture: true,
+      passive: false,
+    });
+    document.addEventListener('focusin', selectZero);
+    return () => {
+      document.removeEventListener('wheel', preventNumberWheel, true);
+      document.removeEventListener('focusin', selectZero);
+    };
+  }, []);
 
   if (authStatus === 'INITIALIZING') {
     return (
@@ -129,6 +155,10 @@ export default function App() {
 
           <Route element={<PermissionRoute permission="PURCHASE_VIEW" />}>
             <Route path="/purchasing" element={<PurchasingModulePage />} />
+          </Route>
+
+          <Route element={<PermissionRoute permission="INVENTORY_VIEW" />}>
+            <Route path="/inventory" element={<InventoryModulePage />} />
           </Route>
 
           <Route element={<PermissionRoute permission="MASTER_VIEW" />}>

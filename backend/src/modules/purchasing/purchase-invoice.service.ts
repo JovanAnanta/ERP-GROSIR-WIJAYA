@@ -18,6 +18,7 @@ import {
   generateFifoLayerNumber,
   recordInitialFifoIn,
 } from './fifo-ledger.utils.js';
+import { generateInventoryMovementNumber } from '../inventory/inventory-movement-number.utils.js';
 import {
   ACTIVITY_TYPES,
   AUDIT_OPERATIONS,
@@ -839,13 +840,14 @@ export class PurchaseInvoiceService {
 
       const movement = await tx.inventoryMovement.create({
         data: {
-          movementNumber: `MOV-IN-${Date.now()}-${detail.purchaseInvoiceDetailId}`,
+          movementNumber: await generateInventoryMovementNumber(tx, 'IN', now),
           productUnitId: parentUnit.productUnitId,
           direction: 'IN',
           quantity: parentQty,
           movementType: 'PURCHASE_INVOICE',
           originType: 'PURCHASE_INVOICE_DETAIL',
           originId: detail.purchaseInvoiceDetailId,
+          originNumber: invoice.purchaseInvoiceNumber,
           movementDate: now,
           createdBy: userId,
         },

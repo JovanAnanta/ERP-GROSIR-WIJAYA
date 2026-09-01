@@ -293,7 +293,7 @@ export default function SupplierListPage() {
           <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto px-1">
             {formError && (<div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-md text-sm font-medium flex items-center gap-2"><AlertTriangle className="w-4 h-4 shrink-0" /> {formError}</div>)}
             <div className="space-y-2"><Label className="font-bold text-slate-700">Nama Supplier <span className="text-rose-500">*</span></Label><Input placeholder="PT Distributor Jaya" value={formData.supplierName} onChange={(e) => setFormData({ ...formData, supplierName: e.target.value })} disabled={isSubmitting} className="bg-slate-50" /></div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-2"><Label className="font-bold text-slate-700">No. Telepon</Label><Input placeholder="021-5551234" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} disabled={isSubmitting} className="bg-slate-50" /></div>
               <div className="space-y-2"><Label className="font-bold text-slate-700">Nama PIC</Label><Input placeholder="Bapak Budi" value={formData.picName} onChange={(e) => setFormData({ ...formData, picName: e.target.value })} disabled={isSubmitting} className="bg-slate-50" /></div>
             </div>

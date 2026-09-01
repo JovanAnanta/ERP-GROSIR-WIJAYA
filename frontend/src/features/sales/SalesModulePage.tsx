@@ -15,10 +15,10 @@ export default function SalesModulePage() {
   return (
     <div className="p-6 bg-slate-50 min-h-full flex flex-col">
       {/* Tab Navigation Header */}
-      <div className="flex border-b border-slate-200 mb-6 bg-white px-6 pt-4 rounded-t-xl shadow-sm">
+      <div className="mb-6 flex overflow-x-auto rounded-t-xl border-b border-slate-200 bg-white px-2 pt-4 shadow-sm sm:px-6">
         <button
           onClick={() => switchTab("sales")}
-          className={`flex items-center gap-2 pb-3 px-4 font-bold text-sm border-b-2 transition-colors ${
+          className={`flex items-center gap-2 whitespace-nowrap pb-3 px-4 font-bold text-sm border-b-2 transition-colors ${
             activeTab === "sales"
               ? "border-[#326dc8] text-[#326dc8]"
               : "border-transparent text-slate-500 hover:text-slate-800"
@@ -28,7 +28,7 @@ export default function SalesModulePage() {
         </button>
         <button
           onClick={() => switchTab("customers")}
-          className={`flex items-center gap-2 pb-3 px-4 font-bold text-sm border-b-2 transition-colors ${
+          className={`flex items-center gap-2 whitespace-nowrap pb-3 px-4 font-bold text-sm border-b-2 transition-colors ${
             activeTab === "customers"
               ? "border-[#326dc8] text-[#326dc8]"
               : "border-transparent text-slate-500 hover:text-slate-800"

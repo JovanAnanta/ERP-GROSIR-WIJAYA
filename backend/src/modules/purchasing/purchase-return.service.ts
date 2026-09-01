@@ -13,6 +13,7 @@ import {
   generateFifoLayerNumber,
   recordInitialFifoIn,
 } from './fifo-ledger.utils.js';
+import { generateInventoryMovementNumber } from '../inventory/inventory-movement-number.utils.js';
 import {
   ACTIVITY_TYPES,
   AUDIT_OPERATIONS,
@@ -566,13 +567,14 @@ export class PurchaseReturnService {
       const cost = detail.baseQuantity.mul(effectiveCost).toDecimalPlaces(2);
       const movement = await tx.inventoryMovement.create({
         data: {
-          movementNumber: `MOV-PR-OUT-${returnId}-${detail.purchaseReturnDetailId}`,
+          movementNumber: await generateInventoryMovementNumber(tx, 'OUT', now),
           productUnitId: layer.productUnitId,
           direction: 'OUT',
           quantity: detail.baseQuantity,
           movementType: 'PURCHASE_RETURN',
           originType: 'PURCHASE_RETURN_DETAIL',
           originId: detail.purchaseReturnDetailId,
+          originNumber: purchaseReturn.purchaseReturnNumber,
           movementDate: now,
           createdBy: userId,
         },
@@ -740,13 +742,18 @@ export class PurchaseReturnService {
         for (const detail of purchaseReturn.details) {
           const movement = await tx.inventoryMovement.create({
             data: {
-              movementNumber: `MOV-PR-IN-${returnId}-${detail.purchaseReturnDetailId}`,
+              movementNumber: await generateInventoryMovementNumber(
+                tx,
+                'IN',
+                now,
+              ),
               productUnitId: detail.fifoLayer.productUnitId,
               direction: 'IN',
               quantity: detail.baseQuantity,
               movementType: 'PURCHASE_RETURN_REPLACEMENT',
               originType: 'PURCHASE_RETURN_DETAIL',
               originId: detail.purchaseReturnDetailId,
+              originNumber: purchaseReturn.purchaseReturnNumber,
               movementDate: now,
               createdBy: userId,
             },
@@ -1147,13 +1154,18 @@ export class PurchaseReturnService {
             );
           const movement = await tx.inventoryMovement.create({
             data: {
-              movementNumber: `MOV-PR-CANCEL-${returnId}-${detail.purchaseReturnDetailId}`,
+              movementNumber: await generateInventoryMovementNumber(
+                tx,
+                'IN',
+                now,
+              ),
               productUnitId: layer.productUnitId,
               direction: 'IN',
               quantity: detail.baseQuantity,
               movementType: 'PURCHASE_RETURN_CANCEL',
               originType: 'PURCHASE_RETURN_DETAIL',
               originId: detail.purchaseReturnDetailId,
+              originNumber: purchaseReturn.purchaseReturnNumber,
               movementDate: now,
               createdBy: userId,
             },

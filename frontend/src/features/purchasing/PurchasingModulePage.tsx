@@ -45,7 +45,7 @@ export default function PurchasingModulePage() {
         <p className="text-slate-500 font-medium text-sm">Pusat monitoring tagihan supplier, pembuatan pesanan (PO), penerimaan faktur (A/P), dan direktori.</p>
       </div>
 
-      <div className="flex border-b border-slate-200 mt-4 bg-white px-4 pt-3 rounded-t-xl shadow-sm shrink-0 overflow-visible items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2 overflow-x-auto rounded-t-xl border-b border-slate-200 bg-white px-2 pt-3 shadow-sm sm:px-4">
         
         <button
           onClick={() => setSearchParams({ tab: "purchases" })}

@@ -94,4 +94,59 @@
   html {
     @apply font-sans;
   }
+
+  html,
+  body,
+  #root {
+    min-width: 320px;
+    min-height: 100%;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+}
+
+/* Shared responsive safeguards for every ERP module. */
+.erp-content > * {
+  min-width: 0;
+}
+
+[data-slot="table-container"],
+.erp-scroll-table {
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 767px) {
+  .erp-content > div {
+    padding: 1rem !important;
+  }
+
+  [data-slot="dialog-content"] {
+    width: calc(100vw - 0.75rem) !important;
+    max-width: calc(100vw - 0.75rem) !important;
+    height: auto !important;
+    max-height: calc(100dvh - 0.75rem) !important;
+    padding: 1rem !important;
+    border-radius: 0.75rem !important;
+  }
+
+  [data-slot="dialog-content"][style] {
+    height: calc(100dvh - 0.75rem) !important;
+  }
+
+  [data-slot="alert-dialog-content"] {
+    width: calc(100vw - 1rem) !important;
+    max-width: calc(100vw - 1rem) !important;
+    max-height: calc(100dvh - 1rem);
+    overflow-y: auto;
+    padding: 1rem !important;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }

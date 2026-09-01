@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { hasPermission, useAuthStore } from "@/store/authStore";
 import type { AuthUser } from "@/store/authStore";
@@ -18,6 +18,8 @@ import {
   CircleDollarSign,
   Settings,
   FileClock,
+  Menu,
+  X,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -36,6 +38,7 @@ const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const ACTIVITY_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
 export default function AppLayout() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, logout, lockSession, isLocked, hydrate } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -136,11 +139,20 @@ export default function AppLayout() {
   };
 
   return (
-    <div className="flex h-screen w-full bg-slate-50 font-sans">
+    <div className="flex h-[100dvh] w-full overflow-hidden bg-slate-50 font-sans">
       <SessionLockPopup />
 
+      {mobileMenuOpen && (
+        <button
+          type="button"
+          aria-label="Tutup menu navigasi"
+          className="fixed inset-0 z-30 bg-slate-950/60 backdrop-blur-[1px] lg:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Sidebar Berbasis Kategori (Enterprise Grade) */}
-      <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shadow-2xl z-10 transition-all duration-300">
+      <aside onClickCapture={() => setMobileMenuOpen(false)} className={`fixed inset-y-0 left-0 z-40 flex w-[min(18rem,86vw)] flex-col bg-slate-900 text-slate-300 shadow-2xl transition-transform duration-300 lg:relative lg:z-10 lg:w-64 lg:shrink-0 lg:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="h-20 flex items-center justify-start px-6 bg-slate-950 border-b border-slate-800">
           <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-3">
             <img
@@ -155,6 +167,14 @@ export default function AppLayout() {
             </h2>
             <p className="text-slate-500 text-xs">Enterprise Edition</p>
           </div>
+          <button
+            type="button"
+            aria-label="Tutup menu"
+            onClick={() => setMobileMenuOpen(false)}
+            className="ml-auto rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white lg:hidden"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto py-6 px-4 custom-scrollbar">
@@ -211,7 +231,10 @@ export default function AppLayout() {
               <CircleDollarSign className="w-5 h-5 mr-3 opacity-80" /> Pricing Workspace
             </div>}
 
-            {hasPermission(user, "INVENTORY_VIEW") && <div className="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 hover:bg-slate-800 hover:text-white">
+            {hasPermission(user, "INVENTORY_VIEW") && <div
+              onClick={() => navigate("/inventory")}
+              className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/inventory") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
+            >
               <Boxes className="w-5 h-5 mr-3 opacity-80" /> Inventory & Warehouse
             </div>}
 
@@ -264,10 +287,20 @@ export default function AppLayout() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-hidden bg-slate-50">
-        <header className="h-20 bg-white border-b border-slate-200 flex items-center px-8 justify-between shadow-sm z-0">
-          <div className="flex flex-col">
-            <h1 className="font-extrabold text-slate-800 text-xl tracking-tight">
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-slate-50">
+        <header className="z-20 flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-3 shadow-sm sm:px-4 md:h-20 md:px-8">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+            <button
+              type="button"
+              aria-label="Buka menu navigasi"
+              aria-expanded={mobileMenuOpen}
+              onClick={() => setMobileMenuOpen(true)}
+              className="shrink-0 rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div className="min-w-0">
+            <h1 className="truncate text-sm font-extrabold tracking-tight text-slate-800 sm:text-base md:text-xl">
               {isActive("/system/users")
                 ? "User Management"
                 : isActive("/system/role-permissions")
@@ -278,20 +311,23 @@ export default function AppLayout() {
                       ? "System Configuration"
                     : isActive("/sales/customers")
                       ? "Sales & Customers"
+                    : isActive("/inventory")
+                      ? "Inventory & Warehouse"
                     : "Dashboard"
                     }
             </h1>
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+            <p className="hidden text-[10px] font-medium uppercase tracking-wider text-slate-500 sm:block md:text-xs">
               Modul ERP Terintegrasi
             </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 px-4 py-2 rounded-full">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-3 md:gap-6">
+            <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 p-1 sm:px-3 sm:py-1.5 md:gap-3 md:px-4 md:py-2">
               <div className="w-8 h-8 rounded-full bg-[#326dc8] text-white flex items-center justify-center font-bold text-sm">
                 {user?.fullName?.charAt(0).toUpperCase() || "A"}
               </div>
-              <div className="flex flex-col">
+              <div className="hidden flex-col sm:flex">
                 <span className="text-sm font-bold text-slate-900 leading-none">
                   {user?.fullName || "Administrator"}
                 </span>
@@ -332,7 +368,7 @@ export default function AppLayout() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto relative">
+        <div className="erp-content relative min-w-0 flex-1 overflow-auto overscroll-contain">
           <Outlet />
         </div>
       </main>

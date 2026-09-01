@@ -625,7 +625,7 @@ export default function PurchaseInvoiceCardList({ onEditInvoice, canCreate = tru
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <Label className="font-bold text-slate-600 uppercase text-[10px]">Metode Bayar</Label>
                 <Select value={payMethod} onValueChange={(v) => { if (v === 'CASH' || v === 'TRANSFER') setPayMethod(v); }}>

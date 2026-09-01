@@ -80,6 +80,7 @@ export interface BrochureResponseData {
     rokok: BrochureProduct[];
     minuman: BrochureProduct[];
     acak: BrochureProduct[];
+    bulkRepack: BrochureProduct[];
   };
 }
 

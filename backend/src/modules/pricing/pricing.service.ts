@@ -208,6 +208,7 @@ export class PricingService {
       rokok: [] as any[],
       minuman: [] as any[],
       acak: [] as any[],
+      bulkRepack: [] as any[],
     };
 
     for (const p of products) {
@@ -224,9 +225,15 @@ export class PricingService {
       if (validUnits.length === 0) continue;
 
       const catLower = p.category.categoryName.toLowerCase();
-      let groupKey: 'rokok' | 'minuman' | 'acak' = 'acak';
+      let groupKey: 'rokok' | 'minuman' | 'acak' | 'bulkRepack' = 'acak';
 
-      if (catLower.includes('rokok')) {
+      if (
+        catLower.includes('curah') ||
+        catLower.includes('bal') ||
+        catLower.includes('repack')
+      ) {
+        groupKey = 'bulkRepack';
+      } else if (catLower.includes('rokok')) {
         groupKey = 'rokok';
       } else if (catLower.includes('minuman') && !catLower.includes('serbuk')) {
         // Pengecualian mutlak: "Minuman Serbuk" dilempar ke tabel ACAK

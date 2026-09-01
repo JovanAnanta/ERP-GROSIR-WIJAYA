@@ -263,6 +263,24 @@ export default function PriceBrochureTab() {
             </div>
           )}
 
+          {/* TABEL 4: BAHAN CURAH & REPACK */}
+          {b?.bulkRepack && b.bulkRepack.length > 0 && (
+            <div className="mb-6">
+              <h2>Bahan Curah & Repack</h2>
+              <table className="w-full text-xs text-left">
+                <thead><tr><th className="w-[40%]">Nama Barang</th><th className="text-right">Harga Bal</th><th className="text-right">Harga Kilogram</th><th className="text-right">Harga Pcs</th></tr></thead>
+                <tbody>{b.bulkRepack.map(item => (
+                  <tr key={item.productId} className="hover:bg-blue-50/50 border-b border-slate-200">
+                    <td className="font-bold text-slate-800 p-1.5">{item.productName}</td>
+                    <td className="text-right p-1"><input type="text" defaultValue={getPrice(item.units, ['BAL'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded" /></td>
+                    <td className="text-right p-1"><input type="text" defaultValue={getPrice(item.units, ['KG', 'KILOGRAM'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded" /></td>
+                    <td className="text-right p-1"><input type="text" defaultValue={getPrice(item.units, ['PCS', 'BUNGKUS', 'BKS'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded" /></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
+
           <div className="mt-6 pt-3 border-t-2 border-slate-300 text-[10px] text-slate-600 font-medium leading-relaxed italic">
             * Harga yang tertera pada katalog ini dapat berubah sewaktu-waktu tanpa pemberitahuan sebelumnya sesuai dengan kebijakan harga grosir terbaru. Jika barang yang Anda butuhkan tidak tertera di daftar ini, silakan hubungi Admin kami.
           </div>

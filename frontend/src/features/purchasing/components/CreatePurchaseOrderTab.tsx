@@ -322,9 +322,9 @@ export default function CreatePurchaseOrderTab({ editingOrderId, onSuccess, onCa
       </div>
 
       {/* TABS / HELPER BUTTONS */}
-      <div className="mb-2 flex justify-between items-end shrink-0">
+      <div className="mb-2 flex shrink-0 flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <Label className="font-extrabold text-slate-800 text-sm uppercase">Daftar Barang Pesanan</Label>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {editingOrderId && onCancelEdit && <Button variant="outline" onClick={onCancelEdit} disabled={isSubmitting} className="font-bold h-9 text-xs px-5">Batal Edit</Button>}
           <Button onClick={() => openCatalog('HISTORY')} disabled={!supplierId} variant="outline" size="sm" className="h-7 text-[10px] font-bold text-emerald-600 border-emerald-200 bg-emerald-50 hover:bg-emerald-100">
             <Download className="w-3 h-3 mr-1"/> Tarik Histori Beli
@@ -418,9 +418,9 @@ export default function CreatePurchaseOrderTab({ editingOrderId, onSuccess, onCa
       </div>
 
       {/* FOOTER ACTIONS */}
-      <div className="mt-auto pt-3 border-t border-slate-200 flex justify-between items-center bg-white shrink-0">
+      <div className="mt-auto flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-white pt-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-md">Total Jenis Barang Dipesan: <span className="text-[#326dc8] font-black">{validItemsCount}</span></p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {/* Tombol selalu aktif agar menampilkan validasi error, tidak diam-diam freeze */}
           <Button variant="outline" onClick={() => handleSubmit('DRAFT')} disabled={isSubmitting} className="font-bold h-9 text-xs px-5 border-slate-300 text-slate-700 hover:bg-slate-100">
             Simpan Draft
@@ -447,7 +447,7 @@ export default function CreatePurchaseOrderTab({ editingOrderId, onSuccess, onCa
               ? (catalogItems as SupplierCatalogItem[]).map(p => (
                   <div key={p.productId} className="p-2 border border-slate-100 bg-slate-50 rounded-md">
                     <p className="font-bold text-xs text-slate-800 mb-2">{p.productName}</p>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {p.units.map(u => (
                         <label key={u.productUnitId} className="flex items-center gap-2 p-2 border border-slate-200 rounded bg-white cursor-pointer hover:border-[#326dc8] transition-colors">
                           <Checkbox checked={selectedUnitIds.includes(u.productUnitId)} onCheckedChange={(c) => setSelectedUnitIds(c ? [...selectedUnitIds, u.productUnitId] : selectedUnitIds.filter(id => id !== u.productUnitId))} />

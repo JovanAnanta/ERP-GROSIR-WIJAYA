@@ -118,7 +118,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-slate-50 px-4">
+    <div className="flex min-h-[100dvh] w-full items-center justify-center overflow-y-auto bg-slate-50 px-4 py-6">
       {/* Pop-up Force Logout */}
       <AlertDialog
         open={!!forceLogoutMessage}

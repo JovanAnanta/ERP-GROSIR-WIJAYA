@@ -98,7 +98,7 @@ export default function UserManagementPage() {
 
   return (
     <div className="p-6 bg-white rounded-xl shadow-sm border border-slate-100 min-h-full">
-      <div className="flex justify-between items-center mb-6">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">User Management</h2>
           <p className="text-slate-500 text-sm">Kelola identitas, role, dan sesi pengguna ERP.</p>

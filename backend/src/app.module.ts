@@ -24,6 +24,7 @@ import { BrandModule } from './modules/master-data/brand/brand.module.js';
 import { PricingModule } from './modules/pricing/pricing.module.js';
 import { PurchasingModule } from './modules/purchasing/purchasing.module.js';
 import { AuthorizationModule } from './common/authorization/authorization.module.js';
+import { InventoryModule } from './modules/inventory/inventory.module.js';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { AuthorizationModule } from './common/authorization/authorization.module
     ProductModule,
     PricingModule,
     PurchasingModule,
+    InventoryModule,
   ],
   controllers: [AppController],
   providers: [

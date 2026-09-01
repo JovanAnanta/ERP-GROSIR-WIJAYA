@@ -504,7 +504,7 @@ export default function SystemConfigurationPage() {
             <CardContent className="p-6 flex justify-center bg-slate-300/30 min-h-[450px] items-center">
               {/* --- 1. SIMULASI STRUK THERMAL --- */}
               {previewMode === "thermal" && (
-                <div className="bg-white w-[300px] shadow-lg p-5 font-mono text-[12px] leading-tight text-slate-900 whitespace-pre-wrap rounded-sm border-t-4 border-slate-300 animate-in fade-in zoom-in-95 duration-200">
+                <div className="w-full max-w-[300px] whitespace-pre-wrap rounded-sm border-t-4 border-slate-300 bg-white p-5 font-mono text-[12px] leading-tight text-slate-900 shadow-lg animate-in fade-in zoom-in-95 duration-200">
                   {/* Thermal Logo (Grayscale) */}
                   {formData.logoBase64 && (
                     <div className="flex justify-center mb-3">
@@ -585,7 +585,7 @@ export default function SystemConfigurationPage() {
 
               {/* --- 2. SIMULASI KOP SURAT PDF (A4 Ratio) --- */}
               {previewMode === "pdf" && (
-                <div className="bg-white w-[340px] aspect-[1/1.414] shadow-md border border-slate-200 p-6 flex flex-col relative animate-in fade-in zoom-in-95 duration-200">
+                <div className="relative flex aspect-[1/1.414] w-full max-w-[340px] flex-col border border-slate-200 bg-white p-4 shadow-md animate-in fade-in zoom-in-95 duration-200 sm:p-6">
                   {/* Kop Surat (Header Dokumen) */}
                   <div className="flex items-center gap-4 pb-4 border-b-2 border-slate-800">
                     {/* Logo PDF (Full Color) */}

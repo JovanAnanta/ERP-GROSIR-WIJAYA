@@ -529,9 +529,9 @@ export default function CreatePurchaseInvoiceTab({ onSuccess, editingInvoiceId, 
         </div>
       </div>
 
-      <div className="mb-2 flex justify-between items-end shrink-0">
+      <div className="mb-2 flex shrink-0 flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <Label className="font-extrabold text-slate-800 text-sm uppercase">Daftar Barang Diterima</Label>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button onClick={handlePrintThermal} variant="outline" size="sm" className="h-7 text-[10px] font-bold text-slate-700 border-slate-300 bg-slate-50 hover:bg-slate-100">
             <Printer className="w-3 h-3 mr-1"/> Cetak Struk
           </Button>
@@ -569,9 +569,9 @@ export default function CreatePurchaseInvoiceTab({ onSuccess, editingInvoiceId, 
                 
                 <td className="p-1 border-r border-slate-200">
                   <Select value={item.productId || null} onValueChange={(val) => handleProductChange(index, val)}>
-                    <SelectTrigger className="h-7 text-[11px] font-bold border-none shadow-none focus:ring-1 focus:ring-[#00509e] rounded-sm bg-transparent">
+                    <SelectTrigger className="h-7 w-full justify-between rounded-sm border-none bg-transparent text-left text-[11px] font-bold shadow-none focus:ring-1 focus:ring-[#00509e]">
                       <SelectValue placeholder="Pilih Produk...">
-                        {allProducts.find(p => p.productId === item.productId)?.productName || item.productName}
+                        {allProducts.find(p => p.productId === item.productId)?.productName || item.productName || "Pilih Produk..."}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent className="bg-white z-50 max-h-[250px] border-slate-200 shadow-lg">
@@ -582,9 +582,9 @@ export default function CreatePurchaseInvoiceTab({ onSuccess, editingInvoiceId, 
 
                 <td className="p-1 border-r border-slate-200">
                   <Select value={item.productUnitId || null} onValueChange={(val) => handleUnitChange(index, val)} disabled={!item.productId}>
-                    <SelectTrigger className="h-7 text-[11px] font-bold border-none shadow-none focus:ring-1 focus:ring-[#00509e] rounded-sm bg-transparent">
-                      <SelectValue placeholder="Satuan...">
-                        {allProducts.find(p => p.productId === item.productId)?.units.find(u => u.productUnitId === item.productUnitId)?.unitName || item.unitName}
+                    <SelectTrigger className="h-7 w-full justify-between rounded-sm border-none bg-transparent text-left text-[11px] font-bold shadow-none focus:ring-1 focus:ring-[#00509e]">
+                      <SelectValue placeholder="Pilih Satuan...">
+                        {allProducts.find(p => p.productId === item.productId)?.units.find(u => u.productUnitId === item.productUnitId)?.unitName || item.unitName || "Pilih Satuan..."}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent className="bg-white z-50 border-slate-200 shadow-lg">
@@ -776,7 +776,7 @@ export default function CreatePurchaseInvoiceTab({ onSuccess, editingInvoiceId, 
             {catalogType === 'MASTER' ? (catalogItems as SupplierCatalogItem[]).map(p => (
               <div key={p.productId} className="p-2 border border-slate-100 bg-slate-50 rounded">
                 <p className="font-bold text-xs text-slate-800 mb-2">{p.productName}</p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {p.units.map(u => (
                     <label key={u.productUnitId} className="flex items-center gap-2 p-2 border border-slate-200 rounded bg-white cursor-pointer hover:border-[#326dc8] transition-colors">
                       <Checkbox checked={selectedUnitIds.includes(u.productUnitId)} onCheckedChange={(c) => setSelectedUnitIds(c ? [...selectedUnitIds, u.productUnitId] : selectedUnitIds.filter(id => id !== u.productUnitId))} />
