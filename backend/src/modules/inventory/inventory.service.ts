@@ -15,6 +15,11 @@ import {
 } from '../purchasing/fifo-ledger.utils.js';
 import { effectiveRemainingUnitCost } from '../purchasing/fifo-cost.utils.js';
 import { generateInventoryMovementNumber } from './inventory-movement-number.utils.js';
+import { formatStockQuantity } from './inventory-display.utils.js';
+import {
+  INVENTORY_MOVEMENT_TYPES,
+  INVENTORY_ORIGIN_TYPES,
+} from '../../common/inventory/inventory-origin.js';
 import type {
   InventoryListQueryDto,
   MovementHistoryQueryDto,
@@ -73,40 +78,6 @@ export class InventoryService {
     });
     const sequence = last ? Number(last[field].slice(prefix.length)) + 1 : 1;
     return `${prefix}${String(sequence).padStart(7, '0')}`;
-  }
-
-  private formatStock(
-    baseQty: number,
-    units: Array<{
-      conversionFactor: Prisma.Decimal;
-      unit: { unitName: string };
-    }>,
-  ) {
-    const sorted = [...units].sort(
-      (left, right) =>
-        Number(right.conversionFactor) - Number(left.conversionFactor),
-    );
-    let remaining = baseQty;
-    const parts: string[] = [];
-    for (const [index, item] of sorted.entries()) {
-      const factor = Number(item.conversionFactor);
-      if (factor <= 0 || remaining + Number.EPSILON < factor) continue;
-      const isBaseUnit = index === sorted.length - 1;
-      const quantity = isBaseUnit
-        ? Number((remaining / factor).toFixed(3))
-        : Math.floor((remaining + Number.EPSILON) / factor);
-      if (quantity > 0)
-        parts.push(`${quantity.toLocaleString('id-ID')} ${item.unit.unitName}`);
-      remaining = Number((remaining - quantity * factor).toFixed(3));
-    }
-    if (remaining > 0 && sorted.length) {
-      parts.push(
-        `${remaining.toLocaleString('id-ID')} ${sorted.at(-1)?.unit.unitName ?? ''}`,
-      );
-    }
-    return parts.length
-      ? parts.join(' ')
-      : `0 ${sorted.at(-1)?.unit.unitName ?? ''}`.trim();
   }
 
   async getSuppliers() {
@@ -175,7 +146,10 @@ export class InventoryService {
           availableQty: Number(parent.inventoryStocks[0]?.availableQty ?? 0),
           packedQty,
           warehouseQty: actualQty - packedQty,
-          stockDisplay: this.formatStock(actualQty, entry.product.productUnits),
+          stockDisplay: formatStockQuantity(
+            actualQty,
+            entry.product.productUnits,
+          ),
         },
       ];
     });
@@ -230,7 +204,7 @@ export class InventoryService {
       suggestedUnitCost: item.fifoLayers[0]
         ? Number(item.fifoLayers[0].unitCost)
         : null,
-      stockDisplay: this.formatStock(
+      stockDisplay: formatStockQuantity(
         Number(item.inventoryStocks[0]?.actualQty ?? 0),
         [
           { conversionFactor: item.conversionFactor, unit: item.unit },
@@ -290,8 +264,11 @@ export class InventoryService {
           productUnitId: detail.productUnitId,
           direction: detail.direction === 'IN' ? 'IN' : 'OUT',
           quantity: detail.quantity,
-          movementType: 'INVENTORY_ADJUSTMENT',
-          originType: 'INVENTORY_ADJUSTMENT',
+          movementType:
+            detail.direction === 'IN'
+              ? INVENTORY_MOVEMENT_TYPES.ADJUSTMENT_IN
+              : INVENTORY_MOVEMENT_TYPES.ADJUSTMENT_OUT,
+          originType: INVENTORY_ORIGIN_TYPES.INVENTORY_ADJUSTMENT,
           originId: adjustment.adjustmentId,
           originNumber: adjustment.adjustmentNumber,
           movementDate: adjustment.adjustmentDate,
@@ -826,6 +803,7 @@ export class InventoryService {
           ),
         );
         const sourceCosts = new Map<string, Prisma.Decimal>();
+        const sourceMovements = new Map<string, bigint>();
         for (const [sourceId, quantity] of sourceGroups) {
           const stock = stocks.get(sourceId)!;
           if (
@@ -846,8 +824,8 @@ export class InventoryService {
               productUnitId: BigInt(sourceId),
               direction: 'OUT',
               quantity,
-              movementType: 'INVENTORY_TRANSFORMATION',
-              originType: 'TRANSFORMATION',
+              movementType: INVENTORY_MOVEMENT_TYPES.TRANSFORMATION_SOURCE_OUT,
+              originType: INVENTORY_ORIGIN_TYPES.INVENTORY_TRANSFORMATION,
               originId: transformation.transformationId,
               originNumber: transformation.transformationNumber,
               transformationId: transformation.transformationId,
@@ -856,6 +834,7 @@ export class InventoryService {
               createdBy: actorId,
             },
           });
+          sourceMovements.set(sourceId, movement.inventoryMovementId);
           sourceCosts.set(
             sourceId,
             await this.consumeFifo(
@@ -938,6 +917,7 @@ export class InventoryService {
             totalCost: current.totalCost.add(line.resultCost),
           });
         }
+        const resultMovements = new Map<string, bigint>();
         for (const [resultId, group] of resultGroups) {
           const weightedUnitCost = group.totalCost
             .div(group.quantity)
@@ -952,8 +932,8 @@ export class InventoryService {
               productUnitId: BigInt(resultId),
               direction: 'IN',
               quantity: group.quantity,
-              movementType: 'INVENTORY_TRANSFORMATION',
-              originType: 'TRANSFORMATION',
+              movementType: INVENTORY_MOVEMENT_TYPES.TRANSFORMATION_RESULT_IN,
+              originType: INVENTORY_ORIGIN_TYPES.INVENTORY_TRANSFORMATION,
               originId: transformation.transformationId,
               originNumber: transformation.transformationNumber,
               transformationId: transformation.transformationId,
@@ -962,11 +942,12 @@ export class InventoryService {
               createdBy: actorId,
             },
           });
+          resultMovements.set(resultId, movement.inventoryMovementId);
           const layer = await tx.fifoLayer.create({
             data: {
               fifoLayerNumber: await generateFifoLayerNumber(tx, now),
               productUnitId: BigInt(resultId),
-              originType: 'TRANSFORMATION',
+              originType: 'INVENTORY_TRANSFORMATION',
               originInventoryMovementId: movement.inventoryMovementId,
               originId: transformation.transformationId,
               originalQty: group.quantity,
@@ -995,7 +976,7 @@ export class InventoryService {
         }
 
         for (const line of calculatedLines) {
-          await tx.inventoryTransformationDetail.create({
+          const detail = await tx.inventoryTransformationDetail.create({
             data: {
               transformationId: transformation.transformationId,
               lineNumber: line.index + 1,
@@ -1011,6 +992,28 @@ export class InventoryService {
               note: line.item.note?.trim() || null,
               createdBy: actorId,
             },
+          });
+          await tx.inventoryTransformationMovementDetail.createMany({
+            data: [
+              {
+                transformationDetailId: detail.transformationDetailId,
+                inventoryMovementId: sourceMovements.get(
+                  line.item.sourceProductUnitId,
+                )!,
+                movementRole: 'SOURCE',
+                allocatedQuantity: new Prisma.Decimal(line.item.sourceQuantity),
+                allocatedCost: line.allocatedSourceCost,
+              },
+              {
+                transformationDetailId: detail.transformationDetailId,
+                inventoryMovementId: resultMovements.get(
+                  line.item.resultProductUnitId,
+                )!,
+                movementRole: 'RESULT',
+                allocatedQuantity: line.resultQty,
+                allocatedCost: line.resultCost,
+              },
+            ],
           });
         }
         await this.logDocument(
@@ -1204,19 +1207,19 @@ export class InventoryService {
           warehouseQty: actualQty - packedQty,
           committedQty: actualQty - availableQty,
           minimumQty,
-          minimumDisplay: this.formatStock(minimumQty, displayUnits),
+          minimumDisplay: formatStockQuantity(minimumQty, displayUnits),
           isLowStock: availableQty <= minimumQty,
-          actualDisplay: this.formatStock(actualQty, displayUnits),
-          warehouseDisplay: this.formatStock(
+          actualDisplay: formatStockQuantity(actualQty, displayUnits),
+          warehouseDisplay: formatStockQuantity(
             actualQty - packedQty,
             displayUnits,
           ),
-          packedDisplay: this.formatStock(packedQty, displayUnits),
-          availableDisplay: this.formatStock(
+          packedDisplay: formatStockQuantity(packedQty, displayUnits),
+          availableDisplay: formatStockQuantity(
             Math.max(availableQty, 0),
             displayUnits,
           ),
-          shortageDisplay: this.formatStock(
+          shortageDisplay: formatStockQuantity(
             Math.max(-availableQty, 0),
             displayUnits,
           ),

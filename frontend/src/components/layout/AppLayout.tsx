@@ -18,6 +18,7 @@ import {
   CircleDollarSign,
   Settings,
   FileClock,
+  Layers3,
   Menu,
   X,
 } from "lucide-react";
@@ -238,6 +239,13 @@ export default function AppLayout() {
               <Boxes className="w-5 h-5 mr-3 opacity-80" /> Inventory & Warehouse
             </div>}
 
+            {hasPermission(user, "FIFO_VIEW") && <div
+              onClick={() => navigate("/fifo")}
+              className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/fifo") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
+            >
+              <Layers3 className="w-5 h-5 mr-3 opacity-80" /> FIFO & Cost
+            </div>}
+
             {hasPermission(user, "FINANCIAL_VIEW") && <div className="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 hover:bg-slate-800 hover:text-white">
               <Wallet className="w-5 h-5 mr-3 opacity-80" /> Finance & Accounting
             </div>}
@@ -313,6 +321,8 @@ export default function AppLayout() {
                       ? "Sales & Customers"
                     : isActive("/inventory")
                       ? "Inventory & Warehouse"
+                    : isActive("/fifo")
+                      ? "FIFO & Cost"
                     : "Dashboard"
                     }
             </h1>

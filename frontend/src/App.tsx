@@ -1,29 +1,31 @@
-import { useEffect } from 'react';
-import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from "react";
+import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 
-import { hasPermission, useAuthStore } from '@/store/authStore';
-import type { AuthUser } from '@/store/authStore';
-import { apiClient } from '@/lib/axios';
+import { hasPermission, useAuthStore } from "@/store/authStore";
+import type { AuthUser } from "@/store/authStore";
+import { apiClient } from "@/lib/axios";
 
-import AppLayout from '@/components/layout/AppLayout';
+import AppLayout from "@/components/layout/AppLayout";
 
-import LoginPage from '@/features/auth/LoginPage';
-import UserManagementPage from '@/features/system/user/UserManagementPage';
-import RolePermissionPage from '@/features/system/role-permission/RolePermissionPage';
-import SystemConfigurationPage from '@/features/system/system-configuration/SystemConfigurationPage';
-import SystemLogsPage from '@/features/system/logs/SystemLogsPage';
-import CatalogModulePage from '@/features/master/CatalogModulePage';
-import PricingModulePage from '@/features/pricing/PricingModulePage'; // <--- Import PricingModulePage
+import LoginPage from "@/features/auth/LoginPage";
+import UserManagementPage from "@/features/system/user/UserManagementPage";
+import RolePermissionPage from "@/features/system/role-permission/RolePermissionPage";
+import SystemConfigurationPage from "@/features/system/system-configuration/SystemConfigurationPage";
+import SystemLogsPage from "@/features/system/logs/SystemLogsPage";
+import CatalogModulePage from "@/features/master/CatalogModulePage";
+import PricingModulePage from "@/features/pricing/PricingModulePage"; // <--- Import PricingModulePage
 
 // TAMBAHKAN IMPORT INI DI SINI
-import SalesModulePage from '@/features/sales/SalesModulePage';
-import PurchasingModulePage from '@/features/purchasing/PurchasingModulePage';
-import InventoryModulePage from '@/features/inventory/InventoryModulePage';
+import SalesModulePage from "@/features/sales/SalesModulePage";
+import PurchasingModulePage from "@/features/purchasing/PurchasingModulePage";
+import InventoryModulePage from "@/features/inventory/InventoryModulePage";
+
+const FifoModulePage = lazy(() => import("@/features/fifo/FifoModulePage"));
 
 // Guard Component: Melindungi halaman yang butuh login
 function ProtectedRoute() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
@@ -34,7 +36,7 @@ function ProtectedRoute() {
 // Guard Component: Mencegah user yang sudah login membuka halaman /login
 function PublicRoute() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  
+
   if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />;
   }
@@ -53,7 +55,7 @@ export default function App() {
     let active = true;
 
     apiClient
-      .get<unknown, { success: boolean; data: AuthUser }>('/auth/me')
+      .get<unknown, { success: boolean; data: AuthUser }>("/auth/me")
       .then((response) => {
         if (active) hydrate(response.data);
       })
@@ -69,29 +71,29 @@ export default function App() {
   useEffect(() => {
     const preventNumberWheel = (event: WheelEvent) => {
       const target = event.target as HTMLInputElement | null;
-      if (target?.type === 'number' && document.activeElement === target) {
+      if (target?.type === "number" && document.activeElement === target) {
         event.preventDefault();
         target.blur();
       }
     };
     const selectZero = (event: FocusEvent) => {
       const target = event.target as HTMLInputElement | null;
-      if (target?.type === 'number' && Number(target.value) === 0) {
+      if (target?.type === "number" && Number(target.value) === 0) {
         target.select();
       }
     };
-    document.addEventListener('wheel', preventNumberWheel, {
+    document.addEventListener("wheel", preventNumberWheel, {
       capture: true,
       passive: false,
     });
-    document.addEventListener('focusin', selectZero);
+    document.addEventListener("focusin", selectZero);
     return () => {
-      document.removeEventListener('wheel', preventNumberWheel, true);
-      document.removeEventListener('focusin', selectZero);
+      document.removeEventListener("wheel", preventNumberWheel, true);
+      document.removeEventListener("focusin", selectZero);
     };
   }, []);
 
-  if (authStatus === 'INITIALIZING') {
+  if (authStatus === "INITIALIZING") {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-slate-50 text-sm font-medium text-slate-600">
         Memverifikasi session...
@@ -113,39 +115,59 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route element={<PermissionRoute permission="DASHBOARD_VIEW" />}>
-          <Route path="/dashboard" element={
-            <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-100">
-              <h2 className="text-2xl font-bold text-slate-800 mb-2">Selamat Datang di Dashboard!</h2>
-              <p className="text-slate-500">Anda berhasil login ke sistem ERP Grosir Wijaya.</p>
-            </div>
-          } />
+            <Route
+              path="/dashboard"
+              element={
+                <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-100">
+                  <h2 className="text-2xl font-bold text-slate-800 mb-2">
+                    Selamat Datang di Dashboard!
+                  </h2>
+                  <p className="text-slate-500">
+                    Anda berhasil login ke sistem ERP Grosir Wijaya.
+                  </p>
+                </div>
+              }
+            />
           </Route>
 
-          <Route path="/access-denied" element={
-            <div className="m-8 rounded-xl border border-amber-200 bg-white p-8 shadow-sm">
-              <h2 className="text-xl font-bold text-slate-800">Akses tidak tersedia</h2>
-              <p className="mt-2 text-sm text-slate-600">Permission akun Anda belum mengizinkan akses ke halaman ini.</p>
-            </div>
-          } />
+          <Route
+            path="/access-denied"
+            element={
+              <div className="m-8 rounded-xl border border-amber-200 bg-white p-8 shadow-sm">
+                <h2 className="text-xl font-bold text-slate-800">
+                  Akses tidak tersedia
+                </h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  Permission akun Anda belum mengizinkan akses ke halaman ini.
+                </p>
+              </div>
+            }
+          />
 
           {/* FR-SYS-002: Hanya Role 1 (Super Owner) & 2 (Owner) yang boleh akses */}
-          <Route element={<RoleGuard allowedRoles={['1', '2']} />}>
+          <Route element={<RoleGuard allowedRoles={["1", "2"]} />}>
             <Route path="/system/users" element={<UserManagementPage />} />
           </Route>
 
           {/* Rute Role & Permission (Eksklusif Super Owner) */}
-          <Route element={<RoleGuard allowedRoles={['1']} />}>
-            <Route path="/system/role-permissions" element={<RolePermissionPage />} />
+          <Route element={<RoleGuard allowedRoles={["1"]} />}>
+            <Route
+              path="/system/role-permissions"
+              element={<RolePermissionPage />}
+            />
           </Route>
 
           {/* Log sistem bersifat read-only untuk Super Owner dan Owner */}
-          <Route element={<RoleGuard allowedRoles={['1', '2']} />}>
+          <Route element={<RoleGuard allowedRoles={["1", "2"]} />}>
             <Route path="/system/logs" element={<SystemLogsPage />} />
           </Route>
 
           {/* Rute System Configuration (Eksklusif Super Owner) */}
-          <Route element={<RoleGuard allowedRoles={['1']} />}>
-            <Route path="/system/configuration" element={<SystemConfigurationPage />} />
+          <Route element={<RoleGuard allowedRoles={["1"]} />}>
+            <Route
+              path="/system/configuration"
+              element={<SystemConfigurationPage />}
+            />
           </Route>
 
           {/* Rute Khusus Sales & Customer */}
@@ -161,6 +183,23 @@ export default function App() {
             <Route path="/inventory" element={<InventoryModulePage />} />
           </Route>
 
+          <Route element={<PermissionRoute permission="FIFO_VIEW" />}>
+            <Route
+              path="/fifo"
+              element={
+                <Suspense
+                  fallback={
+                    <div className="flex min-h-64 items-center justify-center text-sm text-slate-500">
+                      Memuat FIFO &amp; Cost...
+                    </div>
+                  }
+                >
+                  <FifoModulePage />
+                </Suspense>
+              }
+            />
+          </Route>
+
           <Route element={<PermissionRoute permission="MASTER_VIEW" />}>
             <Route path="/catalog" element={<CatalogModulePage />} />
           </Route>
@@ -169,17 +208,19 @@ export default function App() {
           <Route element={<PermissionRoute permission="PRICING_VIEW" />}>
             <Route path="/pricing" element={<PricingModulePage />} />
           </Route>
-
         </Route>
       </Route>
 
       {/* Rute 404 (Fallback untuk URL yang tidak terdaftar) */}
-      <Route path="*" element={
-        <div className="flex h-screen w-full items-center justify-center flex-col gap-2">
-          <h1 className="text-4xl font-bold text-slate-800">404</h1>
-          <p className="text-slate-500">Halaman tidak ditemukan.</p>
-        </div>
-      } />
+      <Route
+        path="*"
+        element={
+          <div className="flex h-screen w-full items-center justify-center flex-col gap-2">
+            <h1 className="text-4xl font-bold text-slate-800">404</h1>
+            <p className="text-slate-500">Halaman tidak ditemukan.</p>
+          </div>
+        }
+      />
     </Routes>
   );
 }

@@ -15,6 +15,10 @@ import {
 } from './fifo-ledger.utils.js';
 import { generateInventoryMovementNumber } from '../inventory/inventory-movement-number.utils.js';
 import {
+  INVENTORY_MOVEMENT_TYPES,
+  INVENTORY_ORIGIN_TYPES,
+} from '../../common/inventory/inventory-origin.js';
+import {
   ACTIVITY_TYPES,
   AUDIT_OPERATIONS,
   changedFields,
@@ -151,8 +155,8 @@ export class PurchaseReturnService {
 
       const layers = await tx.fifoLayer.findMany({
         where: {
-          originType: 'PURCHASE',
-          originId: invoiceDetail.purchaseInvoiceDetailId,
+          originType: 'PURCHASE_INVOICE',
+          purchaseInvoiceDetailId: invoiceDetail.purchaseInvoiceDetailId,
           productUnitId: parentUnit.productUnitId,
         },
       });
@@ -571,9 +575,9 @@ export class PurchaseReturnService {
           productUnitId: layer.productUnitId,
           direction: 'OUT',
           quantity: detail.baseQuantity,
-          movementType: 'PURCHASE_RETURN',
-          originType: 'PURCHASE_RETURN_DETAIL',
-          originId: detail.purchaseReturnDetailId,
+          movementType: INVENTORY_MOVEMENT_TYPES.PURCHASE_RETURN_OUT,
+          originType: INVENTORY_ORIGIN_TYPES.PURCHASE_RETURN,
+          originId: purchaseReturn.purchaseReturnId,
           originNumber: purchaseReturn.purchaseReturnNumber,
           movementDate: now,
           createdBy: userId,
@@ -750,9 +754,9 @@ export class PurchaseReturnService {
               productUnitId: detail.fifoLayer.productUnitId,
               direction: 'IN',
               quantity: detail.baseQuantity,
-              movementType: 'PURCHASE_RETURN_REPLACEMENT',
-              originType: 'PURCHASE_RETURN_DETAIL',
-              originId: detail.purchaseReturnDetailId,
+              movementType: INVENTORY_MOVEMENT_TYPES.PURCHASE_REPLACEMENT_IN,
+              originType: INVENTORY_ORIGIN_TYPES.PURCHASE_RETURN,
+              originId: purchaseReturn.purchaseReturnId,
               originNumber: purchaseReturn.purchaseReturnNumber,
               movementDate: now,
               createdBy: userId,
@@ -765,9 +769,9 @@ export class PurchaseReturnService {
             data: {
               fifoLayerNumber: await generateFifoLayerNumber(tx, now),
               productUnitId: detail.fifoLayer.productUnitId,
-              originType: 'PURCHASE_RETURN_REPLACEMENT',
+              originType: 'PURCHASE_RETURN',
               originInventoryMovementId: movement.inventoryMovementId,
-              originId: detail.purchaseReturnDetailId,
+              originId: purchaseReturn.purchaseReturnId,
               originalQty: detail.baseQuantity,
               remainingQty: detail.baseQuantity,
               unitCost: baseCost,
@@ -1162,9 +1166,9 @@ export class PurchaseReturnService {
               productUnitId: layer.productUnitId,
               direction: 'IN',
               quantity: detail.baseQuantity,
-              movementType: 'PURCHASE_RETURN_CANCEL',
-              originType: 'PURCHASE_RETURN_DETAIL',
-              originId: detail.purchaseReturnDetailId,
+              movementType: INVENTORY_MOVEMENT_TYPES.PURCHASE_RETURN_CANCEL_IN,
+              originType: INVENTORY_ORIGIN_TYPES.PURCHASE_RETURN,
+              originId: purchaseReturn.purchaseReturnId,
               originNumber: purchaseReturn.purchaseReturnNumber,
               movementDate: now,
               createdBy: userId,
@@ -1329,8 +1333,8 @@ export class PurchaseReturnService {
       if (!parent) continue;
       const layer = await this.prisma.fifoLayer.findFirst({
         where: {
-          originType: 'PURCHASE',
-          originId: detail.purchaseInvoiceDetailId,
+          originType: 'PURCHASE_INVOICE',
+          purchaseInvoiceDetailId: detail.purchaseInvoiceDetailId,
           productUnitId: parent.productUnitId,
         },
       });

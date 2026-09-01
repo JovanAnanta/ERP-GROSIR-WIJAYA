@@ -20,6 +20,10 @@ import {
 } from './fifo-ledger.utils.js';
 import { generateInventoryMovementNumber } from '../inventory/inventory-movement-number.utils.js';
 import {
+  INVENTORY_MOVEMENT_TYPES,
+  INVENTORY_ORIGIN_TYPES,
+} from '../../common/inventory/inventory-origin.js';
+import {
   ACTIVITY_TYPES,
   AUDIT_OPERATIONS,
   changedFields,
@@ -844,9 +848,9 @@ export class PurchaseInvoiceService {
           productUnitId: parentUnit.productUnitId,
           direction: 'IN',
           quantity: parentQty,
-          movementType: 'PURCHASE_INVOICE',
-          originType: 'PURCHASE_INVOICE_DETAIL',
-          originId: detail.purchaseInvoiceDetailId,
+          movementType: INVENTORY_MOVEMENT_TYPES.PURCHASE_RECEIPT,
+          originType: INVENTORY_ORIGIN_TYPES.PURCHASE_INVOICE,
+          originId: invoice.purchaseInvoiceId,
           originNumber: invoice.purchaseInvoiceNumber,
           movementDate: now,
           createdBy: userId,
@@ -857,9 +861,10 @@ export class PurchaseInvoiceService {
         data: {
           fifoLayerNumber: await generateFifoLayerNumber(tx, now),
           productUnitId: parentUnit.productUnitId,
-          originType: 'PURCHASE',
+          purchaseInvoiceDetailId: detail.purchaseInvoiceDetailId,
+          originType: 'PURCHASE_INVOICE',
           originInventoryMovementId: movement.inventoryMovementId,
-          originId: detail.purchaseInvoiceDetailId,
+          originId: invoice.purchaseInvoiceId,
           originalQty: parentQty,
           remainingQty: parentQty,
           // FIFO is stored in the parent/base unit, so its unit cost must use

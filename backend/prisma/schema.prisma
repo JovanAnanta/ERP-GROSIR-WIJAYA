@@ -542,6 +542,7 @@ model PurchaseInvoiceDetail {
   productUnit     ProductUnit     @relation(fields: [productUnitId], references: [productUnitId])
 
   purchaseReturnDetails PurchaseReturnDetail[]
+  fifoLayers            FifoLayer[]
 
   @@index([purchaseInvoiceId])
   @@index([productUnitId])
@@ -812,12 +813,18 @@ model FinancialAccountTransaction {
  */
 
 enum FifoLayerOriginType {
-  PURCHASE
-  PURCHASE_RETURN_REPLACEMENT
+  PURCHASE_INVOICE
+  PURCHASE_RETURN
+  SALES_RETURN
   OPENING_BALANCE
-  TRANSFORMATION
-  INVENTORY_FOUND
+  INVENTORY_TRANSFORMATION
   INVENTORY_ADJUSTMENT
+  INVENTORY_LOAN_RETURN
+}
+
+enum TransformationMovementRole {
+  SOURCE
+  RESULT
 }
 
 enum TransactionDirection {
@@ -829,6 +836,7 @@ model FifoLayer {
   fifoLayerId               BigInt              @id @default(autoincrement()) @map("fifo_layer_id")
   fifoLayerNumber           String              @unique @map("fifo_layer_number") @db.VarChar(30)
   productUnitId             BigInt              @map("product_unit_id")
+  purchaseInvoiceDetailId   BigInt?             @map("purchase_invoice_detail_id")
   originType                FifoLayerOriginType @map("origin_type")
   originInventoryMovementId BigInt              @map("origin_inventory_movement_id")
   originId                  BigInt              @map("origin_id")
@@ -841,13 +849,17 @@ model FifoLayer {
   createdBy                 BigInt              @map("created_by")
 
   productUnit             ProductUnit            @relation(fields: [productUnitId], references: [productUnitId])
+  purchaseInvoiceDetail   PurchaseInvoiceDetail? @relation(fields: [purchaseInvoiceDetailId], references: [purchaseInvoiceDetailId], onDelete: Restrict)
   originInventoryMovement InventoryMovement      @relation("MovementGeneratedLayers", fields: [originInventoryMovementId], references: [inventoryMovementId])
   createdByUser           User                   @relation("FifoLayerCreatedBy", fields: [createdBy], references: [userId])
   transactions            FifoLayerTransaction[]
   purchaseReturnDetails   PurchaseReturnDetail[]
 
   @@index([productUnitId])
+  @@index([purchaseInvoiceDetailId])
   @@index([originInventoryMovementId])
+  @@index([productUnitId, remainingQty, createdAt, fifoLayerId], map: "fifo_layer_product_remaining_created_idx")
+  @@index([originType, originId], map: "fifo_layer_origin_idx")
   @@index([createdBy])
   @@map("fifo_layer")
 }
@@ -871,6 +883,7 @@ model FifoLayerTransaction {
 
   @@index([fifoLayerId])
   @@index([inventoryMovementId])
+  @@index([fifoLayerId, createdAt, fifoLayerTransactionId], map: "fifo_layer_transaction_layer_created_idx")
   @@index([createdBy])
   @@map("fifo_layer_transaction")
 }
@@ -908,16 +921,35 @@ model InventoryTransformationDetail {
   createdAt              DateTime @default(now()) @map("created_at")
   createdBy              BigInt   @map("created_by")
 
-  transformation    InventoryTransformation @relation(fields: [transformationId], references: [transformationId], onDelete: Restrict)
-  sourceProductUnit ProductUnit             @relation("TransformationSourceUnit", fields: [sourceProductUnitId], references: [productUnitId])
-  resultProductUnit ProductUnit             @relation("TransformationResultUnit", fields: [resultProductUnitId], references: [productUnitId])
-  createdByUser     User                    @relation("InventoryTransformationDetailCreatedBy", fields: [createdBy], references: [userId])
+  transformation    InventoryTransformation                 @relation(fields: [transformationId], references: [transformationId], onDelete: Restrict)
+  sourceProductUnit ProductUnit                             @relation("TransformationSourceUnit", fields: [sourceProductUnitId], references: [productUnitId])
+  resultProductUnit ProductUnit                             @relation("TransformationResultUnit", fields: [resultProductUnitId], references: [productUnitId])
+  createdByUser     User                                    @relation("InventoryTransformationDetailCreatedBy", fields: [createdBy], references: [userId])
+  movementLinks     InventoryTransformationMovementDetail[]
 
   @@unique([transformationId, lineNumber])
   @@index([sourceProductUnitId])
   @@index([resultProductUnitId])
   @@index([createdBy])
   @@map("inventory_transformation_detail")
+}
+
+model InventoryTransformationMovementDetail {
+  transformationMovementDetailId BigInt                     @id @default(autoincrement()) @map("transformation_movement_detail_id")
+  transformationDetailId         BigInt                     @map("transformation_detail_id")
+  inventoryMovementId            BigInt                     @map("inventory_movement_id")
+  movementRole                   TransformationMovementRole @map("movement_role")
+  allocatedQuantity              Decimal                    @map("allocated_quantity") @db.Decimal(18, 3)
+  allocatedCost                  Decimal                    @map("allocated_cost") @db.Decimal(18, 2)
+  createdAt                      DateTime                   @default(now()) @map("created_at")
+
+  transformationDetail InventoryTransformationDetail @relation(fields: [transformationDetailId], references: [transformationDetailId], onDelete: Restrict)
+  inventoryMovement    InventoryMovement             @relation(fields: [inventoryMovementId], references: [inventoryMovementId], onDelete: Restrict)
+
+  @@unique([transformationDetailId, inventoryMovementId, movementRole], map: "inventory_transformation_movement_detail_unique")
+  @@index([inventoryMovementId, movementRole], map: "inventory_transformation_movement_detail_movement_role_idx")
+  @@index([transformationDetailId], map: "inventory_transformation_movement_detail_detail_idx")
+  @@map("inventory_transformation_movement_detail")
 }
 
 model InventoryMovement {
@@ -940,12 +972,14 @@ model InventoryMovement {
   transformation InventoryTransformation? @relation(fields: [transformationId], references: [transformationId])
   createdByUser  User                     @relation("InventoryMovementCreatedBy", fields: [createdBy], references: [userId])
 
-  generatedLayers FifoLayer[]            @relation("MovementGeneratedLayers")
-  consumedLayers  FifoLayerTransaction[] @relation("MovementConsumedLayers")
+  generatedLayers           FifoLayer[]                             @relation("MovementGeneratedLayers")
+  consumedLayers            FifoLayerTransaction[]                  @relation("MovementConsumedLayers")
+  transformationDetailLinks InventoryTransformationMovementDetail[]
 
   @@index([productUnitId])
   @@index([originType, originId])
   @@index([originType, originNumber])
+  @@index([movementDate, inventoryMovementId], map: "inventory_movement_date_id_idx")
   @@index([transformationId])
   @@index([createdBy])
   @@map("inventory_movement")

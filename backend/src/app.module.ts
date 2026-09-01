@@ -25,6 +25,7 @@ import { PricingModule } from './modules/pricing/pricing.module.js';
 import { PurchasingModule } from './modules/purchasing/purchasing.module.js';
 import { AuthorizationModule } from './common/authorization/authorization.module.js';
 import { InventoryModule } from './modules/inventory/inventory.module.js';
+import { FifoModule } from './modules/fifo/fifo.module.js';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { InventoryModule } from './modules/inventory/inventory.module.js';
     PricingModule,
     PurchasingModule,
     InventoryModule,
+    FifoModule,
   ],
   controllers: [AppController],
   providers: [
