@@ -6,6 +6,7 @@ import {
   Req,
   Res,
   Headers,
+  HttpCode,
   Ip,
   HttpStatus,
   UseGuards,
@@ -33,6 +34,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
+  @HttpCode(HttpStatus.OK)
   async login(
     @Body() dto: LoginDto,
     @Req() req: Request,
@@ -64,7 +66,7 @@ export class AuthController {
       maxAge: SESSION_ABSOLUTE_TTL_MS,
     });
 
-    return res.status(HttpStatus.OK).json({
+    return {
       success: true,
       message: 'Login berhasil',
       data: {
@@ -74,7 +76,7 @@ export class AuthController {
         roleId: result.user.roleId.toString(),
         permissions,
       },
-    });
+    };
   }
 
   @Get('me')

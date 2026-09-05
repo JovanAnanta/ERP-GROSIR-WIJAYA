@@ -5,6 +5,7 @@ import {
   Download,
   Plus,
   Save,
+  Scissors,
   Printer,
   ShoppingCart,
   Trash2,
@@ -34,6 +35,7 @@ import {
   editSalesLine,
   importValidationError,
   salesLinePayload,
+  splitSalesFormLine,
   type SalesFormLine,
 } from "./whatsapp-import.utils";
 import {
@@ -47,7 +49,10 @@ import {
   type SalesOrderPayload,
   type SalesProductOption,
 } from "./sales.api";
-import { printSalesReceipt } from "./sales-receipt";
+import {
+  printSalesReceipt,
+  type ReceiptPartCount,
+} from "./sales-receipt";
 
 type Kind = "SO" | "SI";
 type Line = SalesFormLine;
@@ -119,6 +124,12 @@ export default function SalesDocumentForm({
   const [error, setError] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historySelection, setHistorySelection] = useState<string[]>([]);
+  const [historyTarget, setHistoryTarget] = useState<"SI" | "SO">("SI");
+  const [splitMode, setSplitMode] = useState(false);
+  const [splitLineKey, setSplitLineKey] = useState<string | null>(null);
+  const [deferredQuantity, setDeferredQuantity] = useState(0);
+  const [deferredBonusQuantity, setDeferredBonusQuantity] = useState(0);
+  const [receiptParts, setReceiptParts] = useState<ReceiptPartCount>(1);
 
   const printCurrentInvoice = async () => {
     const currentLines = filled(invoiceLines);
@@ -140,7 +151,7 @@ export default function SalesDocumentForm({
         grandTotal: totals.invoice,
         note,
         preview: true,
-      });
+      }, receiptParts);
     } catch (caught) {
       setError(parseApiError(caught));
     }
@@ -252,7 +263,8 @@ export default function SalesDocumentForm({
   );
   const insertCustomerHistory = () => {
     const chosen = customerHistory.filter(({ unit }) => historySelection.includes(unit.productUnitId));
-    setInvoiceLines((current) => {
+    const setter = historyTarget === "SI" ? setInvoiceLines : setOrderLines;
+    setter((current) => {
       const next = [...current];
       for (const { product, unit } of chosen) {
         if (next.some((line) => line.productUnitId === unit.productUnitId)) continue;
@@ -265,6 +277,11 @@ export default function SalesDocumentForm({
     });
     setHistoryOpen(false);
     setHistorySelection([]);
+  };
+  const openCustomerHistory = (target: "SI" | "SO") => {
+    setHistoryTarget(target);
+    setHistorySelection([]);
+    setHistoryOpen(true);
   };
   const totalPaid = paidAmount + paymentAmount;
 
@@ -347,21 +364,41 @@ export default function SalesDocumentForm({
       { ...line, key: crypto.randomUUID() },
     ]);
   };
-  const splitShortage = (key: string) => {
+  const openSplitLine = (key: string) => {
     const line = invoiceLines.find((item) => item.key === key);
     const unit = line ? unitFor(line) : undefined;
-    if (!line || !unit || line.quantity <= unit.availableQty) return;
-    const shortage = line.quantity - unit.availableQty;
-    updateLine("SI", key, { quantity: unit.availableQty });
-    setOrderLines((current) => [
-      ...current,
-      {
-        ...line,
-        key: crypto.randomUUID(),
-        quantity: shortage,
-        discountAmount: 0,
-      },
-    ]);
+    if (!line || line.quantity <= 0) return;
+    setSplitLineKey(key);
+    setDeferredQuantity(
+      unit && line.quantity > unit.availableQty
+        ? line.quantity - unit.availableQty
+        : 0,
+    );
+    setDeferredBonusQuantity(0);
+  };
+  const applySplitLine = () => {
+    const line = invoiceLines.find((item) => item.key === splitLineKey);
+    if (!line) return;
+    try {
+      const split = splitSalesFormLine(
+        line,
+        deferredQuantity,
+        deferredBonusQuantity,
+      );
+      setInvoiceLines((current) =>
+        current.map((item) =>
+          item.key === line.key ? split.invoiceLine : item,
+        ),
+      );
+      // A referenced SO already retains every quantity not allocated to this SI.
+      // Only a direct SI needs a new deferred SO document.
+      if (!sourceOrderId)
+        setOrderLines((current) => [...current, split.orderLine]);
+      setSplitLineKey(null);
+      setError("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Pembagian qty tidak valid.");
+    }
   };
 
   const loadOrder = (id: string) => {
@@ -412,7 +449,7 @@ export default function SalesDocumentForm({
         !editingId &&
         line.quantity + line.bonusQuantity > (unitFor(line)?.availableQty ?? 0)
       )
-        return `Stok ${productFor(line)?.productName ?? "produk"} tidak cukup. Gunakan tombol Pisahkan kekurangan.`;
+        return `Stok ${productFor(line)?.productName ?? "produk"} tidak cukup. Kurangi qty SI atau gunakan Bagi SI & SO.`;
     }
     if (
       kind === "SI" &&
@@ -684,7 +721,12 @@ export default function SalesDocumentForm({
         />
       )}
       <div
-        className={"grid gap-4 " + (orderLines.length ? "xl:grid-cols-2" : "")}
+        className={
+          "grid gap-4 " +
+          (kind === "SI" && !sourceOrderId && (splitMode || orderLines.length)
+            ? "xl:grid-cols-2"
+            : "")
+        }
       >
         <LinePanel
           title={
@@ -703,14 +745,62 @@ export default function SalesDocumentForm({
           onUpdate={updateLine}
           onAdd={addLine}
           onRemove={removeLine}
-          onMove={kind === "SI" && !editingId ? moveToOrder : undefined}
-          onSplit={kind === "SI" && !editingId ? splitShortage : undefined}
-          historyAction={<Button type="button" variant="outline" size="sm" disabled={!customerId} title={!customerId?"Pilih customer terlebih dahulu untuk membuka histori harga jual.":"Tarik produk dan harga dari histori customer"} onClick={()=>setHistoryOpen(true)} className="h-7 text-[10px] font-bold text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"><Download className="mr-1 h-3.5 w-3.5"/>Tarik Histori Customer</Button>}
+          onMove={
+            kind === "SI" && !editingId && !sourceOrderId
+              ? moveToOrder
+              : undefined
+          }
+          onSplit={
+            kind === "SI" && !editingId && splitMode
+              ? openSplitLine
+              : undefined
+          }
+          historyAction={
+            <>
+              {kind === "SI" && !editingId && (
+                <Button
+                  type="button"
+                  variant={splitMode ? "default" : "outline"}
+                  size="sm"
+                  disabled={splitMode}
+                  onClick={() => setSplitMode(true)}
+                  className="h-7 text-[10px] font-bold"
+                >
+                  <Scissors className="mr-1 h-3.5 w-3.5" />
+                  {sourceOrderId ? "Bagi Pemenuhan SO" : "Bagi SI & SO"}
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!customerId || Boolean(sourceOrderId)}
+                title={
+                  sourceOrderId
+                    ? "Produk dan harga sudah berasal dari SO sumber."
+                    : "Tarik produk dan harga dari histori customer"
+                }
+                onClick={() => openCustomerHistory("SI")}
+                className="h-7 text-[10px] font-bold text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+              >
+                <Download className="mr-1 h-3.5 w-3.5" />
+                Tarik Histori Customer
+              </Button>
+            </>
+          }
         />
-        {kind === "SI" && orderLines.length > 0 && (
+        {kind === "SI" && sourceOrderId && splitMode && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
+            Qty yang tidak dimasukkan ke SI tetap tercatat sebagai sisa pada {sourceOrderNumber}.
+            Tidak dibuatkan SO baru.
+          </div>
+        )}
+        {kind === "SI" &&
+          !sourceOrderId &&
+          (splitMode || orderLines.length > 0) && (
           <LinePanel
             title="Dibuat sebagai Sales Order"
-            hint="Untuk pesanan berikutnya; tidak mereservasi stok"
+            hint="Bagian yang ditunda; belum mereservasi stok"
             lines={orderLines}
             products={products}
             side="SO"
@@ -723,11 +813,82 @@ export default function SalesDocumentForm({
             onAdd={addLine}
             onRemove={removeLine}
             onMove={moveToInvoice}
+            historyAction={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!customerId}
+                title="Tarik produk dan harga dari histori customer ke SO"
+                onClick={() => openCustomerHistory("SO")}
+                className="h-7 text-[10px] font-bold text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+              >
+                <Download className="mr-1 h-3.5 w-3.5" />
+                Tarik Histori Customer
+              </Button>
+            }
           />
         )}
       </div>
 
-      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}><DialogContent className="flex max-h-[80dvh] max-w-xl flex-col overflow-hidden bg-white"><DialogHeader><DialogTitle>Histori Harga Jual Customer</DialogTitle></DialogHeader><div className="min-h-0 flex-1 space-y-2 overflow-y-auto py-2">{customerHistory.map(({product,unit})=><label key={unit.productUnitId} className="flex cursor-pointer items-center justify-between rounded-lg border p-3 hover:border-blue-400"><span className="flex items-center gap-3"><input type="checkbox" checked={historySelection.includes(unit.productUnitId)} onChange={e=>setHistorySelection(old=>e.target.checked?[...old,unit.productUnitId]:old.filter(id=>id!==unit.productUnitId))}/><span><strong className="block text-xs">{product.productName}</strong><small className="text-slate-500">{unit.unitName}</small></span></span><strong className="text-xs text-blue-700">{rupiah(unit.suggestedPrice)}</strong></label>)}{!customerHistory.length&&<p className="py-10 text-center text-xs text-slate-500">Customer ini belum mempunyai histori harga jual.</p>}</div><DialogFooter><Button variant="outline" onClick={()=>setHistoryOpen(false)}>Batal</Button><Button disabled={!historySelection.length} onClick={insertCustomerHistory}>Masukkan Terpilih ({historySelection.length})</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}><DialogContent className="flex max-h-[80dvh] max-w-xl flex-col overflow-hidden bg-white"><DialogHeader><DialogTitle>Histori Harga Jual Customer · {historyTarget}</DialogTitle></DialogHeader><div className="min-h-0 flex-1 space-y-2 overflow-y-auto py-2">{customerHistory.map(({product,unit})=><label key={unit.productUnitId} className="flex cursor-pointer items-center justify-between rounded-lg border p-3 hover:border-blue-400"><span className="flex items-center gap-3"><input type="checkbox" checked={historySelection.includes(unit.productUnitId)} onChange={e=>setHistorySelection(old=>e.target.checked?[...old,unit.productUnitId]:old.filter(id=>id!==unit.productUnitId))}/><span><strong className="block text-xs">{product.productName}</strong><small className="text-slate-500">{unit.unitName}</small></span></span><strong className="text-xs text-blue-700">{rupiah(unit.suggestedPrice)}</strong></label>)}{!customerHistory.length&&<p className="py-10 text-center text-xs text-slate-500">Customer ini belum mempunyai histori harga jual.</p>}</div><DialogFooter><Button variant="outline" onClick={()=>setHistoryOpen(false)}>Batal</Button><Button disabled={!historySelection.length} onClick={insertCustomerHistory}>Masukkan ke {historyTarget} ({historySelection.length})</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={Boolean(splitLineKey)} onOpenChange={(open) => !open && setSplitLineKey(null)}>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-lg bg-white">
+          <DialogHeader>
+            <DialogTitle>Bagi Qty ke SI dan SO</DialogTitle>
+          </DialogHeader>
+          {(() => {
+            const line = invoiceLines.find((item) => item.key === splitLineKey);
+            const product = line ? productFor(line) : undefined;
+            const unit = line ? unitFor(line) : undefined;
+            if (!line) return null;
+            const remainingQty = Math.max(0, line.quantity - deferredQuantity);
+            const remainingBonus = Math.max(0, line.bonusQuantity - deferredBonusQuantity);
+            return (
+              <div className="space-y-4 py-2">
+                <div className="rounded-lg border bg-slate-50 p-3">
+                  <p className="text-sm font-black text-slate-900">{product?.productName ?? "Produk"}</p>
+                  <p className="text-xs text-slate-500">Total awal: {line.quantity.toLocaleString("id-ID")} {unit?.unitName ?? ""}</p>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label={sourceOrderId ? "Tetap sebagai sisa SO" : "Qty dibuat SO"}>
+                    <Input type="number" min="0" max={line.quantity} step="any" value={deferredQuantity || ""} placeholder="Isi qty yang ditunda" onChange={(event)=>setDeferredQuantity(Number(event.target.value))} />
+                  </Field>
+                  <Field label="Qty dibuat SI">
+                    <Input value={`${remainingQty.toLocaleString("id-ID")} ${unit?.unitName ?? ""}`} disabled className="bg-slate-100 font-bold" />
+                  </Field>
+                  {line.bonusQuantity > 0 && (
+                    <>
+                      <Field label={sourceOrderId ? "Bonus tersisa di SO" : "Bonus dibuat SO"}>
+                        <Input type="number" min="0" max={line.bonusQuantity} step="any" value={deferredBonusQuantity || ""} placeholder="0" onChange={(event)=>setDeferredBonusQuantity(Number(event.target.value))} />
+                      </Field>
+                      <Field label="Bonus dibuat SI">
+                        <Input value={remainingBonus.toLocaleString("id-ID")} disabled className="bg-slate-100 font-bold" />
+                      </Field>
+                    </>
+                  )}
+                </div>
+                <p className="rounded-lg bg-blue-50 p-3 text-xs text-blue-700">
+                  Harga satuan tetap sama. Diskon baris dibagi proporsional sesuai qty agar total tidak berubah.
+                </p>
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSplitLineKey(null)}>Batal</Button>
+            <Button
+              disabled={
+                !splitLineKey ||
+                deferredQuantity <= 0 ||
+                deferredQuantity >= (invoiceLines.find((item) => item.key === splitLineKey)?.quantity ?? 0)
+              }
+              onClick={applySplitLine}
+            >
+              Terapkan Pembagian
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="mt-auto pt-3 bg-slate-100/50 p-3 rounded-lg border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 shrink-0">
         <div className="flex flex-col gap-3 w-full md:max-w-[480px]">
           {kind === "SO" ? (
@@ -1000,9 +1161,23 @@ export default function SalesDocumentForm({
           )}
           <div className="flex flex-wrap justify-end gap-2 pt-3">
             {kind === "SI" && (
-              <Button variant="outline" disabled={saving} onClick={() => void printCurrentInvoice()} className="h-9 text-xs font-bold px-4">
-                <Printer className="mr-1 h-3.5 w-3.5" /> Cetak Bon
-              </Button>
+              <div className="flex min-w-0 items-center gap-2">
+                <select
+                  aria-label="Pembagian struk"
+                  value={receiptParts}
+                  onChange={(event) =>
+                    setReceiptParts(Number(event.target.value) as ReceiptPartCount)
+                  }
+                  className="h-9 rounded-md border border-slate-300 bg-white px-2 text-xs font-bold text-slate-700"
+                >
+                  <option value={1}>1 struk</option>
+                  <option value={2}>Bagi 2</option>
+                  <option value={3}>Bagi 3</option>
+                </select>
+                <Button variant="outline" disabled={saving} onClick={() => void printCurrentInvoice()} className="h-9 text-xs font-bold px-4">
+                  <Printer className="mr-1 h-3.5 w-3.5" /> Cetak Bon
+                </Button>
+              </div>
             )}
             <Button
               variant="outline"
@@ -1321,17 +1496,11 @@ function LinePanel(props: LinePanelProps) {
                           width
                         }
                       />
-                      {field === "quantity" &&
-                        insufficient &&
-                        props.onSplit && (
-                          <button
-                            type="button"
-                            onClick={() => props.onSplit?.(line.key)}
-                            className="text-[9px] font-bold text-rose-600 underline p-1"
-                          >
-                            Pisahkan kekurangan
-                          </button>
-                        )}
+                      {field === "quantity" && insufficient && (
+                        <p className="p-1 text-[9px] font-bold text-rose-600">
+                          Melebihi stok tersedia
+                        </p>
+                      )}
                       {field === "unitPrice" && unit && (
                         <p className="text-[9px] text-blue-600 px-1">
                           Saran{" "}
@@ -1366,6 +1535,18 @@ function LinePanel(props: LinePanelProps) {
                   </td>
                   <td className="p-1">
                     <div className="flex gap-1">
+                      {props.onSplit && line.productUnitId && line.quantity > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => props.onSplit?.(line.key)}
+                          title="Bagi kuantitas ke SI dan SO"
+                          aria-label={"Bagi kuantitas baris " + (index + 1)}
+                          className="h-7 w-7 p-0 text-violet-600 hover:bg-violet-50"
+                        >
+                          <Scissors className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       {props.onMove && (
                         <Button
                           variant="ghost"

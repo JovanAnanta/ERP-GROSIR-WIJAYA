@@ -75,6 +75,8 @@ export interface SalesDetailLine {
     salesInvoiceId: string;
     salesInvoiceNumber: string;
     status: SalesStatus;
+    quantity: number;
+    bonusQuantity: number;
   }>;
 }
 
@@ -92,6 +94,7 @@ export interface SalesOrderDocument {
   note?: string | null;
   createdAt: string;
   createdByName?: string;
+  hasInvoiceReference?: boolean;
   details: SalesDetailLine[];
 }
 
@@ -114,6 +117,15 @@ export interface SalesInvoiceDocument {
   salesInvoiceNumber: string;
   salesOrderId?: string | null;
   salesOrderNumber?: string | null;
+  sourceOrderProgress?: {
+    status: SalesStatus;
+    remainingItems: Array<{
+      productName: string;
+      unitName: string;
+      remainingQuantity: number;
+      remainingBonusQuantity: number;
+    }>;
+  };
   customerId?: string | null;
   customerName: string;
   partyType: "CUSTOMER" | "GUEST";

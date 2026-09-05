@@ -4,6 +4,8 @@ import {
   SalesPaymentStatus,
 } from '../../../generated/prisma/client.js';
 
+const ZERO = new Prisma.Decimal(0);
+
 // Customer selection, not a client-supplied party label, determines credit eligibility.
 export function resolveSalesInvoiceTerms(input: {
   customerId?: string;
@@ -29,6 +31,26 @@ export function calculateSalesLineSubtotal(
   discountAmount: Prisma.Decimal,
 ) {
   return quantity.mul(unitPrice).sub(discountAmount).toDecimalPlaces(2);
+}
+
+export function toSalesParentQuantity(input: {
+  quantity: Prisma.Decimal;
+  selectedConversionFactor: Prisma.Decimal;
+  parentConversionFactor: Prisma.Decimal;
+}) {
+  if (
+    input.quantity.lessThan(ZERO) ||
+    input.selectedConversionFactor.lessThanOrEqualTo(ZERO) ||
+    input.parentConversionFactor.lessThanOrEqualTo(ZERO)
+  ) {
+    throw new HttpException(
+      'Konversi satuan Sales tidak valid.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    );
+  }
+  return input.quantity
+    .mul(input.selectedConversionFactor)
+    .div(input.parentConversionFactor);
 }
 
 export function resolveSalesPaymentStatus(

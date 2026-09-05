@@ -26,7 +26,10 @@ import {
 } from "@/components/ui/dialog";
 import { parseApiError } from "@/utils/error";
 import { defaultSalesAccount } from "./sales-form.utils";
-import { printSalesReceipt } from "./sales-receipt";
+import {
+  printSalesReceipt,
+  type ReceiptPartCount,
+} from "./sales-receipt";
 import {
   salesApi,
   type PaginationMeta,
@@ -365,7 +368,14 @@ function OrderCard({
             Customer: {order.customerName}
           </p>
         </div>
-        <Status value={order.status} />
+        <div className="flex flex-col items-end gap-1">
+          <Status value={order.status} />
+          {order.hasInvoiceReference && order.status !== "COMPLETED" && (
+            <span className="rounded-full bg-slate-800 px-2 py-1 text-[9px] font-black text-white">
+              TERKONVERSI SEBAGIAN · READ ONLY
+            </span>
+          )}
+        </div>
       </div>
       <div className="grid grid-cols-3 gap-2 rounded-lg border border-white bg-white/70 p-2 text-[10px]">
         <Mini label="TANGGAL" value={dateLabel(order.orderDate)} />
@@ -380,7 +390,9 @@ function OrderCard({
           <Eye className="h-3.5 w-3.5" />
           Detail
         </button>
-        {canUpdate && ["DRAFT", "READY"].includes(order.status) && (
+        {canUpdate &&
+          !order.hasInvoiceReference &&
+          ["DRAFT", "READY"].includes(order.status) && (
           <button
             onClick={onEdit}
             className="flex h-7 items-center justify-center gap-1 rounded-lg bg-[#326dc8] px-3 text-[11px] font-bold text-white hover:bg-blue-700"
@@ -908,6 +920,7 @@ export function SalesDetailDialog({
   const [reference, setReference] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [receiptParts, setReceiptParts] = useState<ReceiptPartCount>(1);
   useEffect(() => {
     if (invoice && accountsPermission)
       void salesApi
@@ -964,7 +977,7 @@ export function SalesDetailDialog({
         paidAmount: kind === "SI" ? invoice!.paidAmount : undefined,
         outstandingAmount: kind === "SI" ? invoice!.outstandingAmount : undefined,
         note: data.note,
-      });
+      }, receiptParts);
     } catch (caught) {
       setError(parseApiError(caught));
     }
@@ -1023,12 +1036,58 @@ export function SalesDetailDialog({
               </>
             )}
           </div>
+          {invoice?.salesOrderNumber && (
+            <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-black uppercase text-blue-600">
+                    Referensi Sales Order
+                  </p>
+                  <p className="text-sm font-black text-slate-900">
+                    {invoice.salesOrderNumber}
+                  </p>
+                </div>
+                {invoice.sourceOrderProgress && (
+                  <Status value={invoice.sourceOrderProgress.status} />
+                )}
+              </div>
+              {invoice.sourceOrderProgress?.remainingItems.length ? (
+                <div className="mt-3">
+                  <p className="mb-2 text-[10px] font-bold text-slate-600">
+                    Barang yang masih belum dibuat SI:
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {invoice.sourceOrderProgress.remainingItems.map((item) => (
+                      <div
+                        key={`${item.productName}-${item.unitName}`}
+                        className="rounded-lg border border-blue-100 bg-white p-2 text-[10px]"
+                      >
+                        <b className="block text-slate-800">{item.productName}</b>
+                        <span className="text-blue-700">
+                          Sisa {item.remainingQuantity.toLocaleString("id-ID")} {item.unitName}
+                          {item.remainingBonusQuantity > 0
+                            ? ` · Bonus ${item.remainingBonusQuantity.toLocaleString("id-ID")}`
+                            : ""}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : invoice.sourceOrderProgress ? (
+                <p className="mt-3 text-xs font-bold text-emerald-700">
+                  Seluruh barang pada SO sudah dibuat menjadi SI.
+                </p>
+              ) : null}
+            </div>
+          )}
           <div className="mt-5 overflow-x-auto rounded-xl border">
             <table className="min-w-[720px] w-full text-xs">
               <thead className="bg-slate-100 text-[9px] font-black text-slate-500">
                 <tr>
                   <th className="p-3 text-left">PRODUK</th>
-                  <th className="p-3">QTY</th>
+                  <th className="p-3">{order ? "QTY PESANAN" : "QTY"}</th>
+                  {order && <th className="p-3">SUDAH DIBUAT SI</th>}
+                  {order && <th className="p-3">SISA</th>}
                   <th className="p-3">HARGA</th>
                   <th className="p-3">DISKON</th>
                   <th className="p-3">BONUS</th>
@@ -1046,8 +1105,43 @@ export function SalesDetailDialog({
                       <p className="text-[10px] font-normal text-slate-500">
                         {line.unitName}
                       </p>
+                      {order && line.invoices?.length ? (
+                        <div className="mt-2 space-y-1">
+                          {line.invoices.map((linkedInvoice) => (
+                            <div
+                              key={linkedInvoice.salesInvoiceId}
+                              className="w-fit rounded bg-blue-50 px-2 py-1 text-[9px] font-bold text-blue-700"
+                            >
+                              {linkedInvoice.salesInvoiceNumber}: {linkedInvoice.quantity.toLocaleString("id-ID")} {line.unitName}
+                              {linkedInvoice.bonusQuantity > 0
+                                ? ` + bonus ${linkedInvoice.bonusQuantity.toLocaleString("id-ID")}`
+                                : ""}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </td>
                     <td className="p-3 text-center">{line.quantity}</td>
+                    {order && (
+                      <td className="p-3 text-center font-bold text-blue-700">
+                        {(line.fulfilledQuantity ?? 0).toLocaleString("id-ID")}
+                        {(line.fulfilledBonusQuantity ?? 0) > 0 && (
+                          <p className="text-[9px] font-normal">
+                            Bonus {line.fulfilledBonusQuantity?.toLocaleString("id-ID")}
+                          </p>
+                        )}
+                      </td>
+                    )}
+                    {order && (
+                      <td className="p-3 text-center font-black text-amber-700">
+                        {(line.remainingQuantity ?? line.quantity).toLocaleString("id-ID")}
+                        {(line.remainingBonusQuantity ?? line.bonusQuantity) > 0 && (
+                          <p className="text-[9px] font-normal">
+                            Bonus {(line.remainingBonusQuantity ?? line.bonusQuantity).toLocaleString("id-ID")}
+                          </p>
+                        )}
+                      </td>
+                    )}
                     <td className="p-3 text-right">{rupiah(line.unitPrice)}</td>
                     <td className="p-3 text-right">
                       {rupiah(line.discountAmount)}
@@ -1199,13 +1293,27 @@ export function SalesDetailDialog({
           )}
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-white pt-3">
-          <button
-            onClick={() => void print()}
-            className="flex items-center gap-2 rounded-lg border px-4 py-2 text-xs font-bold"
-          >
-            <Printer className="h-4 w-4" />
-            Cetak
-          </button>
+          <div className="flex min-w-0 items-center gap-2">
+            <select
+              aria-label="Pembagian struk"
+              value={receiptParts}
+              onChange={(event) =>
+                setReceiptParts(Number(event.target.value) as ReceiptPartCount)
+              }
+              className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-xs font-bold text-slate-700"
+            >
+              <option value={1}>1 struk</option>
+              <option value={2}>Bagi 2</option>
+              <option value={3}>Bagi 3</option>
+            </select>
+            <button
+              onClick={() => void print()}
+              className="flex h-9 items-center gap-2 rounded-lg border px-4 text-xs font-bold"
+            >
+              <Printer className="h-4 w-4" />
+              Cetak
+            </button>
+          </div>
           <div className="flex flex-wrap gap-2">
             {invoice &&
               accountsPermission &&

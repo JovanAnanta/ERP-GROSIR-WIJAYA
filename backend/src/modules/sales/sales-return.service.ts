@@ -6,6 +6,7 @@ import { generateInventoryMovementNumber } from '../inventory/inventory-movement
 import { INVENTORY_MOVEMENT_TYPES, INVENTORY_ORIGIN_TYPES } from '../../common/inventory/inventory-origin.js';
 import type { SaveSalesReturnDto } from './dto/sales.dto.js';
 import { assertReturnQuantity, resolveReturnSettlement } from './sales-return.rules.js';
+import { toSalesParentQuantity } from './sales-rules.utils.js';
 import { ACTIVITY_TYPES, AUDIT_OPERATIONS, changedFields, createAuditTransactionId, writeActivityLog, writeAuditLog } from '../../common/logging/business-logger.js';
 import { SalesService } from './sales.service.js';
 
@@ -129,7 +130,11 @@ export class SalesReturnService {
       await tx.$queryRaw`SELECT sales_invoice_id FROM sales_invoice WHERE sales_invoice_id = ${invoiceId} FOR UPDATE`;
       const invoice = await tx.salesInvoice.findUnique({
         where: { salesInvoiceId: invoiceId },
-        include: { details: { include: { productUnit: true } } },
+        include: {
+          details: {
+            include: { productUnit: { include: { parentUnit: true } } },
+          },
+        },
       });
       if (!invoice || invoice.status !== 'COMPLETED') throw new HttpException('Hanya Sales Invoice COMPLETED yang dapat diretur.', HttpStatus.CONFLICT);
       const requested = new Map(dto.items.map((item) => [item.salesInvoiceDetailId, item]));
@@ -190,7 +195,12 @@ export class SalesReturnService {
     await tx.$queryRaw`SELECT sales_return_id FROM sales_return WHERE sales_return_id = ${id} FOR UPDATE`;
     const row = await tx.salesReturn.findUnique({
       where: { salesReturnId: id },
-      include: { salesInvoice: true, details: { include: { productUnit: true } } },
+      include: {
+        salesInvoice: true,
+        details: {
+          include: { productUnit: { include: { parentUnit: true } } },
+        },
+      },
     });
     if (!row) throw new HttpException('Sales Return tidak ditemukan.', HttpStatus.NOT_FOUND);
     if (row.status === 'COMPLETED') return;
@@ -199,7 +209,19 @@ export class SalesReturnService {
     for (const detail of row.details) {
       const sourceMovement = await tx.inventoryMovement.findUnique({ where: { salesInvoiceDetailId: detail.salesInvoiceDetailId } });
       if (!sourceMovement) throw new HttpException('Jejak FIFO Sales Invoice tidak ditemukan.', HttpStatus.CONFLICT);
-      const restoreQty = detail.quantity.add(detail.bonusQuantity).mul(detail.productUnit.conversionFactor);
+      const parentUnit = detail.productUnit.isParent
+        ? detail.productUnit
+        : detail.productUnit.parentUnit;
+      if (!parentUnit || parentUnit.productUnitId !== sourceMovement.productUnitId)
+        throw new HttpException(
+          'Konfigurasi unit parent retur tidak sesuai dengan jejak FIFO Sales Invoice.',
+          HttpStatus.CONFLICT,
+        );
+      const restoreQty = toSalesParentQuantity({
+        quantity: detail.quantity.add(detail.bonusQuantity),
+        selectedConversionFactor: detail.productUnit.conversionFactor,
+        parentConversionFactor: parentUnit.conversionFactor,
+      });
       const movement = await tx.inventoryMovement.create({ data: {
         movementNumber: await generateInventoryMovementNumber(tx, 'IN', row.returnDate),
         productUnitId: sourceMovement.productUnitId, direction: 'IN', quantity: restoreQty,

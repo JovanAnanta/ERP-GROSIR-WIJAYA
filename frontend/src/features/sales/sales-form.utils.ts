@@ -8,15 +8,25 @@ import type {
 export function salesOrderReference(order: SalesOrderDocument) {
   const items: SalesItemPayload[] = order.details
     .filter((line) => (line.remainingQuantity ?? line.quantity) > 0)
-    .map((line) => ({
-      productUnitId: line.productUnitId,
-      salesOrderDetailId: line.salesOrderDetailId ?? undefined,
-      quantity: line.remainingQuantity ?? line.quantity,
-      bonusQuantity: line.remainingBonusQuantity ?? line.bonusQuantity,
-      unitPrice: line.unitPrice,
-      discountAmount: line.discountAmount,
-      note: line.note ?? "",
-    }));
+    .map((line) => {
+      const remainingQuantity = line.remainingQuantity ?? line.quantity;
+      return {
+        productUnitId: line.productUnitId,
+        salesOrderDetailId: line.salesOrderDetailId ?? undefined,
+        quantity: remainingQuantity,
+        bonusQuantity: line.remainingBonusQuantity ?? line.bonusQuantity,
+        unitPrice: line.unitPrice,
+        discountAmount:
+          line.quantity > 0
+            ? Math.round(
+                line.discountAmount *
+                  (remainingQuantity / line.quantity) *
+                  100,
+              ) / 100
+            : 0,
+        note: line.note ?? "",
+      };
+    });
   return {
     customerId: order.customerId ?? "",
     customerName: order.customerName,

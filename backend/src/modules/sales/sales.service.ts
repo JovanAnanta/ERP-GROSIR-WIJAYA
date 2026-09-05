@@ -107,7 +107,22 @@ type InvoiceMapInput = {
   salesInvoiceId: bigint;
   salesInvoiceNumber: string;
   salesOrderId: bigint | null;
-  salesOrder?: { salesOrderNumber: string } | null;
+  salesOrder?: {
+    salesOrderNumber: string;
+    status?: SalesOrderStatus;
+    details?: Array<{
+      productUnit: {
+        product: { productName: string };
+        unit: { unitName: string };
+      };
+      quantity: Prisma.Decimal;
+      bonusQuantity: Prisma.Decimal;
+      salesInvoiceDetails: Array<{
+        quantity: Prisma.Decimal;
+        bonusQuantity: Prisma.Decimal;
+      }>;
+    }>;
+  } | null;
   customerId: bigint | null;
   customer?: { customerName: string } | null;
   customerName: string | null;
@@ -190,7 +205,7 @@ export class SalesService {
       where: {
         productUnitId: { in: ids },
         isActive: true,
-        product: { isActive: true },
+        product: { isActive: true, category: { isActive: true } },
       },
       include: { unit: true, product: true, parentUnit: true },
     });
@@ -515,8 +530,6 @@ export class SalesService {
         orderDate: now,
         status: dto.status,
         salesChannel: dto.salesChannel,
-        sourceType: 'MANUAL',
-        paymentStatus: 'UNPAID',
         itemDiscountTotal: totals.itemDiscountTotal,
         discountAmount: totals.discountAmount,
         orderTotal: totals.grandTotal,
@@ -639,6 +652,14 @@ export class SalesService {
       if (order.status === 'COMPLETED')
         throw new HttpException(
           'Sales Order yang sudah terpenuhi tidak dapat dibatalkan.',
+          HttpStatus.CONFLICT,
+        );
+      const activeInvoiceCount = await tx.salesInvoice.count({
+        where: { salesOrderId: id, status: { not: 'CANCELLED' } },
+      });
+      if (activeInvoiceCount > 0)
+        throw new HttpException(
+          'Sales Order yang sudah direferensikan Sales Invoice aktif tidak dapat dibatalkan.',
           HttpStatus.CONFLICT,
         );
       const updated = await tx.salesOrder.update({
@@ -1784,6 +1805,11 @@ export class SalesService {
                 },
               },
               { customerName: { contains: query.search, mode: 'insensitive' } },
+              {
+                customer: {
+                  phone: { contains: query.search, mode: 'insensitive' },
+                },
+              },
             ],
           }
         : {}),
@@ -1959,7 +1985,28 @@ export class SalesService {
       where: { salesInvoiceId: id },
       include: {
         customer: true,
-        salesOrder: { select: { salesOrderNumber: true } },
+        salesOrder: {
+          select: {
+            salesOrderNumber: true,
+            status: true,
+            details: {
+              select: {
+                quantity: true,
+                bonusQuantity: true,
+                productUnit: {
+                  select: {
+                    product: { select: { productName: true } },
+                    unit: { select: { unitName: true } },
+                  },
+                },
+                salesInvoiceDetails: {
+                  where: { salesInvoice: { status: { not: 'CANCELLED' } } },
+                  select: { quantity: true, bonusQuantity: true },
+                },
+              },
+            },
+          },
+        },
         createdByUser: true,
         details: {
           include: {
@@ -1986,6 +2033,9 @@ export class SalesService {
   }
 
   private mapOrder(order: OrderMapInput) {
+    const hasInvoiceReference = Boolean(
+      order.details?.some((detail) => detail.salesInvoiceDetails?.length),
+    );
     return {
       salesOrderId: order.salesOrderId.toString(),
       salesOrderNumber: order.salesOrderNumber,
@@ -2001,6 +2051,7 @@ export class SalesService {
       note: order.note,
       createdAt: order.createdAt,
       createdByName: order.createdByUser?.fullName,
+      hasInvoiceReference,
       details:
         order.details?.map((detail) => {
           const fulfilled =
@@ -2039,6 +2090,8 @@ export class SalesService {
                           row.salesInvoice.salesInvoiceId.toString(),
                         salesInvoiceNumber: row.salesInvoice.salesInvoiceNumber,
                         status: row.salesInvoice.status,
+                        quantity: Number(row.quantity),
+                        bonusQuantity: Number(row.bonusQuantity),
                       },
                     ]
                   : [],
@@ -2054,6 +2107,38 @@ export class SalesService {
       salesInvoiceNumber: invoice.salesInvoiceNumber,
       salesOrderId: invoice.salesOrderId?.toString() ?? null,
       salesOrderNumber: invoice.salesOrder?.salesOrderNumber ?? null,
+      sourceOrderProgress:
+        invoice.salesOrder?.status && invoice.salesOrder.details
+          ? {
+              status: invoice.salesOrder.status,
+              remainingItems: invoice.salesOrder.details.flatMap((detail) => {
+                const fulfilled = detail.salesInvoiceDetails.reduce(
+                  (sum, row) => sum.add(row.quantity),
+                  ZERO,
+                );
+                const fulfilledBonus = detail.salesInvoiceDetails.reduce(
+                  (sum, row) => sum.add(row.bonusQuantity),
+                  ZERO,
+                );
+                const remainingQuantity = detail.quantity.sub(fulfilled);
+                const remainingBonusQuantity =
+                  detail.bonusQuantity.sub(fulfilledBonus);
+                return remainingQuantity.greaterThan(0) ||
+                  remainingBonusQuantity.greaterThan(0)
+                  ? [
+                      {
+                        productName: detail.productUnit.product.productName,
+                        unitName: detail.productUnit.unit.unitName,
+                        remainingQuantity: Number(remainingQuantity),
+                        remainingBonusQuantity: Number(
+                          remainingBonusQuantity,
+                        ),
+                      },
+                    ]
+                  : [];
+              }),
+            }
+          : undefined,
       customerId: invoice.customerId?.toString() ?? null,
       customerName:
         invoice.customerName ?? invoice.customer?.customerName ?? 'Guest',

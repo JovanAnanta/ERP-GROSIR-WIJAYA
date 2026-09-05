@@ -103,3 +103,40 @@ export function salesLinePayload(line: SalesFormLine): SalesItemPayload {
     note: line.note,
   };
 }
+
+export function splitSalesFormLine(
+  line: SalesFormLine,
+  deferredQuantity: number,
+  deferredBonusQuantity = 0,
+) {
+  if (
+    !Number.isFinite(deferredQuantity) ||
+    deferredQuantity <= 0 ||
+    deferredQuantity >= line.quantity ||
+    !Number.isFinite(deferredBonusQuantity) ||
+    deferredBonusQuantity < 0 ||
+    deferredBonusQuantity > line.bonusQuantity
+  ) {
+    throw new Error("Pembagian qty SI dan SO tidak valid.");
+  }
+
+  const deferredRatio = deferredQuantity / line.quantity;
+  const deferredDiscount =
+    Math.round(line.discountAmount * deferredRatio * 100) / 100;
+  return {
+    invoiceLine: editSalesLine(line, {
+      quantity: line.quantity - deferredQuantity,
+      bonusQuantity: line.bonusQuantity - deferredBonusQuantity,
+      discountAmount:
+        Math.round((line.discountAmount - deferredDiscount) * 100) / 100,
+    }),
+    orderLine: {
+      ...line,
+      key: crypto.randomUUID(),
+      salesOrderDetailId: undefined,
+      quantity: deferredQuantity,
+      bonusQuantity: deferredBonusQuantity,
+      discountAmount: deferredDiscount,
+    },
+  };
+}
