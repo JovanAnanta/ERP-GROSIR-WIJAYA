@@ -13,10 +13,18 @@ export const PERMISSIONS = {
   PURCHASE_EXPORT: 'PURCHASE_EXPORT',
 
   SALES_VIEW: 'SALES_VIEW',
+  SALES_IMPORT: 'SALES_IMPORT',
+  ALIAS_VIEW: 'ALIAS_VIEW',
+  ALIAS_MANAGE: 'ALIAS_MANAGE',
   SALES_CREATE: 'SALES_CREATE',
   SALES_UPDATE: 'SALES_UPDATE',
   SALES_APPROVE: 'SALES_APPROVE',
+  SALES_RECEIVE_PAYMENT: 'SALES_RECEIVE_PAYMENT',
   SALES_EXPORT: 'SALES_EXPORT',
+  CUSTOMER_FINANCIAL_VIEW: 'CUSTOMER_FINANCIAL_VIEW',
+  SALES_RETURN_VIEW: 'SALES_RETURN_VIEW',
+  SALES_RETURN_CREATE: 'SALES_RETURN_CREATE',
+  SALES_RETURN_COMPLETE: 'SALES_RETURN_COMPLETE',
 
   PRICING_VIEW: 'PRICING_VIEW',
   PRICING_UPDATE: 'PRICING_UPDATE',
@@ -39,10 +47,35 @@ export interface PermissionDefinition {
   code: PermissionCode;
   name: string;
   module: string;
-  action: 'VIEW' | 'CREATE' | 'UPDATE' | 'APPROVE' | 'EXPORT';
+  action:
+    | 'VIEW'
+    | 'CREATE'
+    | 'UPDATE'
+    | 'APPROVE'
+    | 'RECEIVE_PAYMENT'
+    | 'EXPORT'
+    | 'IMPORT';
 }
 
 export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
+  {
+    code: PERMISSIONS.SALES_IMPORT,
+    name: 'Import Pesanan WhatsApp',
+    module: 'SALES',
+    action: 'IMPORT',
+  },
+  {
+    code: PERMISSIONS.ALIAS_VIEW,
+    name: 'Lihat Daftar Alias',
+    module: 'PRICING',
+    action: 'VIEW',
+  },
+  {
+    code: PERMISSIONS.ALIAS_MANAGE,
+    name: 'Tambah, Ubah dan Hapus Alias',
+    module: 'PRICING',
+    action: 'UPDATE',
+  },
   {
     code: PERMISSIONS.DASHBOARD_VIEW,
     name: 'Lihat Dashboard',
@@ -128,10 +161,40 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
     action: 'APPROVE',
   },
   {
+    code: PERMISSIONS.SALES_RECEIVE_PAYMENT,
+    name: 'Terima Pembayaran Sales',
+    module: 'SALES',
+    action: 'RECEIVE_PAYMENT',
+  },
+  {
     code: PERMISSIONS.SALES_EXPORT,
     name: 'Export Sales',
     module: 'SALES',
     action: 'EXPORT',
+  },
+  {
+    code: PERMISSIONS.CUSTOMER_FINANCIAL_VIEW,
+    name: 'Lihat Piutang Customer',
+    module: 'SALES',
+    action: 'VIEW',
+  },
+  {
+    code: PERMISSIONS.SALES_RETURN_VIEW,
+    name: 'Lihat Sales Return',
+    module: 'SALES',
+    action: 'VIEW',
+  },
+  {
+    code: PERMISSIONS.SALES_RETURN_CREATE,
+    name: 'Buat Sales Return',
+    module: 'SALES',
+    action: 'CREATE',
+  },
+  {
+    code: PERMISSIONS.SALES_RETURN_COMPLETE,
+    name: 'Selesaikan Sales Return',
+    module: 'SALES',
+    action: 'APPROVE',
   },
   {
     code: PERMISSIONS.PRICING_VIEW,

@@ -30,6 +30,10 @@ import {
   createAuditTransactionId,
   writeAuditLog,
 } from '../../common/logging/business-logger.js';
+import {
+  generateBusinessDocumentNumber,
+  generateFinancialAccountTransactionNumber,
+} from '../../common/financial/transaction-number.utils.js';
 
 type CreatedInvoiceWithDetails = Prisma.PurchaseInvoiceGetPayload<{
   include: {
@@ -139,23 +143,6 @@ export class PurchaseInvoiceService {
         );
       }
     }
-  }
-
-  private async generateFinancialTransactionNumber(
-    tx: Prisma.TransactionClient,
-    financialAccountId: bigint,
-  ): Promise<string> {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('FAT:NUMBER'))`;
-    const lastTransaction = await tx.financialAccountTransaction.findFirst({
-      where: { transactionNumber: { startsWith: 'FAT-' } },
-      orderBy: { financialAccountTransactionId: 'desc' },
-      select: { transactionNumber: true },
-    });
-    const lastTimestamp = lastTransaction
-      ? Number(lastTransaction.transactionNumber.split('-')[1])
-      : 0;
-    const timestamp = Math.max(Date.now(), lastTimestamp + 1);
-    return `FAT-${timestamp}-${financialAccountId.toString()}`;
   }
 
   async create(userId: bigint, dto: CreatePurchaseInvoiceDto) {
@@ -430,6 +417,7 @@ export class PurchaseInvoiceService {
 
       const payAmt = new Prisma.Decimal(dto.paymentAmount);
       const now = new Date();
+      const paymentDate = new Date(dto.paymentDate);
 
       const financialAccountId = BigInt(dto.financialAccountId);
       const financialAccount = await tx.financialAccount.findUnique({
@@ -455,7 +443,7 @@ export class PurchaseInvoiceService {
           financialAccountId,
           paymentAmount: payAmt,
           paymentMethod: dto.paymentMethod,
-          paymentDate: new Date(dto.paymentDate),
+          paymentDate,
           referenceNumber: dto.referenceNumber,
           note: dto.note,
           createdBy: userId,
@@ -471,9 +459,9 @@ export class PurchaseInvoiceService {
         },
       });
 
-      const transactionNumber = await this.generateFinancialTransactionNumber(
+      const transactionNumber = await generateFinancialAccountTransactionNumber(
         tx,
-        financialAccountId,
+        now,
       );
       const financialTransaction = await tx.financialAccountTransaction.create({
         data: {
@@ -485,7 +473,26 @@ export class PurchaseInvoiceService {
           amount: payAmt,
           referenceType: 'PURCHASE_INVOICE',
           referenceId: id,
-          transactionDate: now,
+          transactionDate: paymentDate,
+          note: dto.note,
+          createdBy: userId,
+        },
+      });
+
+      const supplierTransaction = await tx.supplierAccountTransaction.create({
+        data: {
+          transactionNumber: await generateBusinessDocumentNumber(
+            tx,
+            'AP',
+            now,
+          ),
+          supplierId: invoice.supplierId,
+          transactionType: 'PURCHASE_PAYMENT',
+          direction: 'OUT',
+          amount: payAmt,
+          referenceType: 'PURCHASE_INVOICE',
+          referenceId: id,
+          transactionDate: paymentDate,
           note: dto.note,
           createdBy: userId,
         },
@@ -503,6 +510,7 @@ export class PurchaseInvoiceService {
         data: {
           outstandingAmount: { decrement: payAmt },
           currentAmount: { decrement: payAmt },
+          lastPaymentDate: paymentDate,
           updatedAt: now,
         },
       });
@@ -560,6 +568,26 @@ export class PurchaseInvoiceService {
           'paidAmount',
           'outstandingAmount',
           'statusPayment',
+        ]),
+      });
+      await writeAuditLog(tx, {
+        userId,
+        transactionId,
+        module: 'FINANCIAL',
+        operation: AUDIT_OPERATIONS.CREATE,
+        entityType: 'SUPPLIER_ACCOUNT_TRANSACTION',
+        entityId: supplierTransaction.supplierAccountTransactionId,
+        entityNumber: supplierTransaction.transactionNumber,
+        source: 'Created via Purchase Invoice Payment',
+        changedFields: changedFields(null, supplierTransaction, [
+          'transactionNumber',
+          'supplierId',
+          'transactionType',
+          'direction',
+          'amount',
+          'referenceType',
+          'referenceId',
+          'transactionDate',
         ]),
       });
       await writeAuditLog(tx, {
@@ -996,6 +1024,53 @@ export class PurchaseInvoiceService {
     now: Date,
     transactionId: string,
   ) {
+    const latestPaymentDate = payments.reduce<Date | undefined>(
+      (latest, payment) => {
+        const candidate =
+          'paymentDate' in payment && payment.paymentDate
+            ? new Date(payment.paymentDate)
+            : now;
+        return !latest || candidate > latest ? candidate : latest;
+      },
+      undefined,
+    );
+    const payableTransaction = await tx.supplierAccountTransaction.create({
+      data: {
+        transactionNumber: await generateBusinessDocumentNumber(tx, 'AP', now),
+        supplierId: invoice.supplierId,
+        transactionType: 'PURCHASE_INVOICE',
+        direction: 'IN',
+        amount: invoice.invoiceTotal,
+        referenceType: 'PURCHASE_INVOICE',
+        referenceId: invoice.purchaseInvoiceId,
+        transactionDate: now,
+        dueDate: invoice.dueDate,
+        note: invoice.note,
+        createdBy: userId,
+      },
+    });
+    await writeAuditLog(tx, {
+      userId,
+      transactionId,
+      module: 'FINANCIAL',
+      operation: AUDIT_OPERATIONS.CREATE,
+      entityType: 'SUPPLIER_ACCOUNT_TRANSACTION',
+      entityId: payableTransaction.supplierAccountTransactionId,
+      entityNumber: payableTransaction.transactionNumber,
+      source: 'Created via Purchase Invoice',
+      changedFields: changedFields(null, payableTransaction, [
+        'transactionNumber',
+        'supplierId',
+        'transactionType',
+        'direction',
+        'amount',
+        'referenceType',
+        'referenceId',
+        'transactionDate',
+        'dueDate',
+      ]),
+    });
+
     if (payments && payments.length > 0) {
       for (const p of payments) {
         const amt = new Prisma.Decimal(p.paymentAmount);
@@ -1024,10 +1099,8 @@ export class PurchaseInvoiceService {
             updatedAt: now,
           },
         });
-        const transactionNumber = await this.generateFinancialTransactionNumber(
-          tx,
-          BigInt(p.financialAccountId),
-        );
+        const transactionNumber =
+          await generateFinancialAccountTransactionNumber(tx, pDate);
         const accountTransaction = await tx.financialAccountTransaction.create({
           data: {
             transactionNumber,
@@ -1038,10 +1111,28 @@ export class PurchaseInvoiceService {
             amount: amt,
             referenceType: 'PURCHASE_INVOICE',
             referenceId: invoice.purchaseInvoiceId,
-            transactionDate: now,
+            transactionDate: pDate,
             createdBy: userId,
           },
         });
+        const supplierPaymentTransaction =
+          await tx.supplierAccountTransaction.create({
+            data: {
+              transactionNumber: await generateBusinessDocumentNumber(
+                tx,
+                'AP',
+                pDate,
+              ),
+              supplierId: invoice.supplierId,
+              transactionType: 'PURCHASE_PAYMENT',
+              direction: 'OUT',
+              amount: amt,
+              referenceType: 'PURCHASE_INVOICE',
+              referenceId: invoice.purchaseInvoiceId,
+              transactionDate: pDate,
+              createdBy: userId,
+            },
+          });
         await writeAuditLog(tx, {
           userId,
           transactionId,
@@ -1057,6 +1148,26 @@ export class PurchaseInvoiceService {
             'paymentMethod',
             'paymentDate',
             'referenceNumber',
+          ]),
+        });
+        await writeAuditLog(tx, {
+          userId,
+          transactionId,
+          module: 'FINANCIAL',
+          operation: AUDIT_OPERATIONS.CREATE,
+          entityType: 'SUPPLIER_ACCOUNT_TRANSACTION',
+          entityId: supplierPaymentTransaction.supplierAccountTransactionId,
+          entityNumber: supplierPaymentTransaction.transactionNumber,
+          source: 'Created via Purchase Invoice',
+          changedFields: changedFields(null, supplierPaymentTransaction, [
+            'transactionNumber',
+            'supplierId',
+            'transactionType',
+            'direction',
+            'amount',
+            'referenceType',
+            'referenceId',
+            'transactionDate',
           ]),
         });
         await writeAuditLog(tx, {
@@ -1095,7 +1206,7 @@ export class PurchaseInvoiceService {
         });
       }
     }
-    if (invoice.outstandingAmount.greaterThan(0)) {
+    {
       const summaryBefore = await tx.supplierFinancialSummary.findUnique({
         where: { supplierId: invoice.supplierId },
       });
@@ -1104,6 +1215,7 @@ export class PurchaseInvoiceService {
         update: {
           outstandingAmount: { increment: invoice.outstandingAmount },
           currentAmount: { increment: invoice.outstandingAmount },
+          ...(latestPaymentDate ? { lastPaymentDate: latestPaymentDate } : {}),
           updatedAt: now,
         },
         create: {
@@ -1111,6 +1223,7 @@ export class PurchaseInvoiceService {
           outstandingAmount: invoice.outstandingAmount,
           currentAmount: invoice.outstandingAmount,
           overdueAmount: 0,
+          lastPaymentDate: latestPaymentDate,
           updatedAt: now,
         },
       });
@@ -1130,6 +1243,7 @@ export class PurchaseInvoiceService {
           'outstandingAmount',
           'currentAmount',
           'overdueAmount',
+          'lastPaymentDate',
         ]),
       });
     }

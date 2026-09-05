@@ -22,6 +22,16 @@ import InventoryModulePage from "@/features/inventory/InventoryModulePage";
 
 const FifoModulePage = lazy(() => import("@/features/fifo/FifoModulePage"));
 
+// React StrictMode mounts effects twice in development. Reuse the same
+// server-side session check so hydration never creates duplicate /auth/me calls.
+let authenticationHydration: Promise<AuthUser> | null = null;
+function currentAuthenticatedUser(): Promise<AuthUser> {
+  authenticationHydration ??= apiClient
+    .get<unknown, { success: boolean; data: AuthUser }>("/auth/me")
+    .then((response) => response.data);
+  return authenticationHydration;
+}
+
 // Guard Component: Melindungi halaman yang butuh login
 function ProtectedRoute() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -54,10 +64,9 @@ export default function App() {
   useEffect(() => {
     let active = true;
 
-    apiClient
-      .get<unknown, { success: boolean; data: AuthUser }>("/auth/me")
-      .then((response) => {
-        if (active) hydrate(response.data);
+    currentAuthenticatedUser()
+      .then((user) => {
+        if (active) hydrate(user);
       })
       .catch(() => {
         if (active) markUnauthenticated();
@@ -172,6 +181,7 @@ export default function App() {
 
           {/* Rute Khusus Sales & Customer */}
           <Route element={<PermissionRoute permission="SALES_VIEW" />}>
+            <Route path="/sales" element={<SalesModulePage />} />
             <Route path="/sales/customers" element={<SalesModulePage />} />
           </Route>
 

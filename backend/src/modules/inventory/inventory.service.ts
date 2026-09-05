@@ -334,6 +334,7 @@ export class InventoryService {
             HttpStatus.CONFLICT,
           );
         }
+        await tx.$queryRaw`SELECT fifo_layer_id FROM fifo_layer WHERE product_unit_id = ${detail.productUnitId} AND remaining_qty > 0 ORDER BY created_at ASC, fifo_layer_id ASC FOR UPDATE`;
         const layers = await tx.fifoLayer.findMany({
           where: {
             productUnitId: detail.productUnitId,
@@ -648,6 +649,7 @@ export class InventoryService {
     movementId: bigint,
     actorId: bigint,
   ) {
+    await tx.$queryRaw`SELECT fifo_layer_id FROM fifo_layer WHERE product_unit_id = ${productUnitId} AND remaining_qty > 0 ORDER BY created_at ASC, fifo_layer_id ASC FOR UPDATE`;
     const layers = await tx.fifoLayer.findMany({
       where: { productUnitId, remainingQty: { gt: 0 } },
       orderBy: [{ createdAt: 'asc' }, { fifoLayerId: 'asc' }],

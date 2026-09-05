@@ -82,7 +82,7 @@ export default function AppLayout() {
     if (now - lastActivitySyncRef.current < ACTIVITY_SYNC_INTERVAL_MS) return;
 
     lastActivitySyncRef.current = now;
-    void apiClient.post('/auth/activity').catch(() => undefined);
+    void apiClient.post("/auth/activity").catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -153,7 +153,10 @@ export default function AppLayout() {
       )}
 
       {/* Sidebar Berbasis Kategori (Enterprise Grade) */}
-      <aside onClickCapture={() => setMobileMenuOpen(false)} className={`fixed inset-y-0 left-0 z-40 flex w-[min(18rem,86vw)] flex-col bg-slate-900 text-slate-300 shadow-2xl transition-transform duration-300 lg:relative lg:z-10 lg:w-64 lg:shrink-0 lg:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside
+        onClickCapture={() => setMobileMenuOpen(false)}
+        className={`fixed inset-y-0 left-0 z-40 flex w-[min(18rem,86vw)] flex-col bg-slate-900 text-slate-300 shadow-2xl transition-transform duration-300 lg:relative lg:z-10 lg:w-64 lg:shrink-0 lg:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}
+      >
         <div className="h-20 flex items-center justify-start px-6 bg-slate-950 border-b border-slate-800">
           <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-3">
             <img
@@ -184,12 +187,15 @@ export default function AppLayout() {
             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 px-2">
               Menu Utama
             </p>
-            {hasPermission(user, "DASHBOARD_VIEW") && <div
-              onClick={() => navigate("/dashboard")}
-              className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/dashboard") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
-            >
-              <LayoutDashboard className="w-5 h-5 mr-3 opacity-80" /> Dashboard
-            </div>}
+            {hasPermission(user, "DASHBOARD_VIEW") && (
+              <div
+                onClick={() => navigate("/dashboard")}
+                className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/dashboard") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
+              >
+                <LayoutDashboard className="w-5 h-5 mr-3 opacity-80" />{" "}
+                Dashboard
+              </div>
+            )}
           </div>
 
           {/* GROUP 2: OPERASIONAL TOKO */}
@@ -198,57 +204,76 @@ export default function AppLayout() {
               Operasional
             </p>
 
-            {hasPermission(user, "SALES_VIEW") && <div
-              onClick={() => navigate("/sales/customers")}
-              className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/sales/customers") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
-            >
-              <ShoppingCart className="w-5 h-5 mr-3 opacity-80" /> Sales & Customers
-            </div>}
+            {hasPermission(user, "SALES_VIEW") && (
+              <div
+                onClick={() => navigate("/sales")}
+                className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/sales") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
+              >
+                <ShoppingCart className="w-5 h-5 mr-3 opacity-80" /> Sales &
+                Customers
+              </div>
+            )}
 
-            {hasPermission(user, "PURCHASE_VIEW") && <div
-              onClick={() => navigate("/purchasing")}
-              className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/purchasing") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
-            >
-              <PackageOpen className="w-5 h-5 mr-3 opacity-80" /> Purchases & Suppliers
-            </div>}
+            {hasPermission(user, "PURCHASE_VIEW") && (
+              <div
+                onClick={() => navigate("/purchasing")}
+                className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/purchasing") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
+              >
+                <PackageOpen className="w-5 h-5 mr-3 opacity-80" /> Purchases &
+                Suppliers
+              </div>
+            )}
 
-            {hasPermission(user, "MASTER_VIEW") && <div
-              onClick={() => navigate("/catalog")}
-              className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/catalog") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
-            >
-              <Tags className="w-5 h-5 mr-3 opacity-80" /> Catalog & Pricing
-            </div>}
+            {hasPermission(user, "MASTER_VIEW") && (
+              <div
+                onClick={() => navigate("/catalog")}
+                className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/catalog") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
+              >
+                <Tags className="w-5 h-5 mr-3 opacity-80" /> Catalog & Pricing
+              </div>
+            )}
 
             {/* ... Menu Catalog & Pricing yang sudah ada ... */}
 
-            {hasPermission(user, "PRICING_VIEW") && <div
-              onClick={() => navigate("/pricing")}
-              className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${
-                isActive("/pricing") 
-                  ? "bg-[#326dc8] text-white shadow-md" 
-                  : "hover:bg-slate-800 hover:text-white"
-              }`}
-            >
-              <CircleDollarSign className="w-5 h-5 mr-3 opacity-80" /> Pricing Workspace
-            </div>}
+            {hasPermission(user, "PRICING_VIEW") && (
+              <div
+                onClick={() => navigate("/pricing")}
+                className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${
+                  isActive("/pricing")
+                    ? "bg-[#326dc8] text-white shadow-md"
+                    : "hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <CircleDollarSign className="w-5 h-5 mr-3 opacity-80" /> Pricing
+                Workspace
+              </div>
+            )}
 
-            {hasPermission(user, "INVENTORY_VIEW") && <div
-              onClick={() => navigate("/inventory")}
-              className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/inventory") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
-            >
-              <Boxes className="w-5 h-5 mr-3 opacity-80" /> Inventory & Warehouse
-            </div>}
+            {hasPermission(user, "INVENTORY_VIEW") && (
+              <div
+                onClick={() => navigate("/inventory")}
+                className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/inventory") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
+              >
+                <Boxes className="w-5 h-5 mr-3 opacity-80" /> Inventory &
+                Warehouse
+              </div>
+            )}
 
-            {hasPermission(user, "FIFO_VIEW") && <div
-              onClick={() => navigate("/fifo")}
-              className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/fifo") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
-            >
-              <Layers3 className="w-5 h-5 mr-3 opacity-80" /> FIFO & Cost
-            </div>}
+            {hasPermission(user, "FIFO_VIEW") && (
+              <div
+                onClick={() => navigate("/fifo")}
+                className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/fifo") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
+              >
+                <Layers3 className="w-5 h-5 mr-3 opacity-80" /> FIFO & Cost
+              </div>
+            )}
 
-            {hasPermission(user, "FINANCIAL_VIEW") && <div className="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 hover:bg-slate-800 hover:text-white">
-              <Wallet className="w-5 h-5 mr-3 opacity-80" /> Finance & Accounting
-            </div>}
+            {hasPermission(user, "FINANCIAL_VIEW") && (
+              <div className="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 hover:bg-slate-800 hover:text-white">
+                <Wallet className="w-5 h-5 mr-3 opacity-80" /> Finance &
+                Accounting
+              </div>
+            )}
           </div>
 
           {/* GROUP 3: PENGATURAN SISTEM */}
@@ -270,7 +295,8 @@ export default function AppLayout() {
                   onClick={() => navigate("/system/role-permissions")}
                   className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/system/role-permissions") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
                 >
-                  <ShieldCheck className="w-5 h-5 mr-3 opacity-80" /> Role & Permission
+                  <ShieldCheck className="w-5 h-5 mr-3 opacity-80" /> Role &
+                  Permission
                 </div>
               )}
 
@@ -286,7 +312,8 @@ export default function AppLayout() {
                   onClick={() => navigate("/system/configuration")}
                   className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/system/configuration") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
                 >
-                  <Settings className="w-5 h-5 mr-3 opacity-80" /> System Configuration
+                  <Settings className="w-5 h-5 mr-3 opacity-80" /> System
+                  Configuration
                 </div>
               )}
             </div>
@@ -308,27 +335,26 @@ export default function AppLayout() {
               <Menu className="h-5 w-5" />
             </button>
             <div className="min-w-0">
-            <h1 className="truncate text-sm font-extrabold tracking-tight text-slate-800 sm:text-base md:text-xl">
-              {isActive("/system/users")
-                ? "User Management"
-                : isActive("/system/role-permissions")
-                  ? "Role & Permission"
-                  : isActive("/system/logs")
-                    ? "System Logs"
-                    : isActive("/system/configuration")
-                      ? "System Configuration"
-                    : isActive("/sales/customers")
-                      ? "Sales & Customers"
-                    : isActive("/inventory")
-                      ? "Inventory & Warehouse"
-                    : isActive("/fifo")
-                      ? "FIFO & Cost"
-                    : "Dashboard"
-                    }
-            </h1>
-            <p className="hidden text-[10px] font-medium uppercase tracking-wider text-slate-500 sm:block md:text-xs">
-              Modul ERP Terintegrasi
-            </p>
+              <h1 className="truncate text-sm font-extrabold tracking-tight text-slate-800 sm:text-base md:text-xl">
+                {isActive("/system/users")
+                  ? "User Management"
+                  : isActive("/system/role-permissions")
+                    ? "Role & Permission"
+                    : isActive("/system/logs")
+                      ? "System Logs"
+                      : isActive("/system/configuration")
+                        ? "System Configuration"
+                        : isActive("/sales/customers")
+                          ? "Sales & Customers"
+                          : isActive("/inventory")
+                            ? "Inventory & Warehouse"
+                            : isActive("/fifo")
+                              ? "FIFO & Cost"
+                              : "Dashboard"}
+              </h1>
+              <p className="hidden text-[10px] font-medium uppercase tracking-wider text-slate-500 sm:block md:text-xs">
+                Modul ERP Terintegrasi
+              </p>
             </div>
           </div>
 

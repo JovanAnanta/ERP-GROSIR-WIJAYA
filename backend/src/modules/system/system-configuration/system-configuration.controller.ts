@@ -22,8 +22,7 @@ interface AuthRequest extends Request {
 }
 
 @Controller('system-configuration')
-@RequireRoles('SUPER_OWNER')
-@UseGuards(SessionGuard, RolesGuard)
+@UseGuards(SessionGuard)
 export class SystemConfigurationController {
   constructor(private readonly configService: SystemConfigurationService) {}
 
@@ -34,6 +33,8 @@ export class SystemConfigurationController {
   }
 
   @Put()
+  @RequireRoles('SUPER_OWNER')
+  @UseGuards(RolesGuard)
   async update(
     @Body() dto: UpdateSystemConfigurationDto,
     @Req() req: AuthRequest,

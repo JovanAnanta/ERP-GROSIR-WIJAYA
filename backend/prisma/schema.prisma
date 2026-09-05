@@ -112,6 +112,9 @@ model User {
   approvedSalesInvoices       SalesInvoice[]        @relation("SalesInvoiceApprovedBy")
   createdSalesInvoiceDetails  SalesInvoiceDetail[]  @relation("SalesInvoiceDetailCreatedBy")
   createdSalesInvoicePayments SalesInvoicePayment[] @relation("SalesInvoicePaymentCreatedBy")
+  updatedSalesInvoices        SalesInvoice[]        @relation("SalesInvoiceUpdatedBy")
+  cancelledSalesInvoices      SalesInvoice[]        @relation("SalesInvoiceCancelledBy")
+  resolvedPaymentHoldings     SalesPaymentHolding[] @relation("SalesPaymentHoldingResolvedBy")
   createdSalesReturns         SalesReturn[]         @relation("SalesReturnCreatedBy")
   approvedSalesReturns        SalesReturn[]         @relation("SalesReturnApprovedBy")
   createdSalesReturnDetails   SalesReturnDetail[]   @relation("SalesReturnDetailCreatedBy")
@@ -777,6 +780,7 @@ model FinancialAccount {
   salesInvoicePayments    SalesInvoicePayment[]
   purchaseInvoicePayments PurchaseInvoicePayment[]
   purchaseReturns         PurchaseReturn[]
+  salesReturnRefunds      SalesReturn[] @relation("SalesReturnRefundAccount")
 
   @@index([createdBy])
   @@index([updatedBy])
@@ -788,7 +792,7 @@ model FinancialAccountTransaction {
   transactionNumber             String                 @unique @map("transaction_number") @db.VarChar(30)
   financialAccountId            BigInt                 @map("financial_account_id")
   transactionType               String                 @map("transaction_type") @db.VarChar(50)
-  paymentMethod                 PurchasePaymentMethod? @map("payment_method")
+  paymentMethod                 String?                @map("payment_method") @db.VarChar(50)
   direction                     String                 @db.VarChar(10)
   amount                        Decimal                @db.Decimal(18, 2)
   referenceType                 String                 @map("reference_type") @db.VarChar(50)
@@ -800,6 +804,8 @@ model FinancialAccountTransaction {
 
   financialAccount FinancialAccount @relation(fields: [financialAccountId], references: [financialAccountId])
   createdByUser    User             @relation("FinancialAccountTransactionCreatedBy", fields: [createdBy], references: [userId])
+  salesInvoicePayment SalesInvoicePayment?
+  salesReturnRefund   SalesReturn? @relation("SalesReturnRefundTransaction")
 
   @@index([financialAccountId])
   @@index([transactionDate])
@@ -963,6 +969,8 @@ model InventoryMovement {
   originId            BigInt               @map("origin_id")
   originNumber        String               @map("origin_number") @db.VarChar(30)
   transformationId    BigInt?              @map("transformation_id")
+  salesInvoiceDetailId BigInt?             @unique @map("sales_invoice_detail_id")
+  salesReturnDetailId  BigInt?             @unique @map("sales_return_detail_id")
   movementDate        DateTime             @map("movement_date")
   note                String?              @db.VarChar(255)
   createdAt           DateTime             @default(now()) @map("created_at")
@@ -970,6 +978,8 @@ model InventoryMovement {
 
   productUnit    ProductUnit              @relation(fields: [productUnitId], references: [productUnitId])
   transformation InventoryTransformation? @relation(fields: [transformationId], references: [transformationId])
+  salesInvoiceDetail SalesInvoiceDetail?  @relation(fields: [salesInvoiceDetailId], references: [salesInvoiceDetailId], onDelete: Restrict)
+  salesReturnDetail  SalesReturnDetail?   @relation(fields: [salesReturnDetailId], references: [salesReturnDetailId], onDelete: Restrict)
   createdByUser  User                     @relation("InventoryMovementCreatedBy", fields: [createdBy], references: [userId])
 
   generatedLayers           FifoLayer[]                             @relation("MovementGeneratedLayers")
@@ -981,6 +991,8 @@ model InventoryMovement {
   @@index([originType, originNumber])
   @@index([movementDate, inventoryMovementId], map: "inventory_movement_date_id_idx")
   @@index([transformationId])
+  @@index([salesInvoiceDetailId])
+  @@index([salesReturnDetailId])
   @@index([createdBy])
   @@map("inventory_movement")
 }
@@ -1132,14 +1144,37 @@ enum SalesPaymentStatus {
 
 enum SalesInvoiceStatus {
   DRAFT
+  READY
   COMPLETED
   CANCELLED
+}
+
+enum SalesPartyType {
+  CUSTOMER
+  GUEST
+}
+
+enum SalesPaymentType {
+  CASH
+  CREDIT
+}
+
+enum SalesPaymentHoldingStatus {
+  HELD
+  APPLIED
+  REFUNDED
+  TRANSFERRED
 }
 
 enum SalesReturnStatus {
   DRAFT
   COMPLETED
   CANCELLED
+}
+
+enum SalesReturnResolutionType {
+  REFUND
+  REPLACEMENT
 }
 
 enum SalesPaymentMethod {
@@ -1151,12 +1186,16 @@ model SalesOrder {
   salesOrderId     BigInt             @id @default(autoincrement()) @map("sales_order_id")
   salesOrderNumber String             @unique @map("sales_order_number") @db.VarChar(30)
   customerId       BigInt?            @map("customer_id")
+  customerName     String?            @map("customer_name") @db.VarChar(255)
   orderDate        DateTime           @map("order_date")
   status           SalesOrderStatus
   salesChannel     String             @map("sales_channel") @db.VarChar(50)
-  sourceType       String             @map("source_type") @db.VarChar(50)
-  paymentStatus    SalesPaymentStatus @map("payment_status")
+  sourceType       String             @default("MANUAL") @map("source_type") @db.VarChar(50)
+  paymentStatus    SalesPaymentStatus @default(UNPAID) @map("payment_status")
   paymentDueDate   DateTime?          @map("payment_due_date") @db.Date
+  itemDiscountTotal Decimal           @default(0) @map("item_discount_total") @db.Decimal(18, 2)
+  discountAmount   Decimal            @default(0) @map("discount_amount") @db.Decimal(18, 2)
+  orderTotal       Decimal            @default(0) @map("order_total") @db.Decimal(18, 2)
   note             String?            @db.VarChar(500)
   createdAt        DateTime           @default(now()) @map("created_at")
   createdBy        BigInt             @map("created_by")
@@ -1181,6 +1220,10 @@ model SalesOrderDetail {
   salesOrderId       BigInt  @map("sales_order_id")
   productUnitId      BigInt  @map("product_unit_id")
   quantity           Decimal @db.Decimal(18, 3)
+  unitPrice          Decimal @default(0) @map("unit_price") @db.Decimal(18, 2)
+  discountAmount     Decimal @default(0) @map("discount_amount") @db.Decimal(18, 2)
+  bonusQuantity      Decimal @default(0) @map("bonus_quantity") @db.Decimal(18, 3)
+  subtotal           Decimal @default(0) @db.Decimal(18, 2)
   note               String? @db.VarChar(255)
 
   salesOrder  SalesOrder  @relation(fields: [salesOrderId], references: [salesOrderId])
@@ -1198,34 +1241,50 @@ model SalesInvoice {
   salesInvoiceNumber String             @unique @map("sales_invoice_number") @db.VarChar(30)
   salesOrderId       BigInt?            @map("sales_order_id")
   customerId         BigInt?            @map("customer_id")
-  customerName       String?            @map("customer_name") @db.VarChar(50)
+  partyType          SalesPartyType      @default(CUSTOMER) @map("party_type")
+  customerName       String?            @map("customer_name") @db.VarChar(255)
+  salesChannel       String              @default("MANUAL") @map("sales_channel") @db.VarChar(50)
+  paymentType        SalesPaymentType    @default(CASH) @map("payment_type")
   invoiceDate        DateTime           @map("invoice_date")
   dueDate            DateTime?          @map("due_date") @db.Date
   invoiceTotal       Decimal            @map("invoice_total") @db.Decimal(18, 2)
   discountAmount     Decimal            @map("discount_amount") @db.Decimal(18, 2)
+  itemDiscountTotal  Decimal            @default(0) @map("item_discount_total") @db.Decimal(18, 2)
   statusPayment      SalesPaymentStatus @map("status_payment")
   paidAmount         Decimal            @map("paid_amount") @db.Decimal(18, 2)
   outstandingAmount  Decimal            @map("outstanding_amount") @db.Decimal(18, 2)
+  returnCreditAppliedAmount Decimal      @default(0) @map("return_credit_applied_amount") @db.Decimal(18, 2)
   status             SalesInvoiceStatus
   note               String?            @db.VarChar(500)
   createdAt          DateTime           @default(now()) @map("created_at")
   createdBy          BigInt             @map("created_by")
+  updatedAt          DateTime?          @updatedAt @map("updated_at")
+  updatedBy          BigInt?            @map("updated_by")
   approvedAt         DateTime?          @map("approved_at")
   approvedBy         BigInt?            @map("approved_by")
+  cancelledAt        DateTime?          @map("cancelled_at")
+  cancelledBy        BigInt?            @map("cancelled_by")
 
   salesOrder     SalesOrder? @relation(fields: [salesOrderId], references: [salesOrderId])
   customer       Customer?   @relation(fields: [customerId], references: [customerId])
   createdByUser  User        @relation("SalesInvoiceCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser  User?       @relation("SalesInvoiceUpdatedBy", fields: [updatedBy], references: [userId])
   approvedByUser User?       @relation("SalesInvoiceApprovedBy", fields: [approvedBy], references: [userId])
+  cancelledByUser User?      @relation("SalesInvoiceCancelledBy", fields: [cancelledBy], references: [userId])
 
   details  SalesInvoiceDetail[]
   payments SalesInvoicePayment[]
-  returns  SalesReturn[]
+  paymentHoldings SalesPaymentHolding[]
+  returns  SalesReturn[] @relation("SalesReturnSourceInvoice")
+  replacementForReturn SalesReturn? @relation("SalesReturnReplacementInvoice")
 
   @@index([salesOrderId])
   @@index([customerId])
   @@index([createdBy])
   @@index([approvedBy])
+  @@index([updatedBy])
+  @@index([cancelledBy])
+  @@index([status, invoiceDate])
   @@map("sales_invoice")
 }
 
@@ -1237,6 +1296,7 @@ model SalesInvoiceDetail {
   quantity             Decimal  @db.Decimal(18, 3)
   unitPrice            Decimal  @map("unit_price") @db.Decimal(18, 2)
   discountAmount       Decimal  @map("discount_amount") @db.Decimal(18, 2)
+  bonusQuantity        Decimal  @default(0) @map("bonus_quantity") @db.Decimal(18, 3)
   subtotal             Decimal  @db.Decimal(18, 2)
   note                 String?  @db.VarChar(255)
   createdAt            DateTime @default(now()) @map("created_at")
@@ -1248,6 +1308,7 @@ model SalesInvoiceDetail {
   createdByUser    User              @relation("SalesInvoiceDetailCreatedBy", fields: [createdBy], references: [userId])
 
   salesReturnDetails SalesReturnDetail[]
+  inventoryMovement InventoryMovement?
 
   @@index([salesInvoiceId])
   @@index([salesOrderDetailId])
@@ -1261,8 +1322,9 @@ model SalesInvoicePayment {
   paymentNumber      String             @unique @map("payment_number") @db.VarChar(30)
   salesInvoiceId     BigInt             @map("sales_invoice_id")
   paymentDate        DateTime           @map("payment_date")
-  paymentMethod      SalesPaymentMethod @map("payment_method")
+  paymentMethod      String             @map("payment_method") @db.VarChar(50)
   financialAccountId BigInt             @map("financial_account_id")
+  financialAccountTransactionId BigInt? @unique @map("financial_account_transaction_id")
   paymentAmount      Decimal            @map("payment_amount") @db.Decimal(18, 2)
   referenceNumber    String?            @map("reference_number") @db.VarChar(100)
   note               String?            @db.VarChar(255)
@@ -1272,6 +1334,8 @@ model SalesInvoicePayment {
   salesInvoice     SalesInvoice     @relation(fields: [salesInvoiceId], references: [salesInvoiceId])
   financialAccount FinancialAccount @relation(fields: [financialAccountId], references: [financialAccountId])
   createdByUser    User             @relation("SalesInvoicePaymentCreatedBy", fields: [createdBy], references: [userId])
+  financialAccountTransaction FinancialAccountTransaction? @relation(fields: [financialAccountTransactionId], references: [financialAccountTransactionId], onDelete: Restrict)
+  holding SalesPaymentHolding?
 
   @@index([salesInvoiceId])
   @@index([financialAccountId])
@@ -1279,11 +1343,39 @@ model SalesInvoicePayment {
   @@map("sales_invoice_payment")
 }
 
+model SalesPaymentHolding {
+  salesPaymentHoldingId BigInt @id @default(autoincrement()) @map("sales_payment_holding_id")
+  salesInvoiceId        BigInt @map("sales_invoice_id")
+  salesPaymentId        BigInt @unique @map("sales_payment_id")
+  amount                Decimal @db.Decimal(18, 2)
+  remainingAmount       Decimal @map("remaining_amount") @db.Decimal(18, 2)
+  status                SalesPaymentHoldingStatus @default(HELD)
+  resolvedAt            DateTime? @map("resolved_at")
+  resolvedBy            BigInt? @map("resolved_by")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [salesInvoiceId], onDelete: Restrict)
+  payment      SalesInvoicePayment @relation(fields: [salesPaymentId], references: [salesPaymentId], onDelete: Restrict)
+  resolvedByUser User? @relation("SalesPaymentHoldingResolvedBy", fields: [resolvedBy], references: [userId])
+
+  @@index([salesInvoiceId, status])
+  @@index([resolvedBy])
+  @@map("sales_payment_holding")
+}
+
 model SalesReturn {
   salesReturnId     BigInt            @id @default(autoincrement()) @map("sales_return_id")
   salesReturnNumber String            @unique @map("sales_return_number") @db.VarChar(30)
   salesInvoiceId    BigInt            @map("sales_invoice_id")
   customerId        BigInt?           @map("customer_id")
+  replacementSalesInvoiceId BigInt?   @unique @map("replacement_sales_invoice_id")
+  resolutionType    SalesReturnResolutionType @default(REFUND) @map("resolution_type")
+  receivableOffsetAmount Decimal      @default(0) @map("receivable_offset_amount") @db.Decimal(18, 2)
+  replacementCreditAmount Decimal     @default(0) @map("replacement_credit_amount") @db.Decimal(18, 2)
+  refundAmount      Decimal           @default(0) @map("refund_amount") @db.Decimal(18, 2)
+  financialAccountId BigInt?          @map("financial_account_id")
+  financialAccountTransactionId BigInt? @unique @map("financial_account_transaction_id")
+  refundPaymentMethod String?         @map("refund_payment_method") @db.VarChar(50)
   returnDate        DateTime          @map("return_date")
   returnTotal       Decimal           @map("return_total") @db.Decimal(18, 2)
   status            SalesReturnStatus
@@ -1293,8 +1385,11 @@ model SalesReturn {
   approvedAt        DateTime?         @map("approved_at")
   approvedBy        BigInt?           @map("approved_by")
 
-  salesInvoice   SalesInvoice @relation(fields: [salesInvoiceId], references: [salesInvoiceId])
+  salesInvoice   SalesInvoice @relation("SalesReturnSourceInvoice", fields: [salesInvoiceId], references: [salesInvoiceId])
+  replacementSalesInvoice SalesInvoice? @relation("SalesReturnReplacementInvoice", fields: [replacementSalesInvoiceId], references: [salesInvoiceId])
   customer       Customer?    @relation(fields: [customerId], references: [customerId])
+  financialAccount FinancialAccount? @relation("SalesReturnRefundAccount", fields: [financialAccountId], references: [financialAccountId])
+  financialAccountTransaction FinancialAccountTransaction? @relation("SalesReturnRefundTransaction", fields: [financialAccountTransactionId], references: [financialAccountTransactionId])
   createdByUser  User         @relation("SalesReturnCreatedBy", fields: [createdBy], references: [userId])
   approvedByUser User?        @relation("SalesReturnApprovedBy", fields: [approvedBy], references: [userId])
 
@@ -1302,6 +1397,8 @@ model SalesReturn {
 
   @@index([salesInvoiceId])
   @@index([customerId])
+  @@index([status, returnDate])
+  @@index([financialAccountId])
   @@index([createdBy])
   @@index([approvedBy])
   @@map("sales_return")
@@ -1313,8 +1410,11 @@ model SalesReturnDetail {
   salesInvoiceDetailId BigInt   @map("sales_invoice_detail_id")
   productUnitId        BigInt   @map("product_unit_id")
   quantity             Decimal  @db.Decimal(18, 3)
+  bonusQuantity        Decimal  @default(0) @map("bonus_quantity") @db.Decimal(18, 3)
   unitPrice            Decimal  @map("unit_price") @db.Decimal(18, 2)
   subtotal             Decimal  @db.Decimal(18, 2)
+  returnCostTotal      Decimal  @default(0) @map("return_cost_total") @db.Decimal(18, 2)
+  reason               String?  @db.VarChar(100)
   note                 String?  @db.VarChar(255)
   createdAt            DateTime @default(now()) @map("created_at")
   createdBy            BigInt   @map("created_by")
@@ -1323,6 +1423,7 @@ model SalesReturnDetail {
   salesInvoiceDetail SalesInvoiceDetail @relation(fields: [salesInvoiceDetailId], references: [salesInvoiceDetailId])
   productUnit        ProductUnit        @relation(fields: [productUnitId], references: [productUnitId])
   createdByUser      User               @relation("SalesReturnDetailCreatedBy", fields: [createdBy], references: [userId])
+  inventoryMovement InventoryMovement?
 
   @@index([salesReturnId])
   @@index([salesInvoiceDetailId])

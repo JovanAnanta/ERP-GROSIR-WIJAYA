@@ -500,6 +500,7 @@ export class PurchaseReturnService {
     let inventoryCostTotal = new Prisma.Decimal(0);
     for (const detail of purchaseReturn.details) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`RETURN_FIFO:${detail.fifoLayerId.toString()}`}))`;
+      await tx.$queryRaw`SELECT fifo_layer_id FROM fifo_layer WHERE fifo_layer_id = ${detail.fifoLayerId} FOR UPDATE`;
       const layer = await tx.fifoLayer.findUnique({
         where: { fifoLayerId: detail.fifoLayerId },
       });
@@ -1148,6 +1149,7 @@ export class PurchaseReturnService {
         const now = new Date();
         for (const detail of purchaseReturn.details) {
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`RETURN_FIFO:${detail.fifoLayerId.toString()}`}))`;
+          await tx.$queryRaw`SELECT fifo_layer_id FROM fifo_layer WHERE fifo_layer_id = ${detail.fifoLayerId} FOR UPDATE`;
           const layer = await tx.fifoLayer.findUnique({
             where: { fifoLayerId: detail.fifoLayerId },
           });
