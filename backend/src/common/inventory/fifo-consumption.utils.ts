@@ -1,5 +1,10 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client.js';
+import {
+  AUDIT_OPERATIONS,
+  changedFields,
+  writeAuditLog,
+} from '../logging/business-logger.js';
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -11,6 +16,12 @@ export async function consumeFifoLayers(
     inventoryMovementId: bigint;
     createdBy: bigint;
     insufficientMessage?: string;
+    audit?: {
+      transactionId: string;
+      entityNumber: string;
+      source: string;
+      ipAddress?: string;
+    };
   },
 ) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`FIFO_CONSUME:${input.productUnitId.toString()}`}))`;
@@ -44,11 +55,11 @@ export async function consumeFifoLayers(
       ZERO,
       layer.remainingCost.sub(cost),
     );
-    await tx.fifoLayer.update({
+    const updatedLayer = await tx.fifoLayer.update({
       where: { fifoLayerId: layer.fifoLayerId },
       data: { remainingQty: quantityAfter, remainingCost },
     });
-    await tx.fifoLayerTransaction.create({
+    const transaction = await tx.fifoLayerTransaction.create({
       data: {
         fifoLayerId: layer.fifoLayerId,
         inventoryMovementId: input.inventoryMovementId,
@@ -61,6 +72,35 @@ export async function consumeFifoLayers(
         createdBy: input.createdBy,
       },
     });
+    if (input.audit) {
+      await writeAuditLog(tx, {
+        userId: input.createdBy,
+        transactionId: input.audit.transactionId,
+        module: 'FIFO',
+        operation: AUDIT_OPERATIONS.UPDATE,
+        entityType: 'FIFO_LAYER',
+        entityId: layer.fifoLayerId,
+        entityNumber: input.audit.entityNumber,
+        source: input.audit.source,
+        changedFields: changedFields(layer, updatedLayer, [
+          'remainingQty',
+          'remainingCost',
+        ]),
+        ipAddress: input.audit.ipAddress,
+      });
+      await writeAuditLog(tx, {
+        userId: input.createdBy,
+        transactionId: input.audit.transactionId,
+        module: 'FIFO',
+        operation: AUDIT_OPERATIONS.CREATE,
+        entityType: 'FIFO_LAYER_TRANSACTION',
+        entityId: transaction.fifoLayerTransactionId,
+        entityNumber: input.audit.entityNumber,
+        source: input.audit.source,
+        changedFields: changedFields(null, transaction),
+        ipAddress: input.audit.ipAddress,
+      });
+    }
     totalCost = totalCost.add(cost);
     remaining = remaining.sub(take);
   }

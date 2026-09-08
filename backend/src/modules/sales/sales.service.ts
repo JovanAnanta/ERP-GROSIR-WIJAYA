@@ -43,6 +43,7 @@ import {
   resolveSalesPaymentStatus,
   resolveSalesPaymentType,
   resolveSalesInvoiceTerms,
+  toSalesParentQuantity,
 } from './sales-rules.utils.js';
 
 const ZERO = new Prisma.Decimal(0);
@@ -250,10 +251,16 @@ export class SalesService {
         productName: unit.product.productName,
         unitName: unit.unit.unitName,
         parentProductUnitId: parentId,
-        baseQuantity: quantity.mul(unit.conversionFactor).div(parentFactor),
-        baseBonusQuantity: bonusQuantity
-          .mul(unit.conversionFactor)
-          .div(parentFactor),
+        baseQuantity: toSalesParentQuantity({
+          quantity,
+          selectedConversionFactor: unit.conversionFactor,
+          parentConversionFactor: parentFactor,
+        }),
+        baseBonusQuantity: toSalesParentQuantity({
+          quantity: bonusQuantity,
+          selectedConversionFactor: unit.conversionFactor,
+          parentConversionFactor: parentFactor,
+        }),
         quantity,
         bonusQuantity,
         unitPrice,
@@ -694,136 +701,182 @@ export class SalesService {
     actorId: bigint,
     dto: SaveSalesInvoiceDto,
     returnCredit = ZERO,
+    options: { skipInventoryReservation?: boolean } = {},
   ) {
     dto = { ...dto, ...resolveSalesInvoiceTerms(dto) };
-        const party = await this.validateParty(
-          tx,
-          dto.partyType,
-          dto.customerId,
-        );
-        const items = await this.prepareItems(tx, dto.items);
-        const totals = this.totals(items, dto.discountAmount);
-        const paid = (dto.payments ?? []).reduce(
-          (sum, payment) => sum.add(payment.paymentAmount),
-          ZERO,
-        );
-        if (paid.greaterThan(totals.grandTotal))
-          throw new HttpException(
-            'Total pembayaran melebihi nilai Sales Invoice.',
-            HttpStatus.UNPROCESSABLE_ENTITY,
-          );
-        if (returnCredit.lessThan(0) || returnCredit.greaterThan(totals.grandTotal.sub(paid)))
-          throw new HttpException('Kredit retur tidak valid untuk Sales Invoice pengganti.', HttpStatus.UNPROCESSABLE_ENTITY);
-        const initialOutstanding = totals.grandTotal.sub(paid).sub(returnCredit);
-        assertGuestPaymentIsUnpaidOrPaid({
-          partyType: dto.partyType,
-          paidAmount: paid,
-          outstandingAmount: initialOutstanding,
-        });
-        const paymentType = resolveSalesPaymentType({
-          partyType: dto.partyType,
-          outstandingAmount: initialOutstanding,
-        });
-        const requestedStatus = dto.status;
-        const initialStatus: 'DRAFT' | 'READY' =
-          requestedStatus === 'READY' ? 'READY' : 'DRAFT';
-        await this.validateSourceOrder(tx, dto, items);
-        await this.reserve(tx, items, initialStatus);
-        const invoiceDate = new Date(dto.invoiceDate);
-        const number = await generateBusinessDocumentNumber(
-          tx,
-          'SI',
-          invoiceDate,
-        );
-        const invoice = await tx.salesInvoice.create({
-          data: {
-            salesInvoiceNumber: number,
-            salesOrderId: dto.salesOrderId ? BigInt(dto.salesOrderId) : null,
-            customerId: party.customerId,
-            partyType: dto.partyType,
-            customerName:
-              dto.partyType === 'CUSTOMER'
-                ? party.customerName
-                : (this.clean(dto.customerName) ?? 'Guest'),
-            salesChannel: dto.salesChannel,
-            paymentType,
-            invoiceDate,
-            dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-            invoiceTotal: totals.grandTotal,
-            discountAmount: totals.discountAmount,
-            itemDiscountTotal: totals.itemDiscountTotal,
-            statusPayment: returnCredit.equals(totals.grandTotal) ? 'PAID' : 'UNPAID',
-            paidAmount: ZERO,
-            outstandingAmount: totals.grandTotal.sub(returnCredit),
-            returnCreditAppliedAmount: returnCredit,
-            status: initialStatus,
-            note: this.clean(dto.note),
+    const party = await this.validateParty(tx, dto.partyType, dto.customerId);
+    const items = await this.prepareItems(tx, dto.items);
+    const totals = this.totals(items, dto.discountAmount);
+    const paid = (dto.payments ?? []).reduce(
+      (sum, payment) => sum.add(payment.paymentAmount),
+      ZERO,
+    );
+    if (paid.greaterThan(totals.grandTotal))
+      throw new HttpException(
+        'Total pembayaran melebihi nilai Sales Invoice.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    if (
+      returnCredit.lessThan(0) ||
+      returnCredit.greaterThan(totals.grandTotal.sub(paid))
+    )
+      throw new HttpException(
+        'Kredit retur tidak valid untuk Sales Invoice pengganti.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    const initialOutstanding = totals.grandTotal.sub(paid).sub(returnCredit);
+    assertGuestPaymentIsUnpaidOrPaid({
+      partyType: dto.partyType,
+      paidAmount: paid,
+      outstandingAmount: initialOutstanding,
+    });
+    const paymentType = resolveSalesPaymentType({
+      partyType: dto.partyType,
+      outstandingAmount: initialOutstanding,
+    });
+    const requestedStatus = dto.status;
+    const initialStatus: 'DRAFT' | 'READY' =
+      requestedStatus === 'READY' ? 'READY' : 'DRAFT';
+    await this.validateSourceOrder(tx, dto, items);
+    if (!options.skipInventoryReservation)
+      await this.reserve(tx, items, initialStatus);
+    const invoiceDate = new Date(dto.invoiceDate);
+    const number = await generateBusinessDocumentNumber(tx, 'SI', invoiceDate);
+    const invoice = await tx.salesInvoice.create({
+      data: {
+        salesInvoiceNumber: number,
+        salesOrderId: dto.salesOrderId ? BigInt(dto.salesOrderId) : null,
+        customerId: party.customerId,
+        partyType: dto.partyType,
+        customerName:
+          dto.partyType === 'CUSTOMER'
+            ? party.customerName
+            : (this.clean(dto.customerName) ?? 'Guest'),
+        salesChannel: dto.salesChannel,
+        paymentType,
+        invoiceDate,
+        dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+        invoiceTotal: totals.grandTotal,
+        discountAmount: totals.discountAmount,
+        itemDiscountTotal: totals.itemDiscountTotal,
+        statusPayment: returnCredit.equals(totals.grandTotal)
+          ? 'PAID'
+          : 'UNPAID',
+        paidAmount: ZERO,
+        outstandingAmount: totals.grandTotal.sub(returnCredit),
+        returnCreditAppliedAmount: returnCredit,
+        status: initialStatus,
+        note: this.clean(dto.note),
+        createdBy: actorId,
+        details: {
+          create: items.map((item) => ({
+            salesOrderDetailId: item.dto.salesOrderDetailId
+              ? BigInt(item.dto.salesOrderDetailId)
+              : null,
+            productUnitId: item.productUnitId,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            discountAmount: item.discountAmount,
+            bonusQuantity: item.bonusQuantity,
+            subtotal: item.subtotal,
+            note: this.clean(item.dto.note),
             createdBy: actorId,
-            details: {
-              create: items.map((item) => ({
-                salesOrderDetailId: item.dto.salesOrderDetailId
-                  ? BigInt(item.dto.salesOrderDetailId)
-                  : null,
-                productUnitId: item.productUnitId,
-                quantity: item.quantity,
-                unitPrice: item.unitPrice,
-                discountAmount: item.discountAmount,
-                bonusQuantity: item.bonusQuantity,
-                subtotal: item.subtotal,
-                note: this.clean(item.dto.note),
-                createdBy: actorId,
-              })),
-            },
-          },
-        });
-        for (const payment of dto.payments ?? [])
-          await this.recordPaymentTx(
-            tx,
-            actorId,
-            invoice.salesInvoiceId,
-            payment,
-          );
-        await this.updateSnapshot(
-          tx,
-          actorId,
-          party.customerId,
-          dto.snapshotMode,
-          items,
-        );
-        let order: { salesOrderId: string; salesOrderNumber: string } | null =
-          null;
-        if (dto.orderItems?.length) {
-          order = await this.createOrderTx(tx, actorId, {
-            customerId: dto.customerId,
-            customerName: dto.customerName,
-            orderDate: dto.invoiceDate,
-            status: 'DRAFT',
-            salesChannel: dto.salesChannel,
-            discountAmount: 0,
-            note: dto.note,
-            items: dto.orderItems,
-          });
-        }
-        if (requestedStatus === 'COMPLETED')
-          await this.completeInvoiceTx(tx, actorId, invoice.salesInvoiceId);
-        await this.writeDocumentLogs(tx, actorId, {
-          operation: 'CREATE',
-          entityType: 'SALES_INVOICE',
-          entityId: invoice.salesInvoiceId,
-          entityNumber: number,
-          before: null,
-          after: invoice,
-          description: `Membuat Sales Invoice ${number}${order ? ` dan ${order.salesOrderNumber}` : ''}`,
-        });
-        await this.syncSourceOrder(
-          tx,
-          dto.salesOrderId ? BigInt(dto.salesOrderId) : null,
-        );
-        return {
-          salesInvoiceId: invoice.salesInvoiceId.toString(),
-          salesInvoiceNumber: number,
-          salesOrder: order,
-        };
+          })),
+        },
+      },
+    });
+    for (const payment of dto.payments ?? [])
+      await this.recordPaymentTx(tx, actorId, invoice.salesInvoiceId, payment);
+    await this.updateSnapshot(
+      tx,
+      actorId,
+      party.customerId,
+      dto.snapshotMode,
+      items,
+    );
+    let order: { salesOrderId: string; salesOrderNumber: string } | null = null;
+    if (dto.orderItems?.length) {
+      order = await this.createOrderTx(tx, actorId, {
+        customerId: dto.customerId,
+        customerName: dto.customerName,
+        orderDate: dto.invoiceDate,
+        status: 'DRAFT',
+        salesChannel: dto.salesChannel,
+        discountAmount: 0,
+        note: dto.note,
+        items: dto.orderItems,
+      });
+    }
+    if (requestedStatus === 'COMPLETED')
+      await this.completeInvoiceTx(tx, actorId, invoice.salesInvoiceId);
+    await this.writeDocumentLogs(tx, actorId, {
+      operation: 'CREATE',
+      entityType: 'SALES_INVOICE',
+      entityId: invoice.salesInvoiceId,
+      entityNumber: number,
+      before: null,
+      after: invoice,
+      description: `Membuat Sales Invoice ${number}${order ? ` dan ${order.salesOrderNumber}` : ''}`,
+    });
+    await this.syncSourceOrder(
+      tx,
+      dto.salesOrderId ? BigInt(dto.salesOrderId) : null,
+    );
+    return {
+      salesInvoiceId: invoice.salesInvoiceId.toString(),
+      salesInvoiceNumber: number,
+      salesOrder: order,
+    };
+  }
+
+  /**
+   * Converts an outgoing Inventory Loan obligation into a final receivable.
+   * The goods already left inventory when the Loan was activated, therefore
+   * this path deliberately reuses every commercial SI rule while skipping
+   * only the SI stock reservation/consumption lifecycle.
+   */
+  async createCompletedInventoryLoanInvoiceTx(
+    tx: Prisma.TransactionClient,
+    actorId: bigint,
+    inventoryLoanResolutionId: bigint,
+    dto: SaveSalesInvoiceDto,
+  ) {
+    if (!dto.customerId) {
+      throw new HttpException(
+        'Customer Inventory Loan wajib tersedia.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    if (!dto.dueDate) {
+      throw new HttpException(
+        'Tanggal jatuh tempo wajib diisi untuk konversi Loan menjadi piutang customer.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
+    const created = await this.createInvoiceTx(
+      tx,
+      actorId,
+      {
+        ...dto,
+        partyType: 'CUSTOMER',
+        paymentType: 'CREDIT',
+        status: 'DRAFT',
+        snapshotMode: 'IGNORE',
+        payments: [],
+        orderItems: undefined,
+        salesOrderId: undefined,
+      },
+      ZERO,
+      { skipInventoryReservation: true },
+    );
+    const salesInvoiceId = BigInt(created.salesInvoiceId);
+    await tx.inventoryLoanResolution.update({
+      where: { inventoryLoanResolutionId },
+      data: { salesInvoiceId },
+    });
+    await this.completeInvoiceTx(tx, actorId, salesInvoiceId);
+    return created;
   }
 
   async quoteInvoiceTx(tx: Prisma.TransactionClient, dto: SaveSalesInvoiceDto) {
@@ -1293,12 +1346,16 @@ export class SalesService {
         note: detail.note ?? undefined,
       })),
     );
+    const loanConversion = await tx.inventoryLoanResolution.count({
+      where: { salesInvoiceId: invoice.salesInvoiceId },
+    });
     const groups = this.groupBase(prepared);
-    await this.lockStocks(
-      tx,
-      groups.map((group) => group.productUnitId),
-    );
-    for (const group of groups) {
+    if (!loanConversion)
+      await this.lockStocks(
+        tx,
+        groups.map((group) => group.productUnitId),
+      );
+    for (const group of loanConversion ? [] : groups) {
       const stock = await tx.inventoryStock.findUnique({
         where: { productUnitId: group.productUnitId },
       });
@@ -1313,7 +1370,11 @@ export class SalesService {
         );
       }
     }
-    for (let index = 0; index < prepared.length; index += 1) {
+    for (
+      let index = 0;
+      index < (loanConversion ? 0 : prepared.length);
+      index += 1
+    ) {
       const item = prepared[index];
       const detail = invoice.details[index];
       const totalQty = item.baseQuantity.add(item.baseBonusQuantity);
@@ -1345,7 +1406,7 @@ export class SalesService {
         insufficientMessage: `FIFO ${item.productName} tidak mencukupi. Seluruh penyelesaian dibatalkan.`,
       });
     }
-    for (const group of groups) {
+    for (const group of loanConversion ? [] : groups) {
       await tx.inventoryStock.update({
         where: { productUnitId: group.productUnitId },
         data: {
@@ -1951,7 +2012,10 @@ export class SalesService {
       include: { financialSummary: true },
     });
     if (!customer)
-      throw new HttpException('Customer tidak ditemukan.', HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        'Customer tidak ditemukan.',
+        HttpStatus.NOT_FOUND,
+      );
     const invoices = await this.prisma.salesInvoice.findMany({
       where: {
         customerId,
@@ -1971,7 +2035,9 @@ export class SalesService {
         customerId: customer.customerId.toString(),
         customerName: customer.customerName,
         phone: customer.phone,
-        outstandingAmount: Number(customer.financialSummary?.outstandingAmount ?? 0),
+        outstandingAmount: Number(
+          customer.financialSummary?.outstandingAmount ?? 0,
+        ),
       },
       invoices: invoices.map((invoice) => this.mapInvoice(invoice)),
     };

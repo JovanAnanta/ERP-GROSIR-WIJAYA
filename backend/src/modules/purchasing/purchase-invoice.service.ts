@@ -152,107 +152,157 @@ export class PurchaseInvoiceService {
         HttpStatus.BAD_REQUEST,
       );
 
-    return await this.prisma.$transaction(async (tx) => {
-      const invoiceNumber = await this.generatePINumber(tx);
-      const supplierId = BigInt(dto.supplierId);
-      const poId = dto.purchaseOrderId ? BigInt(dto.purchaseOrderId) : null;
-      const now = new Date();
-      const transactionId = createAuditTransactionId();
+    return this.prisma.$transaction((tx) =>
+      this.createInvoiceTx(tx, userId, dto),
+    );
+  }
 
-      const invoiceTotal = new Prisma.Decimal(dto.invoiceTotal);
-      await this.validateInvoiceReferences(tx, dto);
-      const totalPaid =
-        dto.status === 'COMPLETED'
-          ? calculateTotalPaid(invoiceTotal, dto.payments)
-          : new Prisma.Decimal(0);
-      const outstandingAmount = invoiceTotal.sub(totalPaid);
+  private async createInvoiceTx(
+    tx: Prisma.TransactionClient,
+    userId: bigint,
+    dto: CreatePurchaseInvoiceDto,
+    options: { inventoryLoanResolutionId?: bigint } = {},
+  ) {
+    const invoiceNumber = await this.generatePINumber(tx);
+    const supplierId = BigInt(dto.supplierId);
+    const poId = dto.purchaseOrderId ? BigInt(dto.purchaseOrderId) : null;
+    const now = new Date();
+    const transactionId = createAuditTransactionId();
 
-      let statusPayment: PurchaseInvoicePaymentStatus =
-        PurchaseInvoicePaymentStatus.UNPAID;
-      if (totalPaid.equals(invoiceTotal))
-        statusPayment = PurchaseInvoicePaymentStatus.PAID;
-      else if (totalPaid.greaterThan(0))
-        statusPayment = PurchaseInvoicePaymentStatus.PARTIAL;
+    const invoiceTotal = new Prisma.Decimal(dto.invoiceTotal);
+    await this.validateInvoiceReferences(tx, dto);
+    const totalPaid =
+      dto.status === 'COMPLETED'
+        ? calculateTotalPaid(invoiceTotal, dto.payments)
+        : new Prisma.Decimal(0);
+    const outstandingAmount = invoiceTotal.sub(totalPaid);
 
-      const invoice: CreatedInvoiceWithDetails =
-        await tx.purchaseInvoice.create({
-          data: {
-            purchaseInvoiceNumber: invoiceNumber,
-            supplierId,
-            purchaseOrderId: poId,
-            invoiceDate: new Date(dto.invoiceDate),
-            dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-            invoiceTotal,
-            discountAmount: new Prisma.Decimal(dto.discountAmount),
-            statusPayment,
-            paidAmount: totalPaid,
-            outstandingAmount,
-            status: dto.status,
-            note: dto.note,
-            createdBy: userId,
-            details: {
-              create: dto.items.map((item) => ({
-                productUnitId: BigInt(item.productUnitId),
-                quantity: item.purchasedQty,
-                unitCost: item.price,
-                subtotal: new Prisma.Decimal(item.purchasedQty).mul(item.price),
-                note: item.note,
-              })),
-            },
-          },
+    let statusPayment: PurchaseInvoicePaymentStatus =
+      PurchaseInvoicePaymentStatus.UNPAID;
+    if (totalPaid.equals(invoiceTotal))
+      statusPayment = PurchaseInvoicePaymentStatus.PAID;
+    else if (totalPaid.greaterThan(0))
+      statusPayment = PurchaseInvoicePaymentStatus.PARTIAL;
+
+    const invoice: CreatedInvoiceWithDetails = await tx.purchaseInvoice.create({
+      data: {
+        purchaseInvoiceNumber: invoiceNumber,
+        supplierId,
+        purchaseOrderId: poId,
+        invoiceDate: new Date(dto.invoiceDate),
+        dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+        invoiceTotal,
+        discountAmount: new Prisma.Decimal(dto.discountAmount),
+        statusPayment,
+        paidAmount: totalPaid,
+        outstandingAmount,
+        status: dto.status,
+        note: dto.note,
+        createdBy: userId,
+        details: {
+          create: dto.items.map((item) => ({
+            productUnitId: BigInt(item.productUnitId),
+            quantity: item.purchasedQty,
+            unitCost: item.price,
+            subtotal: new Prisma.Decimal(item.purchasedQty).mul(item.price),
+            note: item.note,
+          })),
+        },
+      },
+      include: {
+        details: {
           include: {
-            details: {
-              include: {
-                productUnit: {
-                  include: { product: { include: { productUnits: true } } },
-                },
-              },
+            productUnit: {
+              include: { product: { include: { productUnits: true } } },
             },
           },
-        });
+        },
+      },
+    });
 
-      await this._processPriceHistory(
+    if (options.inventoryLoanResolutionId) {
+      await tx.inventoryLoanResolution.update({
+        where: {
+          inventoryLoanResolutionId: options.inventoryLoanResolutionId,
+        },
+        data: { purchaseInvoiceId: invoice.purchaseInvoiceId },
+      });
+    }
+
+    await this._processPriceHistory(
+      tx,
+      invoice,
+      dto.priceHistoryAction,
+      userId,
+      now,
+      transactionId,
+    );
+
+    if (dto.status === 'COMPLETED') {
+      await this._processInventory(tx, invoice, userId, now, transactionId);
+      await this._processFinance(
         tx,
         invoice,
-        dto.priceHistoryAction,
+        dto.payments || [],
         userId,
         now,
         transactionId,
       );
-
-      if (dto.status === 'COMPLETED') {
-        await this._processInventory(tx, invoice, userId, now, transactionId);
-        await this._processFinance(
+      if (poId)
+        await this._processPO(
           tx,
-          invoice,
-          dto.payments || [],
+          poId,
           userId,
           now,
           transactionId,
+          invoiceNumber,
         );
-        if (poId)
-          await this._processPO(
-            tx,
-            poId,
-            userId,
-            now,
-            transactionId,
-            invoiceNumber,
-          );
-      }
+    }
 
-      await this._processLogs(
-        tx,
-        invoice,
-        dto,
-        userId,
-        now,
-        'CREATE',
-        undefined,
-        transactionId,
+    await this._processLogs(
+      tx,
+      invoice,
+      dto,
+      userId,
+      now,
+      'CREATE',
+      undefined,
+      transactionId,
+    );
+    return invoice;
+  }
+
+  async createCompletedInventoryLoanInvoiceTx(
+    tx: Prisma.TransactionClient,
+    userId: bigint,
+    inventoryLoanResolutionId: bigint,
+    dto: CreatePurchaseInvoiceDto,
+  ) {
+    if (!dto.supplierId) {
+      throw new HttpException(
+        'Supplier Inventory Loan wajib tersedia.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
       );
-      return invoice;
-    });
+    }
+    if (!dto.dueDate) {
+      throw new HttpException(
+        'Tanggal jatuh tempo wajib diisi karena PI hasil Inventory Loan langsung menjadi hutang supplier.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
+    return this.createInvoiceTx(
+      tx,
+      userId,
+      {
+        ...dto,
+        purchaseOrderId: undefined,
+        status: 'COMPLETED',
+        priceHistoryAction: 'IGNORE',
+        payments: [],
+      },
+      { inventoryLoanResolutionId },
+    );
   }
 
   async update(
@@ -852,6 +902,12 @@ export class PurchaseInvoiceService {
     now: Date,
     transactionId: string,
   ) {
+    const loanConversion = await tx.inventoryLoanResolution.count({
+      where: { purchaseInvoiceId: invoice.purchaseInvoiceId },
+    });
+    // Barang Loan masuk sudah menambah stok saat Loan diaktifkan. PI hanya
+    // mengesahkan kewajiban dan tidak boleh membuat stok/FIFO untuk kedua kali.
+    if (loanConversion > 0) return;
     for (const detail of invoice.details) {
       const selectedUnit = detail.productUnit;
       const parentUnit = selectedUnit.product.productUnits.find(

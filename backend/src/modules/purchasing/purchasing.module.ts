@@ -15,5 +15,6 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
     PrismaService,
     RolesGuard,
   ],
+  exports: [PurchaseInvoiceService],
 })
 export class PurchasingModule {}

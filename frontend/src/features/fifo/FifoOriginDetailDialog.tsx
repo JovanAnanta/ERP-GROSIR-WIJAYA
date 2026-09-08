@@ -16,6 +16,7 @@ import PurchaseInvoiceDetailDialog from "@/features/purchasing/components/Purcha
 import {
   inventoryApi,
   type InventoryDetail,
+  type InventoryLoanDetail,
   type TransformationDetail,
 } from "@/features/inventory/inventory.api";
 import { parseApiError } from "@/utils/error";
@@ -40,6 +41,7 @@ export default function FifoOriginDetailDialog({ origin, onClose }: Props) {
   const [adjustment, setAdjustment] = useState<InventoryDetail | null>(null);
   const [transformation, setTransformation] =
     useState<TransformationDetail | null>(null);
+  const [loan, setLoan] = useState<InventoryLoanDetail | null>(null);
 
   useEffect(() => {
     if (!origin) return;
@@ -49,6 +51,7 @@ export default function FifoOriginDetailDialog({ origin, onClose }: Props) {
       setPurchaseReturn(null);
       setAdjustment(null);
       setTransformation(null);
+      setLoan(null);
       setError("");
       setLoading(true);
       const request =
@@ -68,11 +71,17 @@ export default function FifoOriginDetailDialog({ origin, onClose }: Props) {
                 ? inventoryApi
                     .transformationDetail(origin.id)
                     .then((data) => active && setTransformation(data))
-                : Promise.reject(
-                    new Error(
-                      "Detail dokumen ini akan tersedia ketika modul terkait selesai dibuat.",
-                    ),
-                  );
+                : origin.type === "INVENTORY_LOAN" ||
+                    origin.type === "INVENTORY_LOAN_RETURN" ||
+                    origin.type === "INVENTORY_LOAN_RECOVERY"
+                  ? inventoryApi
+                      .loanDetail(origin.id)
+                      .then((data) => active && setLoan(data))
+                  : Promise.reject(
+                      new Error(
+                        "Detail dokumen ini akan tersedia ketika modul terkait selesai dibuat.",
+                      ),
+                    );
       void request
         .catch((reason) => active && setError(parseApiError(reason)))
         .finally(() => active && setLoading(false));
@@ -223,6 +232,58 @@ export default function FifoOriginDetailDialog({ origin, onClose }: Props) {
                     <p className="mt-1 text-slate-500">
                       Modal hasil: {rupiah(item.appliedUnitCost)}/unit · total{" "}
                       {rupiah(item.resultCostTotal)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {loan && (
+            <div className="space-y-4">
+              <div className="grid gap-2 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-3">
+                <p>
+                  <b>Nomor Loan</b>
+                  <br />
+                  {loan.loanNumber}
+                </p>
+                <p>
+                  <b>Arah</b>
+                  <br />
+                  {loan.direction === "OUTGOING"
+                    ? "Dipinjamkan"
+                    : "Kita pinjam"}
+                </p>
+                <p>
+                  <b>Partner</b>
+                  <br />
+                  {loan.customer?.customerName ?? loan.supplier?.supplierName}
+                </p>
+                <p>
+                  <b>Status</b>
+                  <br />
+                  {loan.status}
+                </p>
+                <p>
+                  <b>Tanggal</b>
+                  <br />
+                  {new Date(loan.loanDate).toLocaleDateString("id-ID")}
+                </p>
+                <p>
+                  <b>Penyelesaian</b>
+                  <br />
+                  {loan.resolutions.length} transaksi
+                </p>
+              </div>
+              <div className="space-y-2">
+                {loan.details.map((item) => (
+                  <div
+                    key={item.inventoryLoanDetailId}
+                    className="rounded-lg border p-3 text-sm"
+                  >
+                    <b>{item.productUnit.product.productName}</b>
+                    <p className="mt-1 text-slate-600">
+                      {item.quantity} {item.productUnit.unit.unitName} ·{" "}
+                      {rupiah(item.provisionalTotalCost)}
                     </p>
                   </div>
                 ))}

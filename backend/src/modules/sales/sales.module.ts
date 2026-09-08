@@ -7,6 +7,12 @@ import { SalesReturnService } from './sales-return.service.js';
 
 @Module({
   controllers: [SalesController],
-  providers: [SalesService, SalesReturnService, PrismaService, WhatsappImportService],
+  providers: [
+    SalesService,
+    SalesReturnService,
+    PrismaService,
+    WhatsappImportService,
+  ],
+  exports: [SalesService],
 })
 export class SalesModule {}

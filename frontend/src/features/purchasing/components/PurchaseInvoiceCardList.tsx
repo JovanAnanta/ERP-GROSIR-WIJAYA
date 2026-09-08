@@ -12,6 +12,7 @@ import PurchaseReturnDialog from "./PurchaseReturnDialog";
 
 interface Props {
   onEditInvoice: (invoiceId: string) => void;
+  initialInvoiceId?: string | null;
   canCreate?: boolean;
   canUpdate?: boolean;
 }
@@ -24,7 +25,7 @@ const escapeHtml = (value: string): string => value.replace(/[&<>'"]/g, (charact
   '"': '&quot;',
 }[character] ?? character));
 
-export default function PurchaseInvoiceCardList({ onEditInvoice, canCreate = true, canUpdate = true }: Props) {
+export default function PurchaseInvoiceCardList({ onEditInvoice, initialInvoiceId, canCreate = true, canUpdate = true }: Props) {
   const [selectedSupplier, setSelectedSupplier] = useState<SupplierFinancialSummaryCard | null>(null);
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'COMPLETED'>('ACTIVE');
   
@@ -126,6 +127,24 @@ export default function PurchaseInvoiceCardList({ onEditInvoice, canCreate = tru
       setIsDetailLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!initialInvoiceId) return;
+    let active = true;
+    void purchasingApi
+      .getInvoiceDetail(initialInvoiceId)
+      .then((detail) => {
+        if (!active) return;
+        setDetailData(detail);
+        setIsDetailOpen(true);
+      })
+      .catch((caught) => {
+        if (active) setErrorMsg(parseApiError(caught));
+      });
+    return () => {
+      active = false;
+    };
+  }, [initialInvoiceId]);
 
   const handleOpenPayment = async (inv: PurchaseInvoiceListItem) => {
     setPaymentTarget(inv);

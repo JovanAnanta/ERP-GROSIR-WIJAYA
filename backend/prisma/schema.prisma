@@ -102,6 +102,14 @@ model User {
   updatedStockOpnames                   StockOpname[]                   @relation("StockOpnameUpdatedBy")
   cancelledStockOpnames                 StockOpname[]                   @relation("StockOpnameCancelledBy")
   createdStockOpnameDetails             StockOpnameDetail[]             @relation("StockOpnameDetailCreatedBy")
+  createdInventoryLoans                 InventoryLoan[]                 @relation("InventoryLoanCreatedBy")
+  updatedInventoryLoans                 InventoryLoan[]                 @relation("InventoryLoanUpdatedBy")
+  activatedInventoryLoans               InventoryLoan[]                 @relation("InventoryLoanActivatedBy")
+  closedInventoryLoans                  InventoryLoan[]                 @relation("InventoryLoanClosedBy")
+  cancelledInventoryLoans               InventoryLoan[]                 @relation("InventoryLoanCancelledBy")
+  createdInventoryLoanResolutions       InventoryLoanResolution[]       @relation("InventoryLoanResolutionCreatedBy")
+  completedInventoryLoanResolutions     InventoryLoanResolution[]       @relation("InventoryLoanResolutionCompletedBy")
+  cancelledInventoryLoanResolutions     InventoryLoanResolution[]       @relation("InventoryLoanResolutionCancelledBy")
 
   /**
    * SALES
@@ -348,6 +356,8 @@ model ProductUnit {
   inventoryAdjustmentDetails InventoryAdjustmentDetail[]
   stockOpnameDetails         StockOpnameDetail[]
   inventoryStocks            InventoryStock[]
+  inventoryLoanDetails       InventoryLoanDetail[]
+  inventoryLoanReplacements  InventoryLoanResolutionDetail[] @relation("InventoryLoanReplacementUnit")
 
   /**
    * SALES
@@ -393,6 +403,7 @@ model Supplier {
   accountTransactions SupplierAccountTransaction[]
 
   suggestedCosts SupplierSuggestedCost[]
+  inventoryLoans InventoryLoan[]
 
   @@index([createdBy])
   @@index([updatedBy])
@@ -442,6 +453,7 @@ model Customer {
   accountTransactions CustomerAccountTransaction[]
 
   suggestedPrices CustomerSuggestedPrice[]
+  inventoryLoans InventoryLoan[]
 
   @@index([createdBy])
   @@index([updatedBy])
@@ -522,6 +534,7 @@ model PurchaseInvoice {
   returns                PurchaseReturn[]         @relation("PurchaseReturnSourceInvoice")
   appliedPurchaseReturns PurchaseReturn[]         @relation("PurchaseReturnAppliedInvoice")
   payments               PurchaseInvoicePayment[]
+  inventoryLoanResolutions InventoryLoanResolution[]
 
   @@index([purchaseOrderId])
   @@index([supplierId])
@@ -826,6 +839,8 @@ enum FifoLayerOriginType {
   INVENTORY_TRANSFORMATION
   INVENTORY_ADJUSTMENT
   INVENTORY_LOAN_RETURN
+  INVENTORY_LOAN
+  INVENTORY_LOAN_RECOVERY
 }
 
 enum TransformationMovementRole {
@@ -860,6 +875,8 @@ model FifoLayer {
   createdByUser           User                   @relation("FifoLayerCreatedBy", fields: [createdBy], references: [userId])
   transactions            FifoLayerTransaction[]
   purchaseReturnDetails   PurchaseReturnDetail[]
+  inventoryLoanAllocations InventoryLoanFifoAllocation[]
+  inventoryLoanResolutionAllocations InventoryLoanResolutionAllocation[]
 
   @@index([productUnitId])
   @@index([purchaseInvoiceDetailId])
@@ -985,6 +1002,7 @@ model InventoryMovement {
   generatedLayers           FifoLayer[]                             @relation("MovementGeneratedLayers")
   consumedLayers            FifoLayerTransaction[]                  @relation("MovementConsumedLayers")
   transformationDetailLinks InventoryTransformationMovementDetail[]
+  inventoryLoanResolutionDetail InventoryLoanResolutionDetail?
 
   @@index([productUnitId])
   @@index([originType, originId])
@@ -1123,6 +1141,203 @@ model InventoryStock {
   @@unique([productUnitId])
   @@index([productId])
   @@map("inventory_stock")
+}
+
+enum InventoryLoanDirection {
+  OUTGOING
+  INCOMING
+}
+
+enum InventoryLoanStatus {
+  DRAFT
+  OUTSTANDING
+  CLOSED
+  WRITTEN_OFF
+  CANCELLED
+}
+
+enum InventoryLoanResolutionStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
+enum InventoryLoanResolutionType {
+  SAME_PRODUCT_RETURN
+  REPLACEMENT_PRODUCT
+  INVOICE_CONVERSION
+  WRITE_OFF
+}
+
+enum InventoryLoanAllocationRole {
+  LOAN_OBLIGATION
+  REPLACEMENT_IN
+  REPLACEMENT_OUT
+}
+
+model InventoryLoan {
+  inventoryLoanId BigInt @id @default(autoincrement()) @map("inventory_loan_id")
+  loanNumber String @unique @map("loan_number") @db.VarChar(30)
+  direction InventoryLoanDirection
+  customerId BigInt? @map("customer_id")
+  supplierId BigInt? @map("supplier_id")
+  loanDate DateTime @map("loan_date") @db.Date
+  dueDate DateTime? @map("due_date") @db.Date
+  status InventoryLoanStatus @default(DRAFT)
+  note String? @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy BigInt @map("created_by")
+  updatedAt DateTime? @updatedAt @map("updated_at")
+  updatedBy BigInt? @map("updated_by")
+  activatedAt DateTime? @map("activated_at")
+  activatedBy BigInt? @map("activated_by")
+  closedAt DateTime? @map("closed_at")
+  closedBy BigInt? @map("closed_by")
+  cancelledAt DateTime? @map("cancelled_at")
+  cancelledBy BigInt? @map("cancelled_by")
+
+  customer Customer? @relation(fields: [customerId], references: [customerId], onDelete: Restrict)
+  supplier Supplier? @relation(fields: [supplierId], references: [supplierId], onDelete: Restrict)
+  createdByUser User @relation("InventoryLoanCreatedBy", fields: [createdBy], references: [userId])
+  updatedByUser User? @relation("InventoryLoanUpdatedBy", fields: [updatedBy], references: [userId])
+  activatedByUser User? @relation("InventoryLoanActivatedBy", fields: [activatedBy], references: [userId])
+  closedByUser User? @relation("InventoryLoanClosedBy", fields: [closedBy], references: [userId])
+  cancelledByUser User? @relation("InventoryLoanCancelledBy", fields: [cancelledBy], references: [userId])
+  details InventoryLoanDetail[]
+  resolutions InventoryLoanResolution[]
+
+  @@index([direction, status, loanDate])
+  @@index([customerId, status])
+  @@index([supplierId, status])
+  @@index([dueDate, status])
+  @@index([createdBy])
+  @@map("inventory_loan")
+}
+
+model InventoryLoanDetail {
+  inventoryLoanDetailId BigInt @id @default(autoincrement()) @map("inventory_loan_detail_id")
+  inventoryLoanId BigInt @map("inventory_loan_id")
+  productUnitId BigInt @map("product_unit_id")
+  quantity Decimal @db.Decimal(18, 3)
+  provisionalUnitCost Decimal @map("provisional_unit_cost") @db.Decimal(18, 2)
+  provisionalTotalCost Decimal @map("provisional_total_cost") @db.Decimal(18, 2)
+  returnedQuantity Decimal @default(0) @map("returned_quantity") @db.Decimal(18, 3)
+  convertedQuantity Decimal @default(0) @map("converted_quantity") @db.Decimal(18, 3)
+  writtenOffQuantity Decimal @default(0) @map("written_off_quantity") @db.Decimal(18, 3)
+  recoveredQuantity Decimal @default(0) @map("recovered_quantity") @db.Decimal(18, 3)
+  note String? @db.VarChar(255)
+
+  inventoryLoan InventoryLoan @relation(fields: [inventoryLoanId], references: [inventoryLoanId], onDelete: Restrict)
+  productUnit ProductUnit @relation(fields: [productUnitId], references: [productUnitId], onDelete: Restrict)
+  fifoAllocations InventoryLoanFifoAllocation[]
+  resolutionDetails InventoryLoanResolutionDetail[]
+
+  @@unique([inventoryLoanId, productUnitId])
+  @@index([productUnitId])
+  @@map("inventory_loan_detail")
+}
+
+model InventoryLoanFifoAllocation {
+  inventoryLoanFifoAllocationId BigInt @id @default(autoincrement()) @map("inventory_loan_fifo_allocation_id")
+  inventoryLoanDetailId BigInt @map("inventory_loan_detail_id")
+  fifoLayerId BigInt @map("fifo_layer_id")
+  allocatedQuantity Decimal @map("allocated_quantity") @db.Decimal(18, 3)
+  unitCost Decimal @map("unit_cost") @db.Decimal(18, 2)
+  totalCost Decimal @map("total_cost") @db.Decimal(18, 2)
+  remainingAllocationQuantity Decimal @map("remaining_allocation_quantity") @db.Decimal(18, 3)
+
+  inventoryLoanDetail InventoryLoanDetail @relation(fields: [inventoryLoanDetailId], references: [inventoryLoanDetailId], onDelete: Restrict)
+  fifoLayer FifoLayer @relation(fields: [fifoLayerId], references: [fifoLayerId], onDelete: Restrict)
+  resolutionAllocations InventoryLoanResolutionAllocation[]
+
+  @@unique([inventoryLoanDetailId, fifoLayerId])
+  @@index([fifoLayerId])
+  @@map("inventory_loan_fifo_allocation")
+}
+
+model InventoryLoanResolution {
+  inventoryLoanResolutionId BigInt @id @default(autoincrement()) @map("inventory_loan_resolution_id")
+  resolutionNumber String @unique @map("resolution_number") @db.VarChar(30)
+  inventoryLoanId BigInt @map("inventory_loan_id")
+  resolutionDate DateTime @map("resolution_date") @db.Date
+  status InventoryLoanResolutionStatus @default(DRAFT)
+  salesInvoiceId BigInt? @map("sales_invoice_id")
+  purchaseInvoiceId BigInt? @map("purchase_invoice_id")
+  note String? @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy BigInt @map("created_by")
+  completedAt DateTime? @map("completed_at")
+  completedBy BigInt? @map("completed_by")
+  cancelledAt DateTime? @map("cancelled_at")
+  cancelledBy BigInt? @map("cancelled_by")
+
+  inventoryLoan InventoryLoan @relation(fields: [inventoryLoanId], references: [inventoryLoanId], onDelete: Restrict)
+  salesInvoice SalesInvoice? @relation(fields: [salesInvoiceId], references: [salesInvoiceId], onDelete: Restrict)
+  purchaseInvoice PurchaseInvoice? @relation(fields: [purchaseInvoiceId], references: [purchaseInvoiceId], onDelete: Restrict)
+  createdByUser User @relation("InventoryLoanResolutionCreatedBy", fields: [createdBy], references: [userId])
+  completedByUser User? @relation("InventoryLoanResolutionCompletedBy", fields: [completedBy], references: [userId])
+  cancelledByUser User? @relation("InventoryLoanResolutionCancelledBy", fields: [cancelledBy], references: [userId])
+  details InventoryLoanResolutionDetail[]
+
+  @@index([inventoryLoanId, status, resolutionDate])
+  @@index([salesInvoiceId])
+  @@index([purchaseInvoiceId])
+  @@map("inventory_loan_resolution")
+}
+
+model InventoryLoanResolutionDetail {
+  inventoryLoanResolutionDetailId BigInt @id @default(autoincrement()) @map("inventory_loan_resolution_detail_id")
+  inventoryLoanResolutionId BigInt @map("inventory_loan_resolution_id")
+  inventoryLoanDetailId BigInt @map("inventory_loan_detail_id")
+  recoveredWriteOffDetailId BigInt? @map("recovered_write_off_detail_id")
+  resolutionType InventoryLoanResolutionType @map("resolution_type")
+  sourceQuantity Decimal @map("source_quantity") @db.Decimal(18, 3)
+  obligationUnitCost Decimal @map("obligation_unit_cost") @db.Decimal(18, 2)
+  obligationTotalCost Decimal @map("obligation_total_cost") @db.Decimal(18, 2)
+  replacementProductUnitId BigInt? @map("replacement_product_unit_id")
+  replacementQuantity Decimal? @map("replacement_quantity") @db.Decimal(18, 3)
+  replacementUnitCost Decimal? @map("replacement_unit_cost") @db.Decimal(18, 2)
+  replacementTotalCost Decimal? @map("replacement_total_cost") @db.Decimal(18, 2)
+  actualFifoCost Decimal? @map("actual_fifo_cost") @db.Decimal(18, 2)
+  valuationVariance Decimal @default(0) @map("valuation_variance") @db.Decimal(18, 2)
+  inventoryRevaluationAmount Decimal @default(0) @map("inventory_revaluation_amount") @db.Decimal(18, 2)
+  consumedCostAdjustmentAmount Decimal @default(0) @map("consumed_cost_adjustment_amount") @db.Decimal(18, 2)
+  inventoryMovementId BigInt? @unique @map("inventory_movement_id")
+  note String? @db.VarChar(255)
+
+  resolution InventoryLoanResolution @relation(fields: [inventoryLoanResolutionId], references: [inventoryLoanResolutionId], onDelete: Restrict)
+  inventoryLoanDetail InventoryLoanDetail @relation(fields: [inventoryLoanDetailId], references: [inventoryLoanDetailId], onDelete: Restrict)
+  recoveredWriteOffDetail InventoryLoanResolutionDetail? @relation("InventoryLoanWriteOffRecovery", fields: [recoveredWriteOffDetailId], references: [inventoryLoanResolutionDetailId], onDelete: Restrict)
+  recoveries InventoryLoanResolutionDetail[] @relation("InventoryLoanWriteOffRecovery")
+  replacementProductUnit ProductUnit? @relation("InventoryLoanReplacementUnit", fields: [replacementProductUnitId], references: [productUnitId], onDelete: Restrict)
+  inventoryMovement InventoryMovement? @relation(fields: [inventoryMovementId], references: [inventoryMovementId], onDelete: Restrict)
+  allocations InventoryLoanResolutionAllocation[]
+
+  @@index([inventoryLoanResolutionId])
+  @@index([inventoryLoanDetailId, resolutionType])
+  @@index([recoveredWriteOffDetailId])
+  @@index([replacementProductUnitId])
+  @@map("inventory_loan_resolution_detail")
+}
+
+model InventoryLoanResolutionAllocation {
+  inventoryLoanResolutionAllocationId BigInt @id @default(autoincrement()) @map("inventory_loan_resolution_allocation_id")
+  inventoryLoanResolutionDetailId BigInt @map("inventory_loan_resolution_detail_id")
+  inventoryLoanFifoAllocationId BigInt? @map("inventory_loan_fifo_allocation_id")
+  fifoLayerId BigInt @map("fifo_layer_id")
+  role InventoryLoanAllocationRole
+  quantity Decimal @db.Decimal(18, 3)
+  unitCost Decimal @map("unit_cost") @db.Decimal(18, 2)
+  totalCost Decimal @map("total_cost") @db.Decimal(18, 2)
+
+  resolutionDetail InventoryLoanResolutionDetail @relation(fields: [inventoryLoanResolutionDetailId], references: [inventoryLoanResolutionDetailId], onDelete: Restrict)
+  loanAllocation InventoryLoanFifoAllocation? @relation(fields: [inventoryLoanFifoAllocationId], references: [inventoryLoanFifoAllocationId], onDelete: Restrict)
+  fifoLayer FifoLayer @relation(fields: [fifoLayerId], references: [fifoLayerId], onDelete: Restrict)
+
+  @@index([inventoryLoanResolutionDetailId])
+  @@index([inventoryLoanFifoAllocationId])
+  @@index([fifoLayerId])
+  @@map("inventory_loan_resolution_allocation")
 }
 
 /**
@@ -1277,6 +1492,7 @@ model SalesInvoice {
   paymentHoldings SalesPaymentHolding[]
   returns  SalesReturn[] @relation("SalesReturnSourceInvoice")
   replacementForReturn SalesReturn? @relation("SalesReturnReplacementInvoice")
+  inventoryLoanResolutions InventoryLoanResolution[]
 
   @@index([salesOrderId])
   @@index([customerId])
