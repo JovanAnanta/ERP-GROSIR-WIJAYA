@@ -28,6 +28,7 @@ export default function SalesModulePage() {
   const activeTab = (params.get("tab") as Tab) || "sales";
   const kind = params.get("kind") === "so" ? "SO" : "SI";
   const editingId = params.get("editId");
+  const viewInvoiceId = params.get("viewInvoiceId");
   const [version, setVersion] = useState(0);
   const [message, setMessage] = useState("");
   const canCreate = hasPermission(user, "SALES_CREATE");
@@ -130,6 +131,7 @@ export default function SalesModulePage() {
         {activeTab === "sales" && (
           <SalesDocumentList
             version={version}
+            initialInvoiceId={viewInvoiceId}
             canUpdate={canUpdate}
             canApprove={canApprove}
             canReceivePayment={canReceivePayment}

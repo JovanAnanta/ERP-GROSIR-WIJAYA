@@ -29,6 +29,7 @@ export default function PurchasingModulePage() {
   const subType = (searchParams.get("sub") as TransactionSubtype) || "po";
   const editInvoiceId = searchParams.get("editId");
   const editOrderId = searchParams.get("editPoId");
+  const viewInvoiceId = searchParams.get("viewInvoiceId");
 
   const setActiveTab = (tab: TabType, sub?: TransactionSubtype) => {
     const params: Record<string, string> = { tab };
@@ -109,7 +110,7 @@ export default function PurchasingModulePage() {
               setSearchParams({ tab: "transactions", sub: "po", editPoId: poId });
             }} />
             <div className="min-h-[650px]">
-              <PurchaseInvoiceCardList key={`pi-${purchaseListVersion}`} canCreate={canCreate} canUpdate={canUpdate} onEditInvoice={(invId) => {
+              <PurchaseInvoiceCardList key={`pi-${purchaseListVersion}`} initialInvoiceId={viewInvoiceId} canCreate={canCreate} canUpdate={canUpdate} onEditInvoice={(invId) => {
                 if (!canUpdate) return;
                 setSearchParams({ tab: "transactions", sub: "pi", editId: invId });
               }} />

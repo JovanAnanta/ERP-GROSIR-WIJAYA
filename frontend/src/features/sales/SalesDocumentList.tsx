@@ -45,6 +45,7 @@ async function printCompletedInvoice(invoice: SalesInvoiceDocument) {
 
 interface Props {
   version: number;
+  initialInvoiceId?: string | null;
   canUpdate: boolean;
   canApprove: boolean;
   canReceivePayment: boolean;
@@ -115,6 +116,23 @@ export default function SalesDocumentList(props: Props) {
       setError(parseApiError(caught));
     }
   };
+
+  useEffect(() => {
+    if (!props.initialInvoiceId) return;
+    let active = true;
+    const invoiceId = props.initialInvoiceId;
+    void salesApi
+      .invoice(invoiceId)
+      .then((data) => {
+        if (active) setDetail({ kind: "SI", data });
+      })
+      .catch((caught) => {
+        if (active) setError(parseApiError(caught));
+      });
+    return () => {
+      active = false;
+    };
+  }, [props.initialInvoiceId]);
 
   return (
     <div className="space-y-5 pb-8">

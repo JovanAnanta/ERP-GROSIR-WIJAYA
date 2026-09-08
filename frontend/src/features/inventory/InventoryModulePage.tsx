@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Boxes, PackageSearch, Plus, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Boxes, PackageSearch, Plus, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogOverlay,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,9 +18,9 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { hasPermission, useAuthStore } from '@/store/authStore';
-import { parseApiError } from '@/utils/error';
+} from "@/components/ui/alert-dialog";
+import { hasPermission, useAuthStore } from "@/store/authStore";
+import { parseApiError } from "@/utils/error";
 import {
   inventoryApi,
   type AdjustmentPayload,
@@ -30,17 +30,20 @@ import {
   type PaginationMeta,
   type ProductStockOption,
   type SupplierOption,
-} from './inventory.api';
-import InventoryTransformationPanel from './InventoryTransformationPanel';
-import StockMovementHistoryPanel from './StockMovementHistoryPanel';
-import InventorySectionNav, { type InventorySection } from './InventorySectionNav';
-import InventoryPageSizeSelect from './InventoryPageSizeSelect';
+} from "./inventory.api";
+import InventoryTransformationPanel from "./InventoryTransformationPanel";
+import StockMovementHistoryPanel from "./StockMovementHistoryPanel";
+import InventorySectionNav, {
+  type InventorySection,
+} from "./InventorySectionNav";
+import InventoryPageSizeSelect from "./InventoryPageSizeSelect";
+import InventoryLoanPanel from "./InventoryLoanPanel";
 
-type Kind = 'adjustments' | 'opnames';
+type Kind = "adjustments" | "opnames";
 
 type FormItem = {
   productUnitId: string;
-  direction: 'IN' | 'OUT';
+  direction: "IN" | "OUT";
   quantity: number;
   warehouseQty: number;
   packedQty: number;
@@ -50,8 +53,8 @@ type FormItem = {
 
 const formatLocalDate = (value: Date) => {
   const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const day = String(value.getDate()).padStart(2, '0');
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
 const today = () => formatLocalDate(new Date());
@@ -71,13 +74,13 @@ const emptyMeta: PaginationMeta = {
 export default function InventoryModulePage() {
   const user = useAuthStore((state) => state.user);
 
-  const canCreate = hasPermission(user, 'INVENTORY_CREATE');
-  const canUpdate = hasPermission(user, 'INVENTORY_UPDATE');
-  const canApprove = hasPermission(user, 'INVENTORY_APPROVE');
+  const canCreate = hasPermission(user, "INVENTORY_CREATE");
+  const canUpdate = hasPermission(user, "INVENTORY_UPDATE");
+  const canApprove = hasPermission(user, "INVENTORY_APPROVE");
 
-  const [kind, setKind] = useState<Kind>('adjustments');
-  const [workspace, setWorkspace] = useState<InventorySection>('MOVEMENTS');
-  const [tab, setTab] = useState<'ACTIVE' | 'HISTORY'>('ACTIVE');
+  const [kind, setKind] = useState<Kind>("adjustments");
+  const [workspace, setWorkspace] = useState<InventorySection>("MOVEMENTS");
+  const [tab, setTab] = useState<"ACTIVE" | "HISTORY">("ACTIVE");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [listDateFrom, setListDateFrom] = useState(sevenDaysAgo);
@@ -90,17 +93,17 @@ export default function InventoryModulePage() {
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   const [detail, setDetail] = useState<InventoryDetail | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string>();
 
   const [date, setDate] = useState(today());
-  const [supplierId, setSupplierId] = useState('');
-  const [reason, setReason] = useState('Penyesuaian stok manual');
-  const [note, setNote] = useState('');
+  const [supplierId, setSupplierId] = useState("");
+  const [reason, setReason] = useState("Penyesuaian stok manual");
+  const [note, setNote] = useState("");
   const [items, setItems] = useState<FormItem[]>([]);
   const [visibleRows, setVisibleRows] = useState(6);
 
@@ -110,7 +113,9 @@ export default function InventoryModulePage() {
   const [catalogItems, setCatalogItems] = useState<ProductStockOption[]>([]);
   const [selectedCatalogIds, setSelectedCatalogIds] = useState<string[]>([]);
 
-  const [confirmAction, setConfirmAction] = useState<null | (() => Promise<void>)>(null);
+  const [confirmAction, setConfirmAction] = useState<
+    null | (() => Promise<void>)
+  >(null);
 
   const [conflicts, setConflicts] = useState<
     Array<{
@@ -122,7 +127,7 @@ export default function InventoryModulePage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
       const response = await inventoryApi.list(kind, tab, page, limit, {
@@ -163,13 +168,13 @@ export default function InventoryModulePage() {
   const resetForm = () => {
     setEditingId(undefined);
     setDate(today());
-    setSupplierId('');
-    setReason('Penyesuaian stok manual');
-    setNote('');
+    setSupplierId("");
+    setReason("Penyesuaian stok manual");
+    setNote("");
     setItems([]);
     setVisibleRows(6);
-    setError('');
-    setNotice('');
+    setError("");
+    setNotice("");
     setFormOpen(true);
   };
 
@@ -182,12 +187,12 @@ export default function InventoryModulePage() {
       ...current,
       {
         productUnitId: id,
-        direction: 'IN',
+        direction: "IN",
         quantity: 0,
         warehouseQty: product.warehouseQty,
         packedQty: product.packedQty,
         unitCost: product.suggestedUnitCost ?? undefined,
-        note: '',
+        note: "",
       },
     ]);
   };
@@ -201,11 +206,11 @@ export default function InventoryModulePage() {
 
   const openCatalog = async () => {
     if (!supplierId) {
-      setError('Pilih supplier terlebih dahulu untuk membuka katalog.');
+      setError("Pilih supplier terlebih dahulu untuk membuka katalog.");
       return;
     }
 
-    setError('');
+    setError("");
     setSelectedCatalogIds([]);
     setCatalogOpen(true);
 
@@ -227,9 +232,7 @@ export default function InventoryModulePage() {
     );
 
     setItems((current) => {
-      const existing = new Set(
-        current.map((item) => item.productUnitId),
-      );
+      const existing = new Set(current.map((item) => item.productUnitId));
 
       const additions = products
         .filter(
@@ -239,12 +242,12 @@ export default function InventoryModulePage() {
         )
         .map((product) => ({
           productUnitId: product.productUnitId,
-          direction: 'IN' as const,
+          direction: "IN" as const,
           quantity: 0,
           warehouseQty: product.warehouseQty,
           packedQty: product.packedQty,
           unitCost: product.suggestedUnitCost ?? undefined,
-          note: '',
+          note: "",
         }));
 
       const next = [...current, ...additions];
@@ -271,37 +274,35 @@ export default function InventoryModulePage() {
   const formItemsFromDetail = (value: InventoryDetail): FormItem[] =>
     value.details.map((raw) => ({
       productUnitId: String(raw.productUnitId),
-      direction: (raw.direction as 'IN' | 'OUT') ?? 'IN',
+      direction: (raw.direction as "IN" | "OUT") ?? "IN",
       quantity: Number(raw.quantity ?? 0),
       warehouseQty: Number(raw.countedQty ?? 0),
       packedQty: Number(raw.packedQty ?? 0),
       unitCost: raw.unitCost == null ? undefined : Number(raw.unitCost),
-      note: String(raw.note ?? ''),
+      note: String(raw.note ?? ""),
     }));
 
   const edit = (value: InventoryDetail) => {
     const detailItems = formItemsFromDetail(value);
 
     setEditingId((value.adjustmentId ?? value.stockOpnameId)!);
-    setDate(
-      String(value.adjustmentDate ?? value.opnameDate).slice(0, 10),
-    );
-    setSupplierId(value.supplierId ?? '');
-    setReason(value.reason ?? 'Penyesuaian stok manual');
-    setNote(value.note ?? '');
+    setDate(String(value.adjustmentDate ?? value.opnameDate).slice(0, 10));
+    setSupplierId(value.supplierId ?? "");
+    setReason(value.reason ?? "Penyesuaian stok manual");
+    setNote(value.note ?? "");
     setItems(detailItems);
     setVisibleRows(Math.max(6, detailItems.length));
-    setError('');
-    setNotice('');
+    setError("");
+    setNotice("");
     setDetail(null);
     setFormOpen(true);
   };
 
-  const payload = (status: 'DRAFT' | 'APPROVED') =>
-    kind === 'adjustments'
-      ? {
+  const payload = (status: "DRAFT" | "APPROVED") =>
+    kind === "adjustments"
+      ? ({
           adjustmentDate: date,
-          reason: reason || 'Penyesuaian stok manual',
+          reason: reason || "Penyesuaian stok manual",
           note: note || undefined,
           status,
           items: items.map(
@@ -315,12 +316,12 @@ export default function InventoryModulePage() {
               productUnitId,
               direction,
               quantity,
-              unitCost: direction === 'IN' ? unitCost : undefined,
+              unitCost: direction === "IN" ? unitCost : undefined,
               note: itemNote || undefined,
             }),
           ),
-        } satisfies AdjustmentPayload
-      : {
+        } satisfies AdjustmentPayload)
+      : ({
           opnameDate: date,
           supplierId: supplierId || undefined,
           note: note || undefined,
@@ -340,36 +341,34 @@ export default function InventoryModulePage() {
               note: itemNote || undefined,
             }),
           ),
-        } satisfies OpnamePayload;
+        } satisfies OpnamePayload);
 
   const saveDraft = async () => {
     if (!items.length) {
-      setError('Pilih minimal satu produk sebelum menyimpan.');
+      setError("Pilih minimal satu produk sebelum menyimpan.");
       return undefined;
     }
 
     setSaving(true);
-    setError('');
+    setError("");
 
     try {
       const response =
-        kind === 'adjustments'
+        kind === "adjustments"
           ? await inventoryApi.saveAdjustment(
-              payload('DRAFT') as AdjustmentPayload,
+              payload("DRAFT") as AdjustmentPayload,
               editingId,
             )
           : await inventoryApi.saveOpname(
-              payload('DRAFT') as OpnamePayload,
+              payload("DRAFT") as OpnamePayload,
               editingId,
             );
 
       setEditingId(
-        response.adjustmentId ??
-          response.stockOpnameId ??
-          editingId,
+        response.adjustmentId ?? response.stockOpnameId ?? editingId,
       );
 
-      setNotice('Draft berhasil disimpan.');
+      setNotice("Draft berhasil disimpan.");
 
       await load();
 
@@ -385,15 +384,12 @@ export default function InventoryModulePage() {
   const requestApprove = async () => {
     const saved = await saveDraft();
 
-    const id =
-      editingId ??
-      saved?.adjustmentId ??
-      saved?.stockOpnameId;
+    const id = editingId ?? saved?.adjustmentId ?? saved?.stockOpnameId;
 
     if (!id) return;
 
     try {
-      if (kind === 'opnames') {
+      if (kind === "opnames") {
         const found = await inventoryApi.conflicts(id);
 
         if (found.length) {
@@ -402,47 +398,47 @@ export default function InventoryModulePage() {
         }
       }
 
-      setConfirmAction(
-        () => async () => {
-          await inventoryApi.approve(kind, id);
-          setFormOpen(false);
-          setConfirmAction(null);
-          await load();
-        },
-      );
+      setConfirmAction(() => async () => {
+        await inventoryApi.approve(kind, id);
+        setFormOpen(false);
+        setConfirmAction(null);
+        await load();
+      });
     } catch (caught) {
       setError(parseApiError(caught));
     }
   };
 
   const doCancel = (value: InventoryDetail) =>
-    setConfirmAction(
-      () => async () => {
-        await inventoryApi.cancel(
-          kind,
-          (value.adjustmentId ?? value.stockOpnameId)!,
-        );
+    setConfirmAction(() => async () => {
+      await inventoryApi.cancel(
+        kind,
+        (value.adjustmentId ?? value.stockOpnameId)!,
+      );
 
-        setDetail(null);
-        setConfirmAction(null);
+      setDetail(null);
+      setConfirmAction(null);
 
-        await load();
-      },
-    );
+      await load();
+    });
 
   const changeWorkspace = (next: InventorySection) => {
-    if (next === 'ADJUSTMENT') setKind('adjustments');
-    if (next === 'OPNAME') setKind('opnames');
+    if (next === "ADJUSTMENT") setKind("adjustments");
+    if (next === "OPNAME") setKind("opnames");
     setWorkspace(next);
     setPage(1);
   };
 
-  if (workspace === 'TRANSFORMATION') {
+  if (workspace === "TRANSFORMATION") {
     return <InventoryTransformationPanel onNavigate={changeWorkspace} />;
   }
 
-  if (workspace === 'MOVEMENTS') {
+  if (workspace === "MOVEMENTS") {
     return <StockMovementHistoryPanel onNavigate={changeWorkspace} />;
+  }
+
+  if (workspace === "LOAN") {
+    return <InventoryLoanPanel onNavigate={changeWorkspace} />;
   }
 
   return (
@@ -458,7 +454,15 @@ export default function InventoryModulePage() {
           </p>
         </div>
 
-        {canCreate && <Button onClick={resetForm} className="w-full bg-[#326dc8] text-white sm:w-auto"><Plus className="mr-2 h-4 w-4"/>Buat {kind === 'adjustments' ? 'Adjustment' : 'Opname'}</Button>}
+        {canCreate && (
+          <Button
+            onClick={resetForm}
+            className="w-full bg-[#326dc8] text-white sm:w-auto"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Buat {kind === "adjustments" ? "Adjustment" : "Opname"}
+          </Button>
+        )}
       </div>
 
       <div className="mb-4 space-y-2">
@@ -466,40 +470,62 @@ export default function InventoryModulePage() {
         <div className="grid gap-2 rounded-lg border bg-white p-3 sm:ml-auto sm:w-fit sm:grid-cols-2">
           <label className="text-[10px] font-bold uppercase text-slate-500">
             Dari tanggal
-            <input type="date" value={listDateFrom} onChange={(event) => { setListDateFrom(event.target.value); setPage(1); }} className="mt-1 h-9 w-full rounded-md border px-2 text-xs font-medium sm:w-40" />
+            <input
+              type="date"
+              value={listDateFrom}
+              onChange={(event) => {
+                setListDateFrom(event.target.value);
+                setPage(1);
+              }}
+              className="mt-1 h-9 w-full rounded-md border px-2 text-xs font-medium sm:w-40"
+            />
           </label>
           <label className="text-[10px] font-bold uppercase text-slate-500">
             Sampai tanggal
-            <input type="date" value={listDateTo} onChange={(event) => { setListDateTo(event.target.value); setPage(1); }} className="mt-1 h-9 w-full rounded-md border px-2 text-xs font-medium sm:w-40" />
+            <input
+              type="date"
+              value={listDateTo}
+              onChange={(event) => {
+                setListDateTo(event.target.value);
+                setPage(1);
+              }}
+              className="mt-1 h-9 w-full rounded-md border px-2 text-xs font-medium sm:w-40"
+            />
           </label>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-        <div className="flex w-full rounded-lg bg-slate-100 p-1 sm:w-fit">
-          <button
-            onClick={() => {
-              setTab('ACTIVE');
-              setPage(1);
-            }}
-            className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold ${
-              tab === 'ACTIVE' ? 'bg-white shadow' : ''
-            }`}
-          >
-            Draft Aktif
-          </button>
+          <div className="flex w-full rounded-lg bg-slate-100 p-1 sm:w-fit">
+            <button
+              onClick={() => {
+                setTab("ACTIVE");
+                setPage(1);
+              }}
+              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold ${
+                tab === "ACTIVE" ? "bg-white shadow" : ""
+              }`}
+            >
+              Draft Aktif
+            </button>
 
-          <button
-            onClick={() => {
-              setTab('HISTORY');
+            <button
+              onClick={() => {
+                setTab("HISTORY");
+                setPage(1);
+              }}
+              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold ${
+                tab === "HISTORY" ? "bg-white shadow" : ""
+              }`}
+            >
+              Riwayat
+            </button>
+          </div>
+          <InventoryPageSizeSelect
+            value={limit}
+            onChange={(value) => {
+              setLimit(value);
               setPage(1);
             }}
-            className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold ${
-              tab === 'HISTORY' ? 'bg-white shadow' : ''
-            }`}
-          >
-            Riwayat
-          </button>
-        </div>
-        <InventoryPageSizeSelect value={limit} onChange={(value) => { setLimit(value); setPage(1); }} />
+          />
         </div>
       </div>
 
@@ -516,9 +542,7 @@ export default function InventoryModulePage() {
       )}
 
       {loading ? (
-        <div className="p-10 text-center text-slate-500">
-          Memuat data...
-        </div>
+        <div className="p-10 text-center text-slate-500">Memuat data...</div>
       ) : cards.length === 0 ? (
         <div className="rounded-xl border border-dashed bg-white p-12 text-center text-slate-500">
           <Boxes className="mx-auto mb-3 h-8 w-8" />
@@ -531,9 +555,9 @@ export default function InventoryModulePage() {
               key={card.adjustmentId ?? card.stockOpnameId}
               onClick={() => void openDetail(card)}
               className={`rounded-xl border p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
-                card.status === 'DRAFT'
-                  ? 'border-blue-200 bg-white'
-                  : 'border-slate-200 bg-slate-100'
+                card.status === "DRAFT"
+                  ? "border-blue-200 bg-white"
+                  : "border-slate-200 bg-slate-100"
               }`}
             >
               <div className="flex items-start justify-between">
@@ -544,24 +568,22 @@ export default function InventoryModulePage() {
 
                   <p className="mt-1 text-xs font-medium text-slate-500">
                     {new Date(
-                      card.adjustmentDate ??
-                        card.opnameDate ??
-                        card.createdAt,
-                    ).toLocaleDateString('id-ID')}{' '}
+                      card.adjustmentDate ?? card.opnameDate ?? card.createdAt,
+                    ).toLocaleDateString("id-ID")}{" "}
                     · {card._count.details} produk
                     {card.supplier?.supplierName
                       ? ` · ${card.supplier.supplierName}`
-                      : ''}
+                      : ""}
                   </p>
                 </div>
 
                 <span
                   className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${
-                    card.status === 'DRAFT'
-                      ? 'bg-amber-100 text-amber-700'
-                      : card.status === 'APPROVED'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-slate-200 text-slate-600'
+                    card.status === "DRAFT"
+                      ? "bg-amber-100 text-amber-700"
+                      : card.status === "APPROVED"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-slate-200 text-slate-600"
                   }`}
                 >
                   {card.status}
@@ -570,13 +592,13 @@ export default function InventoryModulePage() {
 
               <p className="mt-4 line-clamp-2 text-sm text-slate-600">
                 {card.note ??
-                  (kind === 'adjustments'
-                    ? 'Lihat catatan per produk'
-                    : 'Tanpa catatan')}
+                  (kind === "adjustments"
+                    ? "Lihat catatan per produk"
+                    : "Tanpa catatan")}
               </p>
 
               <p className="mt-3 text-xs text-slate-400">
-                Dibuat oleh {card.createdByUser?.fullName ?? '-'}
+                Dibuat oleh {card.createdByUser?.fullName ?? "-"}
               </p>
             </button>
           ))}
@@ -586,86 +608,69 @@ export default function InventoryModulePage() {
       {meta.totalData > 0 && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-3 text-xs">
           <span className="text-slate-500">
-            Menampilkan {cards.length} dari {meta.totalData}{' '}
-            {kind === 'adjustments' ? 'adjustment' : 'opname'} · Halaman{' '}
+            Menampilkan {cards.length} dari {meta.totalData}{" "}
+            {kind === "adjustments" ? "adjustment" : "opname"} · Halaman{" "}
             {meta.currentPage} dari {Math.max(meta.totalPage, 1)}
           </span>
           <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page <= 1}
-            onClick={() =>
-              setPage((current) => current - 1)
-            }
-          >
-            Prev
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page >= meta.totalPage}
-            onClick={() =>
-              setPage((current) => current + 1)
-            }
-          >
-            Next
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage((current) => current - 1)}
+            >
+              Prev
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= meta.totalPage}
+              onClick={() => setPage((current) => current + 1)}
+            >
+              Next
+            </Button>
           </div>
         </div>
       )}
 
-      <Dialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-      >
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogOverlay className="fixed inset-0 z-50 bg-black/50" />
 
         <DialogContent
           className="z-[60] flex max-h-none max-w-none flex-col overflow-x-hidden overflow-y-auto border-slate-200 bg-white p-5 shadow-2xl lg:overflow-hidden"
           style={{
-            width: '1200px',
-            maxWidth: '96vw',
-            height: '92vh',
+            width: "1200px",
+            maxWidth: "96vw",
+            height: "92vh",
           }}
         >
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-base font-black uppercase">
-              {editingId ? 'Edit' : 'Buat'}{' '}
-              {kind === 'adjustments'
-                ? 'Stock Adjustment'
-                : 'Stock Opname'}
+              {editingId ? "Edit" : "Buat"}{" "}
+              {kind === "adjustments" ? "Stock Adjustment" : "Stock Opname"}
             </DialogTitle>
           </DialogHeader>
 
           <div className="grid shrink-0 gap-3 md:grid-cols-3">
             <label className="text-[11px] font-bold uppercase text-slate-600">
               Tanggal
-
               <input
                 type="date"
                 value={date}
-                onChange={(event) =>
-                  setDate(event.target.value)
-                }
+                onChange={(event) => setDate(event.target.value)}
                 className="mt-1 h-9 w-full rounded-md border px-3 text-xs font-semibold"
               />
             </label>
 
-            {kind === 'opnames' && (
+            {kind === "opnames" && (
               <label className="text-[11px] font-bold uppercase text-slate-600">
                 Supplier (Opsional)
-
                 <select
                   value={supplierId}
-                  onChange={(event) =>
-                    setSupplierId(event.target.value)
-                  }
+                  onChange={(event) => setSupplierId(event.target.value)}
                   className="mt-1 h-9 w-full rounded-md border bg-white px-3 text-xs font-semibold"
                 >
-                  <option value="">
-                    Tanpa filter supplier
-                  </option>
+                  <option value="">Tanpa filter supplier</option>
 
                   {suppliers.map((supplier) => (
                     <option
@@ -681,18 +686,13 @@ export default function InventoryModulePage() {
 
             <label
               className={`text-[11px] font-bold uppercase text-slate-600 ${
-                kind === 'adjustments'
-                  ? 'md:col-span-2'
-                  : ''
+                kind === "adjustments" ? "md:col-span-2" : ""
               }`}
             >
               Catatan Dokumen (Opsional)
-
               <input
                 value={note}
-                onChange={(event) =>
-                  setNote(event.target.value)
-                }
+                onChange={(event) => setNote(event.target.value)}
                 className="mt-1 h-9 w-full rounded-md border px-3 text-xs font-medium"
                 placeholder="Catatan umum dokumen..."
               />
@@ -702,13 +702,13 @@ export default function InventoryModulePage() {
           <div
             className={`mt-2 flex h-11 shrink-0 items-center rounded-md border px-3 text-xs font-semibold ${
               error
-                ? 'border-rose-100 bg-rose-50/60 text-rose-700'
+                ? "border-rose-100 bg-rose-50/60 text-rose-700"
                 : notice
-                  ? 'border-emerald-100 bg-emerald-50/60 text-emerald-700'
-                  : 'border-slate-100 bg-slate-50 text-transparent'
+                  ? "border-emerald-100 bg-emerald-50/60 text-emerald-700"
+                  : "border-slate-100 bg-slate-50 text-transparent"
             }`}
           >
-            {error || notice || 'Area informasi'}
+            {error || notice || "Area informasi"}
           </div>
 
           {/* PRODUCT HEADER + ACTIONS */}
@@ -719,7 +719,8 @@ export default function InventoryModulePage() {
               </p>
 
               <p className="text-[10px] text-slate-500">
-                Pilih produk pada baris yang tersedia. Baris kosong tidak akan disimpan.
+                Pilih produk pada baris yang tersedia. Baris kosong tidak akan
+                disimpan.
               </p>
             </div>
 
@@ -763,7 +764,6 @@ export default function InventoryModulePage() {
 
                 <span className="relative pb-0.5">
                   Tambah Baris Kosong
-
                   <span
                     className="
                       absolute bottom-0 left-0 h-px w-0
@@ -776,7 +776,7 @@ export default function InventoryModulePage() {
               </Button>
 
               {/* KATALOG SUPPLIER */}
-              {kind === 'opnames' && (
+              {kind === "opnames" && (
                 <Button
                   type="button"
                   variant="outline"
@@ -806,27 +806,17 @@ export default function InventoryModulePage() {
             <table className="w-full min-w-[1050px] border-collapse text-xs">
               <thead className="sticky top-0 z-10 bg-slate-100 text-left text-[10px] uppercase text-slate-600">
                 <tr>
-                  <th className="w-10 border-r p-2 text-center">
-                    No
-                  </th>
+                  <th className="w-10 border-r p-2 text-center">No</th>
 
-                  <th className="min-w-[230px] border-r p-2">
-                    Produk
-                  </th>
+                  <th className="min-w-[230px] border-r p-2">Produk</th>
 
-                  {kind === 'adjustments' ? (
+                  {kind === "adjustments" ? (
                     <>
-                      <th className="w-24 border-r p-2">
-                        Arah
-                      </th>
+                      <th className="w-24 border-r p-2">Arah</th>
 
-                      <th className="w-28 border-r p-2 text-center">
-                        Qty
-                      </th>
+                      <th className="w-28 border-r p-2 text-center">Qty</th>
 
-                      <th className="w-40 border-r p-2">
-                        Harga Modal / Unit
-                      </th>
+                      <th className="w-40 border-r p-2">Harga Modal / Unit</th>
                     </>
                   ) : (
                     <>
@@ -842,9 +832,7 @@ export default function InventoryModulePage() {
                         Sudah Dikemas (Otomatis)
                       </th>
 
-                      <th className="w-24 border-r p-2">
-                        Perbedaan
-                      </th>
+                      <th className="w-24 border-r p-2">Perbedaan</th>
 
                       <th className="w-40 border-r p-2">
                         Modal / Unit Jika Lebih
@@ -852,288 +840,255 @@ export default function InventoryModulePage() {
                     </>
                   )}
 
-                  <th className="min-w-[180px] border-r p-2">
-                    Catatan Produk
-                  </th>
+                  <th className="min-w-[180px] border-r p-2">Catatan Produk</th>
 
                   <th className="w-12" />
                 </tr>
               </thead>
 
               <tbody>
-                {Array.from({ length: rowCount }).map(
-                  (_, index) => {
-                    const item = items[index];
+                {Array.from({ length: rowCount }).map((_, index) => {
+                  const item = items[index];
 
-                    if (!item) {
-                      return (
-                        <tr
-                          key={`blank-${index}`}
-                          className="h-11 border-t bg-white"
-                        >
-                          <td className="border-r text-center text-slate-400">
-                            {index + 1}
-                          </td>
-
-                          <td className="border-r p-1">
-                            <select
-                              value=""
-                              onChange={(event) =>
-                                addItem(event.target.value)
-                              }
-                              className="h-8 w-full border-none bg-transparent px-2 font-semibold outline-none"
-                            >
-                              <option value="">
-                                Pilih produk...
-                              </option>
-
-                              {products
-                                .filter(
-                                  (product) =>
-                                    !items.some(
-                                      (selected) =>
-                                        selected.productUnitId ===
-                                        product.productUnitId,
-                                    ),
-                                )
-                                .map((product) => (
-                                  <option
-                                    key={product.productUnitId}
-                                    value={product.productUnitId}
-                                  >
-                                    {product.productName} · Stok{' '}
-                                    {product.stockDisplay}
-                                  </option>
-                                ))}
-                            </select>
-                          </td>
-
-                          <td
-                            colSpan={
-                              kind === 'adjustments' ? 5 : 7
-                            }
-                            className="bg-slate-50/50"
-                          />
-                        </tr>
-                      );
-                    }
-
-                    const product = productMap.get(
-                      item.productUnitId,
-                    );
-
-                    const variance =
-                      item.warehouseQty +
-                      item.packedQty -
-                      (product?.actualQty ?? 0);
-
+                  if (!item) {
                     return (
                       <tr
-                        key={item.productUnitId}
-                        className="h-11 border-t bg-blue-50/10"
+                        key={`blank-${index}`}
+                        className="h-11 border-t bg-white"
                       >
-                        <td className="border-r text-center font-bold text-slate-400">
+                        <td className="border-r text-center text-slate-400">
                           {index + 1}
                         </td>
 
-                        <td className="border-r p-2 font-bold text-slate-800">
-                          {product?.productName}
+                        <td className="border-r p-1">
+                          <select
+                            value=""
+                            onChange={(event) => addItem(event.target.value)}
+                            className="h-8 w-full border-none bg-transparent px-2 font-semibold outline-none"
+                          >
+                            <option value="">Pilih produk...</option>
 
-                          <div className="text-[10px] font-normal text-slate-500">
-                            Stok: {product?.stockDisplay ?? `0 ${product?.unitName ?? ''}`} · tersedia{' '}
-                            {product?.availableQty}
-                          </div>
+                            {products
+                              .filter(
+                                (product) =>
+                                  !items.some(
+                                    (selected) =>
+                                      selected.productUnitId ===
+                                      product.productUnitId,
+                                  ),
+                              )
+                              .map((product) => (
+                                <option
+                                  key={product.productUnitId}
+                                  value={product.productUnitId}
+                                >
+                                  {product.productName} · Stok{" "}
+                                  {product.stockDisplay}
+                                </option>
+                              ))}
+                          </select>
                         </td>
 
-                        {kind === 'adjustments' ? (
-                          <>
-                            <td className="border-r p-1">
-                              <select
-                                value={item.direction}
-                                onChange={(event) =>
-                                  patchItem(index, {
-                                    direction:
-                                      event.target.value as
-                                        | 'IN'
-                                        | 'OUT',
-                                  })
-                                }
-                                className="h-8 w-full rounded border bg-white px-1"
-                              >
-                                <option value="IN">
-                                  Tambah
-                                </option>
+                        <td
+                          colSpan={kind === "adjustments" ? 5 : 7}
+                          className="bg-slate-50/50"
+                        />
+                      </tr>
+                    );
+                  }
 
-                                <option value="OUT">
-                                  Kurang
-                                </option>
-                              </select>
-                            </td>
+                  const product = productMap.get(item.productUnitId);
 
-                            <td className="border-r p-1">
-                              <input
-                                type="number"
-                                min="0.001"
-                                step="0.001"
-                                value={item.quantity || ''}
-                                onChange={(event) =>
-                                  patchItem(index, {
-                                    quantity: Number(
-                                      event.target.value,
-                                    ),
-                                  })
-                                }
-                                className="h-8 w-full rounded border text-center font-bold"
-                              />
-                            </td>
+                  const variance =
+                    item.warehouseQty +
+                    item.packedQty -
+                    (product?.actualQty ?? 0);
 
-                            <td className="border-r p-1">
-                              {item.direction === 'IN' ? (
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={item.unitCost ?? ''}
-                                  onChange={(event) =>
-                                    patchItem(index, {
-                                      unitCost: event.target.value
-                                        ? Number(
-                                            event.target.value,
-                                          )
-                                        : undefined,
-                                    })
-                                  }
-                                  className="h-8 w-full rounded border px-2"
-                                  placeholder="Isi jika belum ada histori"
-                                />
-                              ) : (
-                                <span className="px-2 text-[10px] font-semibold text-slate-500">
-                                  Mengikuti FIFO tertua
-                                </span>
-                              )}
-                            </td>
-                          </>
-                        ) : (
-                          <>
-                            <td className="border-r p-2 font-semibold text-slate-700">
-                              {product?.stockDisplay}
-                            </td>
+                  return (
+                    <tr
+                      key={item.productUnitId}
+                      className="h-11 border-t bg-blue-50/10"
+                    >
+                      <td className="border-r text-center font-bold text-slate-400">
+                        {index + 1}
+                      </td>
 
-                            <td className="border-r p-1">
+                      <td className="border-r p-2 font-bold text-slate-800">
+                        {product?.productName}
+
+                        <div className="text-[10px] font-normal text-slate-500">
+                          Stok:{" "}
+                          {product?.stockDisplay ??
+                            `0 ${product?.unitName ?? ""}`}{" "}
+                          · tersedia {product?.availableQty}
+                        </div>
+                      </td>
+
+                      {kind === "adjustments" ? (
+                        <>
+                          <td className="border-r p-1">
+                            <select
+                              value={item.direction}
+                              onChange={(event) =>
+                                patchItem(index, {
+                                  direction: event.target.value as "IN" | "OUT",
+                                })
+                              }
+                              className="h-8 w-full rounded border bg-white px-1"
+                            >
+                              <option value="IN">Tambah</option>
+
+                              <option value="OUT">Kurang</option>
+                            </select>
+                          </td>
+
+                          <td className="border-r p-1">
+                            <input
+                              type="number"
+                              min="0.001"
+                              step="0.001"
+                              value={item.quantity || ""}
+                              onChange={(event) =>
+                                patchItem(index, {
+                                  quantity: Number(event.target.value),
+                                })
+                              }
+                              className="h-8 w-full rounded border text-center font-bold"
+                            />
+                          </td>
+
+                          <td className="border-r p-1">
+                            {item.direction === "IN" ? (
                               <input
                                 type="number"
                                 min="0"
-                                step="0.001"
-                                value={item.warehouseQty || ''}
+                                value={item.unitCost ?? ""}
                                 onChange={(event) =>
                                   patchItem(index, {
-                                    warehouseQty: Number(
-                                      event.target.value,
-                                    ),
+                                    unitCost: event.target.value
+                                      ? Number(event.target.value)
+                                      : undefined,
                                   })
                                 }
-                                className="h-8 w-full rounded border text-center font-bold"
+                                className="h-8 w-full rounded border px-2"
+                                placeholder="Isi jika belum ada histori"
                               />
-                            </td>
+                            ) : (
+                              <span className="px-2 text-[10px] font-semibold text-slate-500">
+                                Mengikuti FIFO tertua
+                              </span>
+                            )}
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="border-r p-2 font-semibold text-slate-700">
+                            {product?.stockDisplay}
+                          </td>
 
-                            <td className="border-r p-2 text-center font-bold text-slate-600">
-                              {item.packedQty} {product?.unitName}
-                            </td>
+                          <td className="border-r p-1">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.001"
+                              value={item.warehouseQty || ""}
+                              onChange={(event) =>
+                                patchItem(index, {
+                                  warehouseQty: Number(event.target.value),
+                                })
+                              }
+                              className="h-8 w-full rounded border text-center font-bold"
+                            />
+                          </td>
 
-                            <td
-                              className={`border-r p-2 text-center font-black ${
-                                variance
-                                  ? 'text-amber-600'
-                                  : 'text-emerald-600'
-                              }`}
-                            >
-                              {variance > 0 ? '+' : ''}
-                              {variance}
-                            </td>
+                          <td className="border-r p-2 text-center font-bold text-slate-600">
+                            {item.packedQty} {product?.unitName}
+                          </td>
 
-                            <td className="border-r p-1">
-                              {variance > 0 ? (
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={item.unitCost ?? ''}
-                                  onChange={(event) =>
-                                    patchItem(index, {
-                                      unitCost:
-                                        event.target.value
-                                          ? Number(
-                                              event.target.value,
-                                            )
-                                          : undefined,
-                                    })
-                                  }
-                                  className="h-8 w-full rounded border px-2"
-                                  placeholder="Harga modal per unit"
-                                />
-                              ) : (
-                                <span className="px-2 text-slate-400">
-                                  Tidak diperlukan
-                                </span>
-                              )}
-                            </td>
-                          </>
-                        )}
-
-                        <td className="border-r p-1">
-                          <input
-                            value={item.note}
-                            onChange={(event) =>
-                              patchItem(index, {
-                                note: event.target.value,
-                              })
-                            }
-                            className="h-8 w-full rounded border px-2"
-                            placeholder="Alasan/keterangan produk..."
-                          />
-                        </td>
-
-                        <td className="p-1 text-center">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setItems((current) =>
-                                current.filter(
-                                  (_, itemIndex) =>
-                                    itemIndex !== index,
-                                ),
-                              )
-                            }
-                            className="rounded p-1.5 text-rose-500 hover:bg-rose-100"
+                          <td
+                            className={`border-r p-2 text-center font-black ${
+                              variance ? "text-amber-600" : "text-emerald-600"
+                            }`}
                           >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  },
-                )}
+                            {variance > 0 ? "+" : ""}
+                            {variance}
+                          </td>
+
+                          <td className="border-r p-1">
+                            {variance > 0 ? (
+                              <input
+                                type="number"
+                                min="0"
+                                value={item.unitCost ?? ""}
+                                onChange={(event) =>
+                                  patchItem(index, {
+                                    unitCost: event.target.value
+                                      ? Number(event.target.value)
+                                      : undefined,
+                                  })
+                                }
+                                className="h-8 w-full rounded border px-2"
+                                placeholder="Harga modal per unit"
+                              />
+                            ) : (
+                              <span className="px-2 text-slate-400">
+                                Tidak diperlukan
+                              </span>
+                            )}
+                          </td>
+                        </>
+                      )}
+
+                      <td className="border-r p-1">
+                        <input
+                          value={item.note}
+                          onChange={(event) =>
+                            patchItem(index, {
+                              note: event.target.value,
+                            })
+                          }
+                          className="h-8 w-full rounded border px-2"
+                          placeholder="Alasan/keterangan produk..."
+                        />
+                      </td>
+
+                      <td className="p-1 text-center">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setItems((current) =>
+                              current.filter(
+                                (_, itemIndex) => itemIndex !== index,
+                              ),
+                            )
+                          }
+                          className="rounded p-1.5 text-rose-500 hover:bg-rose-100"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
-          {kind === 'opnames' && (
+          {kind === "opnames" && (
             <div className="mt-2 shrink-0 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] font-medium text-blue-800">
-              Isi hanya jumlah yang benar-benar terlihat di gudang. Total fisik tercatat mencakup barang di gudang dan barang Sales READY yang sudah dikemas. Jumlah dikemas diisi otomatis.
+              Isi hanya jumlah yang benar-benar terlihat di gudang. Total fisik
+              tercatat mencakup barang di gudang dan barang Sales READY yang
+              sudah dikemas. Jumlah dikemas diisi otomatis.
             </div>
           )}
 
           <div className="mt-3 flex shrink-0 flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
             <span className="w-fit rounded bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">
-              Produk terisi:{' '}
-              <b className="text-blue-700">
-                {items.length}
-              </b>
+              Produk terisi: <b className="text-blue-700">{items.length}</b>
             </span>
 
             <div className="grid grid-cols-2 gap-2 sm:flex">
-              <Button
-                variant="outline"
-                onClick={() => setFormOpen(false)}
-              >
+              <Button variant="outline" onClick={() => setFormOpen(false)}>
                 Tutup
               </Button>
 
@@ -1159,18 +1114,15 @@ export default function InventoryModulePage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={catalogOpen}
-        onOpenChange={setCatalogOpen}
-      >
+      <Dialog open={catalogOpen} onOpenChange={setCatalogOpen}>
         <DialogOverlay className="fixed inset-0 z-[70] bg-black/40" />
 
         <DialogContent
           className="z-[80] flex max-h-none max-w-none flex-col overflow-hidden bg-white p-5"
           style={{
-            width: '720px',
-            maxWidth: '92vw',
-            height: '72vh',
+            width: "720px",
+            maxWidth: "92vw",
+            height: "72vh",
           }}
         >
           <DialogHeader>
@@ -1200,9 +1152,7 @@ export default function InventoryModulePage() {
                           checked
                             ? [...current, product.productUnitId]
                             : current.filter(
-                                (id) =>
-                                  id !==
-                                  product.productUnitId,
+                                (id) => id !== product.productUnitId,
                               ),
                         )
                       }
@@ -1237,14 +1187,10 @@ export default function InventoryModulePage() {
                       (product) =>
                         !items.some(
                           (item) =>
-                            item.productUnitId ===
-                            product.productUnitId,
+                            item.productUnitId === product.productUnitId,
                         ),
                     )
-                    .map(
-                      (product) =>
-                        product.productUnitId,
-                    ),
+                    .map((product) => product.productUnitId),
                 )
               }
             >
@@ -1252,10 +1198,7 @@ export default function InventoryModulePage() {
             </Button>
 
             <div className="grid grid-cols-2 gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setCatalogOpen(false)}
-              >
+              <Button variant="outline" onClick={() => setCatalogOpen(false)}>
                 Batal
               </Button>
 
@@ -1270,26 +1213,20 @@ export default function InventoryModulePage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={!!detail}
-        onOpenChange={(open) =>
-          !open && setDetail(null)
-        }
-      >
+      <Dialog open={!!detail} onOpenChange={(open) => !open && setDetail(null)}>
         <DialogOverlay className="fixed inset-0 z-50 bg-black/50" />
 
         <DialogContent
           className="z-[60] flex max-h-none max-w-none flex-col overflow-hidden bg-white p-6"
           style={{
-            width: '1000px',
-            maxWidth: '94vw',
-            height: '92vh',
+            width: "1000px",
+            maxWidth: "94vw",
+            height: "92vh",
           }}
         >
           <DialogHeader>
             <DialogTitle>
-              {detail?.adjustmentNumber ??
-                detail?.stockOpnameNumber}
+              {detail?.adjustmentNumber ?? detail?.stockOpnameNumber}
             </DialogTitle>
           </DialogHeader>
 
@@ -1310,7 +1247,7 @@ export default function InventoryModulePage() {
                       detail.adjustmentDate ??
                         detail.opnameDate ??
                         detail.createdAt,
-                    ).toLocaleDateString('id-ID')}
+                    ).toLocaleDateString("id-ID")}
                   </b>
                 </div>
 
@@ -1323,9 +1260,7 @@ export default function InventoryModulePage() {
                 <div>
                   Supplier
                   <br />
-                  <b>
-                    {detail.supplier?.supplierName ?? '-'}
-                  </b>
+                  <b>{detail.supplier?.supplierName ?? "-"}</b>
                 </div>
               </div>
 
@@ -1333,9 +1268,7 @@ export default function InventoryModulePage() {
                 <table className="w-full min-w-[720px] text-sm">
                   <thead className="sticky top-0 bg-slate-50">
                     <tr>
-                      <th className="p-3 text-left">
-                        Produk
-                      </th>
+                      <th className="p-3 text-left">Produk</th>
                       <th>Unit</th>
                       <th>Perubahan / Hitungan</th>
                       <th>Harga Modal</th>
@@ -1347,46 +1280,36 @@ export default function InventoryModulePage() {
                     {detail.details.map((item) => (
                       <tr
                         key={String(
-                          item.adjustmentDetailId ??
-                            item.stockOpnameDetailId,
+                          item.adjustmentDetailId ?? item.stockOpnameDetailId,
                         )}
                         className="border-t"
                       >
-                        <td className="p-3 font-bold">
-                          {item.productName}
-                        </td>
+                        <td className="p-3 font-bold">{item.productName}</td>
+
+                        <td className="text-center">{item.unitName}</td>
 
                         <td className="text-center">
-                          {item.unitName}
-                        </td>
-
-                        <td className="text-center">
-                          {kind === 'adjustments'
+                          {kind === "adjustments"
                             ? `${item.direction} ${item.quantity}`
                             : `Dihitung di gudang ${item.countedQty} + sudah dikemas ${item.packedQty} = total fisik ${
-                                Number(item.countedQty) +
-                                Number(item.packedQty)
+                                Number(item.countedQty) + Number(item.packedQty)
                               } (selisih ${item.varianceQty})`}
                         </td>
 
                         <td className="text-center">
                           {item.unitCost == null
-                            ? '-'
-                            : Number(
-                                item.unitCost,
-                              ).toLocaleString('id-ID')}
+                            ? "-"
+                            : Number(item.unitCost).toLocaleString("id-ID")}
                         </td>
 
-                        <td className="p-3">
-                          {String(item.note ?? '-')}
-                        </td>
+                        <td className="p-3">{String(item.note ?? "-")}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
 
-              {detail.status === 'DRAFT' && (
+              {detail.status === "DRAFT" && (
                 <div className="mt-3 flex shrink-0 flex-wrap justify-end gap-2">
                   {canApprove && (
                     <Button
@@ -1416,9 +1339,7 @@ export default function InventoryModulePage() {
       <AlertDialog open={!!confirmAction}>
         <AlertDialogContent className="bg-white">
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              Konfirmasi tindakan permanen
-            </AlertDialogTitle>
+            <AlertDialogTitle>Konfirmasi tindakan permanen</AlertDialogTitle>
 
             <AlertDialogDescription>
               Setelah disetujui atau dibatalkan, dokumen tidak dapat diedit.
@@ -1427,25 +1348,17 @@ export default function InventoryModulePage() {
           </AlertDialogHeader>
 
           <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={() =>
-                setConfirmAction(null)
-              }
-            >
+            <AlertDialogCancel onClick={() => setConfirmAction(null)}>
               Kembali
             </AlertDialogCancel>
 
             <AlertDialogAction
               className="bg-emerald-600"
               onClick={() =>
-                void confirmAction
-                  ?.()
-                  .catch((caught) => {
-                    setError(
-                      parseApiError(caught),
-                    );
-                    setConfirmAction(null);
-                  })
+                void confirmAction?.().catch((caught) => {
+                  setError(parseApiError(caught));
+                  setConfirmAction(null);
+                })
               }
             >
               Ya, lanjutkan
@@ -1464,8 +1377,8 @@ export default function InventoryModulePage() {
             <AlertDialogDescription asChild>
               <div>
                 <p>
-                  Hasil hitung fisik tetap tersimpan. Perbarui snapshot,
-                  tinjau ulang selisih, lalu klik Setujui kembali.
+                  Hasil hitung fisik tetap tersimpan. Perbarui snapshot, tinjau
+                  ulang selisih, lalu klik Setujui kembali.
                 </p>
 
                 <div className="mt-3 max-h-52 overflow-auto rounded border">
@@ -1477,8 +1390,7 @@ export default function InventoryModulePage() {
                       <b>{conflict.productName}</b>
 
                       <span>
-                        {conflict.snapshotQty} →{' '}
-                        {conflict.currentQty}
+                        {conflict.snapshotQty} → {conflict.currentQty}
                       </span>
                     </div>
                   ))}
@@ -1488,9 +1400,7 @@ export default function InventoryModulePage() {
           </AlertDialogHeader>
 
           <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={() => setConflicts([])}
-            >
+            <AlertDialogCancel onClick={() => setConflicts([])}>
               Tinjau Nanti
             </AlertDialogCancel>
 
@@ -1498,42 +1408,27 @@ export default function InventoryModulePage() {
               className="bg-rose-600"
               onClick={() =>
                 void Promise.all([
-                  inventoryApi.refreshSnapshots(
-                    editingId!,
-                  ),
+                  inventoryApi.refreshSnapshots(editingId!),
                   inventoryApi.products(),
                 ])
-                  .then(
-                    async ([, latestProducts]) => {
-                      const fresh =
-                        await inventoryApi.detail(
-                          'opnames',
-                          editingId!,
-                        );
+                  .then(async ([, latestProducts]) => {
+                    const fresh = await inventoryApi.detail(
+                      "opnames",
+                      editingId!,
+                    );
 
-                      setProducts(
-                        latestProducts,
-                      );
+                    setProducts(latestProducts);
 
-                      setItems(
-                        formItemsFromDetail(
-                          fresh,
-                        ),
-                      );
+                    setItems(formItemsFromDetail(fresh));
 
-                      setConflicts([]);
-                      setError('');
+                    setConflicts([]);
+                    setError("");
 
-                      setNotice(
-                        'Snapshot diperbarui. Hasil hitung fisik tetap tersimpan; silakan tinjau selisih baru.',
-                      );
-                    },
-                  )
-                  .catch((caught) =>
-                    setError(
-                      parseApiError(caught),
-                    ),
-                  )
+                    setNotice(
+                      "Snapshot diperbarui. Hasil hitung fisik tetap tersimpan; silakan tinjau selisih baru.",
+                    );
+                  })
+                  .catch((caught) => setError(parseApiError(caught)))
               }
             >
               Perbarui Data Stok

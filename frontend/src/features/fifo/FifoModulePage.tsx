@@ -48,6 +48,7 @@ const originLabels: Record<string, string> = {
   INVENTORY_TRANSFORMATION: "Transformation",
   INVENTORY_LOAN: "Inventory Loan",
   INVENTORY_LOAN_RETURN: "Pengembalian Loan",
+  INVENTORY_LOAN_RECOVERY: "Pemulihan Loan",
   OPENING_BALANCE: "Opening Balance",
 };
 

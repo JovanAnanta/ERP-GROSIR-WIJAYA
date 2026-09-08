@@ -405,8 +405,8 @@ export class FifoService {
       idsByType.set(reference.originType, set);
     }
     const ids = (type: string) => [...(idsByType.get(type) ?? [])];
-    const [invoices, returns, adjustments, transformations] = await Promise.all(
-      [
+    const [invoices, returns, adjustments, transformations, loans] =
+      await Promise.all([
         ids(INVENTORY_ORIGIN_TYPES.PURCHASE_INVOICE).length
           ? this.prisma.purchaseInvoice.findMany({
               where: {
@@ -468,8 +468,34 @@ export class FifoService {
               },
             })
           : [],
-      ],
-    );
+        [
+          ...ids(INVENTORY_ORIGIN_TYPES.INVENTORY_LOAN),
+          ...ids(INVENTORY_ORIGIN_TYPES.INVENTORY_LOAN_RETURN),
+          ...ids(INVENTORY_ORIGIN_TYPES.INVENTORY_LOAN_RECOVERY),
+        ].length
+          ? this.prisma.inventoryLoan.findMany({
+              where: {
+                inventoryLoanId: {
+                  in: [
+                    ...new Set([
+                      ...ids(INVENTORY_ORIGIN_TYPES.INVENTORY_LOAN),
+                      ...ids(INVENTORY_ORIGIN_TYPES.INVENTORY_LOAN_RETURN),
+                      ...ids(INVENTORY_ORIGIN_TYPES.INVENTORY_LOAN_RECOVERY),
+                    ]),
+                  ],
+                },
+              },
+              select: {
+                inventoryLoanId: true,
+                loanNumber: true,
+                status: true,
+                loanDate: true,
+                customer: { select: { customerName: true } },
+                supplier: { select: { supplierName: true } },
+              },
+            })
+          : [],
+      ]);
     const result = new Map<string, OriginSummary>();
     invoices.forEach((item) =>
       result.set(
@@ -525,6 +551,23 @@ export class FifoService {
         },
       ),
     );
+    for (const item of loans) {
+      for (const type of [
+        INVENTORY_ORIGIN_TYPES.INVENTORY_LOAN,
+        INVENTORY_ORIGIN_TYPES.INVENTORY_LOAN_RETURN,
+        INVENTORY_ORIGIN_TYPES.INVENTORY_LOAN_RECOVERY,
+      ]) {
+        result.set(`${type}:${item.inventoryLoanId.toString()}`, {
+          type,
+          id: item.inventoryLoanId.toString(),
+          number: item.loanNumber,
+          status: item.status,
+          partyName: item.customer?.customerName ?? item.supplier?.supplierName,
+          date: item.loanDate,
+          detailAvailable: true,
+        });
+      }
+    }
     return result;
   }
 }

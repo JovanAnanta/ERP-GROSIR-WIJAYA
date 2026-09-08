@@ -9,6 +9,7 @@ export type FifoOriginType =
   | "INVENTORY_TRANSFORMATION"
   | "INVENTORY_LOAN"
   | "INVENTORY_LOAN_RETURN"
+  | "INVENTORY_LOAN_RECOVERY"
   | "OPENING_BALANCE";
 
 export interface FifoOriginSummary {

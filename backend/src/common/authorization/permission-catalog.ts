@@ -34,6 +34,11 @@ export const PERMISSIONS = {
   INVENTORY_CREATE: 'INVENTORY_CREATE',
   INVENTORY_UPDATE: 'INVENTORY_UPDATE',
   INVENTORY_APPROVE: 'INVENTORY_APPROVE',
+  INVENTORY_LOAN_VIEW: 'INVENTORY_LOAN_VIEW',
+  INVENTORY_LOAN_CREATE: 'INVENTORY_LOAN_CREATE',
+  INVENTORY_LOAN_UPDATE: 'INVENTORY_LOAN_UPDATE',
+  INVENTORY_LOAN_ACTIVATE: 'INVENTORY_LOAN_ACTIVATE',
+  INVENTORY_LOAN_RESOLVE: 'INVENTORY_LOAN_RESOLVE',
 
   FIFO_VIEW: 'FIFO_VIEW',
   FINANCIAL_VIEW: 'FINANCIAL_VIEW',
@@ -235,6 +240,36 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
   {
     code: PERMISSIONS.INVENTORY_APPROVE,
     name: 'Approve Inventory',
+    module: 'INVENTORY',
+    action: 'APPROVE',
+  },
+  {
+    code: PERMISSIONS.INVENTORY_LOAN_VIEW,
+    name: 'Lihat Inventory Loan',
+    module: 'INVENTORY',
+    action: 'VIEW',
+  },
+  {
+    code: PERMISSIONS.INVENTORY_LOAN_CREATE,
+    name: 'Buat Inventory Loan',
+    module: 'INVENTORY',
+    action: 'CREATE',
+  },
+  {
+    code: PERMISSIONS.INVENTORY_LOAN_UPDATE,
+    name: 'Ubah dan Batalkan Draft Inventory Loan',
+    module: 'INVENTORY',
+    action: 'UPDATE',
+  },
+  {
+    code: PERMISSIONS.INVENTORY_LOAN_ACTIVATE,
+    name: 'Aktifkan Inventory Loan',
+    module: 'INVENTORY',
+    action: 'APPROVE',
+  },
+  {
+    code: PERMISSIONS.INVENTORY_LOAN_RESOLVE,
+    name: 'Selesaikan Inventory Loan',
     module: 'INVENTORY',
     action: 'APPROVE',
   },

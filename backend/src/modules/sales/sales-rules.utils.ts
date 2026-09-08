@@ -31,6 +31,16 @@ export function calculateSalesLineSubtotal(
   return quantity.mul(unitPrice).sub(discountAmount).toDecimalPlaces(2);
 }
 
+export function toSalesParentQuantity(input: {
+  quantity: Prisma.Decimal;
+  selectedConversionFactor: Prisma.Decimal;
+  parentConversionFactor: Prisma.Decimal;
+}) {
+  return input.quantity
+    .mul(input.selectedConversionFactor)
+    .div(input.parentConversionFactor);
+}
+
 export function resolveSalesPaymentStatus(
   paidAmount: Prisma.Decimal,
   outstandingAmount: Prisma.Decimal,
