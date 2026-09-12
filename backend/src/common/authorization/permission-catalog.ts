@@ -11,6 +11,7 @@ export const PERMISSIONS = {
   PURCHASE_UPDATE: 'PURCHASE_UPDATE',
   PURCHASE_APPROVE: 'PURCHASE_APPROVE',
   PURCHASE_EXPORT: 'PURCHASE_EXPORT',
+  PURCHASE_OPENING_BALANCE_CREATE: 'PURCHASE_OPENING_BALANCE_CREATE',
 
   SALES_VIEW: 'SALES_VIEW',
   SALES_IMPORT: 'SALES_IMPORT',
@@ -25,6 +26,7 @@ export const PERMISSIONS = {
   SALES_RETURN_VIEW: 'SALES_RETURN_VIEW',
   SALES_RETURN_CREATE: 'SALES_RETURN_CREATE',
   SALES_RETURN_COMPLETE: 'SALES_RETURN_COMPLETE',
+  SALES_OPENING_BALANCE_CREATE: 'SALES_OPENING_BALANCE_CREATE',
 
   PRICING_VIEW: 'PRICING_VIEW',
   PRICING_UPDATE: 'PRICING_UPDATE',
@@ -41,7 +43,13 @@ export const PERMISSIONS = {
   INVENTORY_LOAN_RESOLVE: 'INVENTORY_LOAN_RESOLVE',
 
   FIFO_VIEW: 'FIFO_VIEW',
+  FIFO_OPENING_BALANCE_VIEW: 'FIFO_OPENING_BALANCE_VIEW',
+  FIFO_OPENING_BALANCE_CREATE: 'FIFO_OPENING_BALANCE_CREATE',
+  FIFO_OPENING_BALANCE_POST: 'FIFO_OPENING_BALANCE_POST',
   FINANCIAL_VIEW: 'FINANCIAL_VIEW',
+  FINANCIAL_CREATE: 'FINANCIAL_CREATE',
+  FINANCIAL_TRANSFER: 'FINANCIAL_TRANSFER',
+  FINANCIAL_ACCOUNT_MANAGE: 'FINANCIAL_ACCOUNT_MANAGE',
   REPORT_VIEW: 'REPORT_VIEW',
   REPORT_EXPORT: 'REPORT_EXPORT',
 } as const;
@@ -142,6 +150,12 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
     action: 'EXPORT',
   },
   {
+    code: PERMISSIONS.PURCHASE_OPENING_BALANCE_CREATE,
+    name: 'Input Saldo Awal Hutang Supplier',
+    module: 'PURCHASE',
+    action: 'CREATE',
+  },
+  {
     code: PERMISSIONS.SALES_VIEW,
     name: 'Lihat Sales dan Customer',
     module: 'SALES',
@@ -202,6 +216,12 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
     action: 'APPROVE',
   },
   {
+    code: PERMISSIONS.SALES_OPENING_BALANCE_CREATE,
+    name: 'Input Saldo Awal Piutang Customer',
+    module: 'SALES',
+    action: 'CREATE',
+  },
+  {
     code: PERMISSIONS.PRICING_VIEW,
     name: 'Lihat Pricing',
     module: 'PRICING',
@@ -246,31 +266,31 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
   {
     code: PERMISSIONS.INVENTORY_LOAN_VIEW,
     name: 'Lihat Inventory Loan',
-    module: 'INVENTORY',
+    module: 'INVENTORY_LOAN',
     action: 'VIEW',
   },
   {
     code: PERMISSIONS.INVENTORY_LOAN_CREATE,
     name: 'Buat Inventory Loan',
-    module: 'INVENTORY',
+    module: 'INVENTORY_LOAN',
     action: 'CREATE',
   },
   {
     code: PERMISSIONS.INVENTORY_LOAN_UPDATE,
     name: 'Ubah dan Batalkan Draft Inventory Loan',
-    module: 'INVENTORY',
+    module: 'INVENTORY_LOAN',
     action: 'UPDATE',
   },
   {
     code: PERMISSIONS.INVENTORY_LOAN_ACTIVATE,
     name: 'Aktifkan Inventory Loan',
-    module: 'INVENTORY',
+    module: 'INVENTORY_LOAN',
     action: 'APPROVE',
   },
   {
     code: PERMISSIONS.INVENTORY_LOAN_RESOLVE,
     name: 'Selesaikan Inventory Loan',
-    module: 'INVENTORY',
+    module: 'INVENTORY_LOAN',
     action: 'APPROVE',
   },
   {
@@ -280,10 +300,46 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
     action: 'VIEW',
   },
   {
+    code: PERMISSIONS.FIFO_OPENING_BALANCE_VIEW,
+    name: 'Lihat Saldo Awal Persediaan',
+    module: 'FIFO',
+    action: 'VIEW',
+  },
+  {
+    code: PERMISSIONS.FIFO_OPENING_BALANCE_CREATE,
+    name: 'Simpan Draft Saldo Awal Persediaan',
+    module: 'FIFO',
+    action: 'CREATE',
+  },
+  {
+    code: PERMISSIONS.FIFO_OPENING_BALANCE_POST,
+    name: 'Tetapkan Saldo Awal Persediaan',
+    module: 'FIFO',
+    action: 'APPROVE',
+  },
+  {
     code: PERMISSIONS.FINANCIAL_VIEW,
     name: 'Lihat Financial',
     module: 'FINANCIAL',
     action: 'VIEW',
+  },
+  {
+    code: PERMISSIONS.FINANCIAL_CREATE,
+    name: 'Catat Kas Masuk & Keluar',
+    module: 'FINANCIAL',
+    action: 'CREATE',
+  },
+  {
+    code: PERMISSIONS.FINANCIAL_TRANSFER,
+    name: 'Transfer Antar Akun',
+    module: 'FINANCIAL',
+    action: 'CREATE',
+  },
+  {
+    code: PERMISSIONS.FINANCIAL_ACCOUNT_MANAGE,
+    name: 'Kelola Akun Kas & Bank',
+    module: 'FINANCIAL',
+    action: 'UPDATE',
   },
   {
     code: PERMISSIONS.REPORT_VIEW,

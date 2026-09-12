@@ -21,10 +21,28 @@ import {
 } from "@/features/inventory/inventory.api";
 import { parseApiError } from "@/utils/error";
 import type { FifoOriginSummary } from "./fifo.api";
+import { apiClient } from "@/lib/axios";
 
 interface Props {
   origin: FifoOriginSummary | null;
   onClose: () => void;
+}
+
+interface InventoryOpeningDetail {
+  openingBalanceNumber: string;
+  openingBalanceDate: string;
+  status: string;
+  note?: string | null;
+  details: Array<{
+    inventoryOpeningBalanceDetailId: string;
+    inputQuantity: number;
+    parentQuantity: number;
+    parentUnitCost: number;
+    totalCost: number;
+    product: { productName: string };
+    selectedUnit: { unit: { unitName: string } };
+    parentUnit: { unit: { unitName: string } };
+  }>;
 }
 
 const rupiah = (value: number) =>
@@ -42,6 +60,7 @@ export default function FifoOriginDetailDialog({ origin, onClose }: Props) {
   const [transformation, setTransformation] =
     useState<TransformationDetail | null>(null);
   const [loan, setLoan] = useState<InventoryLoanDetail | null>(null);
+  const [opening, setOpening] = useState<InventoryOpeningDetail | null>(null);
 
   useEffect(() => {
     if (!origin) return;
@@ -52,6 +71,7 @@ export default function FifoOriginDetailDialog({ origin, onClose }: Props) {
       setAdjustment(null);
       setTransformation(null);
       setLoan(null);
+      setOpening(null);
       setError("");
       setLoading(true);
       const request =
@@ -77,6 +97,8 @@ export default function FifoOriginDetailDialog({ origin, onClose }: Props) {
                   ? inventoryApi
                       .loanDetail(origin.id)
                       .then((data) => active && setLoan(data))
+                  : origin.type === "OPENING_BALANCE"
+                    ? apiClient.get<{ data: InventoryOpeningDetail }>(`/opening-balances/inventory/${origin.id}`).then((response) => active && setOpening(response.data.data))
                   : Promise.reject(
                       new Error(
                         "Detail dokumen ini akan tersedia ketika modul terkait selesai dibuat.",
@@ -170,6 +192,7 @@ export default function FifoOriginDetailDialog({ origin, onClose }: Props) {
               </div>
             </div>
           )}
+          {opening && <div className="space-y-4"><div className="grid gap-2 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-3"><p><b>Nomor</b><br/>{opening.openingBalanceNumber}</p><p><b>Tanggal</b><br/>{new Date(opening.openingBalanceDate).toLocaleDateString("id-ID")}</p><p><b>Status</b><br/>{opening.status}</p><p className="sm:col-span-3"><b>Catatan</b><br/>{opening.note||"-"}</p></div><div className="overflow-x-auto rounded-xl border"><table className="min-w-[680px] w-full text-xs"><thead className="bg-slate-100"><tr><th className="p-3 text-left">Produk</th><th className="p-3">Input</th><th className="p-3">FIFO Parent</th><th className="p-3 text-right">Modal FIFO</th><th className="p-3 text-right">Total</th></tr></thead><tbody>{opening.details.map((item)=><tr key={item.inventoryOpeningBalanceDetailId} className="border-t"><td className="p-3 font-bold">{item.product.productName}</td><td className="p-3 text-center">{item.inputQuantity} {item.selectedUnit.unit.unitName}</td><td className="p-3 text-center">{item.parentQuantity} {item.parentUnit.unit.unitName}</td><td className="p-3 text-right">{rupiah(item.parentUnitCost)}</td><td className="p-3 text-right font-bold">{rupiah(item.totalCost)}</td></tr>)}</tbody></table></div></div>}
           {adjustment && (
             <div className="space-y-4">
               <div className="grid gap-2 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-3">

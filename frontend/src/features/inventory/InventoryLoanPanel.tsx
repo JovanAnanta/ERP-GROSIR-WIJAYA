@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   HandCoins,
   Plus,
+  Printer,
   RefreshCw,
   Trash2,
 } from "lucide-react";
@@ -15,6 +16,14 @@ import {
 } from "@/components/ui/dialog";
 import { hasPermission, useAuthStore } from "@/store/authStore";
 import { parseApiError } from "@/utils/error";
+import { systemConfigApi } from "@/features/system/system-configuration.api";
+import {
+  createThermalPrintJob,
+  escapeReceiptHtml,
+  thermalReceiptFooter,
+  thermalReceiptHeader,
+  type ThermalPrintJob,
+} from "@/lib/thermal-print";
 import InventoryPageSizeSelect from "./InventoryPageSizeSelect";
 import InventorySectionNav, {
   type InventorySection,
@@ -227,6 +236,23 @@ export default function InventoryLoanPanel({
     try {
       setDetail(await inventoryApi.loanDetail(id));
     } catch (caught) {
+      setError(parseApiError(caught));
+    }
+  };
+  const printLoan = async (loan: InventoryLoanDetail) => {
+    let printJob: ThermalPrintJob | undefined;
+    try {
+      printJob = createThermalPrintJob(loan.loanNumber);
+      const config = await systemConfigApi.get();
+      const partner =
+        loan.customer?.customerName ?? loan.supplier?.supplierName ?? "-";
+      const total = loan.details.reduce(
+        (sum, line) => sum + Number(line.provisionalTotalCost),
+        0,
+      );
+      await printJob.printDocument(`<!doctype html><html><head><title>${escapeReceiptHtml(loan.loanNumber)}</title><style>@page{size:80mm auto;margin:0}body{width:80mm;margin:0;padding:4mm;font-family:'Courier New',Courier,monospace;font-size:10px;line-height:1.3;color:#000}.line{border-bottom:1px dashed #000;margin:5px 0}.solid{border-bottom:1px solid #000;margin:5px 0}.row{display:flex;justify-content:space-between;gap:3mm}.item{margin:2px 0}.right{text-align:right}.total{font-weight:700;font-size:10.5px}</style></head><body>${thermalReceiptHeader(config)}<div class="line"></div><div class="center bold">INVENTORY LOAN</div><div class="line"></div><div>No. Loan : ${escapeReceiptHtml(loan.loanNumber)}</div><div>Arah : ${loan.direction === "OUTGOING" ? "Dipinjamkan" : "Kita Pinjam"}</div><div>Partner : ${escapeReceiptHtml(partner)}</div><div>Tanggal : ${escapeReceiptHtml(new Date(loan.loanDate).toLocaleDateString("id-ID"))}</div><div>Target : ${loan.dueDate ? escapeReceiptHtml(new Date(loan.dueDate).toLocaleDateString("id-ID")) : "-"}</div><div>Status : ${escapeReceiptHtml(loan.status)}</div><div class="solid"></div>${loan.details.map((line) => `<div class="item"><div class="bold">${escapeReceiptHtml(line.productUnit.product.productName)}</div><div class="row"><span>${escapeReceiptHtml(line.quantity)} ${escapeReceiptHtml(line.productUnit.unit.unitName)}</span><span>${escapeReceiptHtml(rupiah(Number(line.provisionalTotalCost)))}</span></div></div>`).join("")}<div class="solid"></div><div class="row total"><span>TOTAL NILAI MODAL</span><span>${escapeReceiptHtml(rupiah(total))}</span></div>${loan.note ? `<div style="margin-top:2mm"><b>Catatan:</b> ${escapeReceiptHtml(loan.note)}</div>` : ""}${thermalReceiptFooter(config)}</body></html>`);
+    } catch (caught) {
+      printJob?.close();
       setError(parseApiError(caught));
     }
   };
@@ -960,6 +986,14 @@ export default function InventoryLoanPanel({
                 </div>
               )}
               <div className="mt-3 flex flex-wrap justify-end gap-2">
+                <Button
+                  variant="outline"
+                  className="mr-auto"
+                  onClick={() => void printLoan(detail)}
+                >
+                  <Printer className="mr-2 h-4 w-4" />
+                  Cetak IL
+                </Button>
                 {detail.status === "DRAFT" && canUpdate && (
                   <Button variant="outline" onClick={() => edit(detail)}>
                     Edit Draft

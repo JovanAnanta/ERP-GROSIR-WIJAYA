@@ -6,6 +6,7 @@ import {
   ShoppingCart,
   Users,
   WalletCards,
+  Landmark,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -19,8 +20,9 @@ import CustomerListPage from "./customer/CustomerListPage";
 import SalesDocumentForm from "./SalesDocumentForm";
 import SalesDocumentList from "./SalesDocumentList";
 import CustomerOutstandingPage from "./CustomerOutstandingPage";
+import PartyOpeningBalanceForm from "@/features/opening-balance/PartyOpeningBalanceForm";
 
-type Tab = "sales" | "transaction" | "customers" | "outstanding";
+type Tab = "sales" | "transaction" | "customers" | "outstanding" | "opening-balance";
 
 export default function SalesModulePage() {
   const [params, setParams] = useSearchParams();
@@ -37,6 +39,7 @@ export default function SalesModulePage() {
   const canReceivePayment = hasPermission(user, "SALES_RECEIVE_PAYMENT");
   const canViewOutstanding = hasPermission(user, "CUSTOMER_FINANCIAL_VIEW");
   const canReturn = hasPermission(user, "SALES_RETURN_CREATE");
+  const canCreateOpeningBalance = hasPermission(user, "SALES_OPENING_BALANCE_CREATE");
 
   useEffect(() => {
     if (!message) return;
@@ -126,6 +129,12 @@ export default function SalesModulePage() {
           icon={<WalletCards className="h-4 w-4 text-rose-500" />}
           label="Piutang Customer"
         />}
+        {canCreateOpeningBalance && <Nav
+          active={activeTab === "opening-balance"}
+          onClick={() => setParams({ tab: "opening-balance" })}
+          icon={<Landmark className="h-4 w-4 text-blue-600" />}
+          label="Saldo Awal Piutang"
+        />}
       </div>
       <div className="min-h-0 flex-1">
         {activeTab === "sales" && (
@@ -160,6 +169,7 @@ export default function SalesModulePage() {
         {activeTab === "outstanding" && canViewOutstanding && (
           <CustomerOutstandingPage canPay={canReceivePayment} canReturn={canReturn} />
         )}
+        {activeTab === "opening-balance" && canCreateOpeningBalance && <PartyOpeningBalanceForm type="CUSTOMER" />}
       </div>
     </div>
   );

@@ -269,7 +269,10 @@ export default function AppLayout() {
             )}
 
             {hasPermission(user, "FINANCIAL_VIEW") && (
-              <div className="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 hover:bg-slate-800 hover:text-white">
+              <div
+                onClick={() => navigate("/finance")}
+                className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer mb-1 ${isActive("/finance") ? "bg-[#326dc8] text-white shadow-md" : "hover:bg-slate-800 hover:text-white"}`}
+              >
                 <Wallet className="w-5 h-5 mr-3 opacity-80" /> Finance &
                 Accounting
               </div>

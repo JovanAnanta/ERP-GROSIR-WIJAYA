@@ -1,4 +1,4 @@
-import { apiClient } from '@/lib/axios';
+import { apiClient } from "@/lib/axios";
 
 export interface PurchaseOrderItemPayload {
   productUnitId: string;
@@ -10,13 +10,14 @@ export interface CreatePurchaseOrderPayload {
   supplierId: string;
   expectedDate?: string;
   note?: string;
-  status: 'DRAFT' | 'READY';
-  items: PurchaseOrderItemPayload[]; 
+  status: "DRAFT" | "READY";
+  items: PurchaseOrderItemPayload[];
 }
 
 export interface PurchaseInvoiceItemPayload {
   productUnitId: string;
   purchasedQty: number;
+  bonusQty?: number;
   price: number;
   note?: string;
 }
@@ -24,7 +25,7 @@ export interface PurchaseInvoiceItemPayload {
 export interface PurchasePaymentPayload {
   financialAccountId: string;
   paymentAmount: number;
-  paymentMethod: 'CASH' | 'TRANSFER';
+  paymentMethod: "CASH" | "TRANSFER";
   referenceNumber?: string;
 }
 
@@ -36,8 +37,8 @@ export interface CreatePurchaseInvoicePayload {
   invoiceTotal: number;
   discountAmount: number;
   note?: string;
-  status: 'DRAFT' | 'COMPLETED';
-  priceHistoryAction: 'MERGE' | 'REWRITE' | 'IGNORE';
+  status: "DRAFT" | "COMPLETED";
+  priceHistoryAction: "MERGE" | "REWRITE" | "IGNORE";
   items: PurchaseInvoiceItemPayload[];
   payments?: PurchasePaymentPayload[];
 }
@@ -55,7 +56,7 @@ export interface SupplierProductOption {
   productUnitId: string;
   productName: string;
   unitName: string;
-  suggestedCost: number; 
+  suggestedCost: number;
 }
 
 export interface SupplierCatalogItem {
@@ -98,6 +99,24 @@ export interface FinancialAccountOption {
   accountName: string;
   accountType: string;
   currentBalance: number;
+  isDefault: boolean;
+}
+
+export function defaultFinancialAccount(
+  accounts: FinancialAccountOption[],
+  paymentMethod: "CASH" | "TRANSFER" = "CASH",
+) {
+  const accountType = paymentMethod === "CASH" ? "CASH" : "BANK";
+  return (
+    accounts.find(
+      (account) =>
+        account.accountType === accountType && account.isDefault,
+    )?.financialAccountId ??
+    accounts.find((account) => account.accountType === accountType)
+      ?.financialAccountId ??
+    accounts[0]?.financialAccountId ??
+    ""
+  );
 }
 
 export interface PurchasePaginationMeta {
@@ -114,7 +133,7 @@ export interface PurchaseOrderListItem {
   supplierName: string;
   orderDate: string;
   expectedDate?: string | null;
-  status: 'DRAFT' | 'READY' | 'COMPLETED' | 'CANCELLED';
+  status: "DRAFT" | "READY" | "COMPLETED" | "CANCELLED";
   note?: string | null;
   createdAt: string;
   updatedAt?: string | null;
@@ -145,7 +164,7 @@ export interface PurchaseOrderFullDetail extends PurchaseOrderListItem {
   purchaseInvoices: Array<{
     purchaseInvoiceId: string;
     purchaseInvoiceNumber: string;
-    status: 'DRAFT' | 'COMPLETED' | 'CANCELLED';
+    status: "DRAFT" | "COMPLETED" | "CANCELLED";
     createdAt: string;
   }>;
 }
@@ -171,8 +190,9 @@ export interface PurchaseInvoiceListItem {
   invoiceTotal: number;
   paidAmount: number;
   outstandingAmount: number;
-  statusPayment: 'PAID' | 'PARTIAL' | 'UNPAID';
-  status: 'DRAFT' | 'COMPLETED' | 'CANCELLED';
+  statusPayment: "PAID" | "PARTIAL" | "UNPAID";
+  status: "DRAFT" | "COMPLETED" | "CANCELLED";
+  documentType?: "STANDARD" | "OPENING_BALANCE";
   note?: string;
   createdAt: string;
   returnSummary?: { total: number; pending: number; overdue: number };
@@ -184,6 +204,7 @@ export interface PurchaseInvoiceDetailItem {
   productName: string;
   unitName: string;
   quantity: number;
+  bonusQuantity: number;
   unitCost: number;
   subtotal: number;
   note?: string;
@@ -193,7 +214,7 @@ export interface PurchaseInvoiceDetailPayment {
   purchasePaymentId: string;
   accountName: string;
   paymentAmount: number;
-  paymentMethod: 'CASH' | 'TRANSFER';
+  paymentMethod: "CASH" | "TRANSFER";
   paymentDate: string;
   referenceNumber?: string;
   note?: string;
@@ -206,8 +227,13 @@ export interface PurchaseInvoiceFullDetail extends PurchaseInvoiceListItem {
   payments: PurchaseInvoiceDetailPayment[];
 }
 
-export type PurchaseReturnStatus = 'DRAFT' | 'READY' | 'COMPLETED' | 'CANCELLED';
-export type PurchaseReturnResolutionType = 'REPLACEMENT' | 'CURRENT_INVOICE_DEDUCTION' | 'NEXT_INVOICE_DEDUCTION' | 'CASHBACK';
+export type PurchaseReturnStatus =
+  "DRAFT" | "READY" | "COMPLETED" | "CANCELLED";
+export type PurchaseReturnResolutionType =
+  | "REPLACEMENT"
+  | "CURRENT_INVOICE_DEDUCTION"
+  | "NEXT_INVOICE_DEDUCTION"
+  | "CASHBACK";
 
 export interface PurchaseReturnContextItem {
   purchaseInvoiceDetailId: string;
@@ -276,7 +302,7 @@ export interface SavePurchaseReturnPayload {
   returnDate: string;
   expectedResolutionDate?: string;
   resolutionType: PurchaseReturnResolutionType;
-  status: 'DRAFT' | 'READY';
+  status: "DRAFT" | "READY";
   reason: string;
   note?: string;
   items: Array<{
@@ -290,7 +316,7 @@ export interface SavePurchaseReturnPayload {
 export interface AddPaymentPayload {
   financialAccountId: string;
   paymentAmount: number;
-  paymentMethod: 'CASH' | 'TRANSFER';
+  paymentMethod: "CASH" | "TRANSFER";
   paymentDate: string;
   referenceNumber?: string;
   note?: string;
@@ -298,32 +324,52 @@ export interface AddPaymentPayload {
 
 export const purchasingApi = {
   createOrder: async (data: CreatePurchaseOrderPayload) => {
-    const res = await apiClient.post<{ success: boolean; message: string }>('/purchasing/orders', data);
+    const res = await apiClient.post<{ success: boolean; message: string }>(
+      "/purchasing/orders",
+      data,
+    );
     return res.data;
   },
   updateOrder: async (poId: string, data: CreatePurchaseOrderPayload) => {
-    const res = await apiClient.put<{ success: boolean; message: string }>(`/purchasing/orders/${poId}`, data);
+    const res = await apiClient.put<{ success: boolean; message: string }>(
+      `/purchasing/orders/${poId}`,
+      data,
+    );
     return res.data;
   },
   createInvoice: async (data: CreatePurchaseInvoicePayload) => {
-    const res = await apiClient.post<{ success: boolean; message: string }>('/purchasing/invoices', data);
+    const res = await apiClient.post<{ success: boolean; message: string }>(
+      "/purchasing/invoices",
+      data,
+    );
     return res.data;
   },
-  updateInvoice: async (invoiceId: string, data: CreatePurchaseInvoicePayload) => {
-    const res = await apiClient.put<{ success: boolean; message: string }>(`/purchasing/invoices/${invoiceId}`, data);
+  updateInvoice: async (
+    invoiceId: string,
+    data: CreatePurchaseInvoicePayload,
+  ) => {
+    const res = await apiClient.put<{ success: boolean; message: string }>(
+      `/purchasing/invoices/${invoiceId}`,
+      data,
+    );
     return res.data;
   },
   addInvoicePayment: async (invoiceId: string, data: AddPaymentPayload) => {
-    const res = await apiClient.post<{ success: boolean; message: string }>(`/purchasing/invoices/${invoiceId}/payments`, data);
+    const res = await apiClient.post<{ success: boolean; message: string }>(
+      `/purchasing/invoices/${invoiceId}/payments`,
+      data,
+    );
     return res.data;
   },
 
   // LIST & DASHBOARD
   getSupplierSummaries: async () => {
-    const res = await apiClient.get<{ data: SupplierFinancialSummaryCard[] }>('/purchasing/list/supplier-summaries');
+    const res = await apiClient.get<{ data: SupplierFinancialSummaryCard[] }>(
+      "/purchasing/list/supplier-summaries",
+    );
     return res.data.data;
   },
-  getOrders: async (tab: 'ACTIVE' | 'HISTORY', page = 1, limit = 20) => {
+  getOrders: async (tab: "ACTIVE" | "HISTORY", page = 1, limit = 20) => {
     const params = new URLSearchParams({
       tab,
       page: String(page),
@@ -341,12 +387,17 @@ export const purchasingApi = {
     );
     return res.data.data;
   },
-  getInvoices: async (supplierId: string, tab: 'ACTIVE' | 'COMPLETED', page = 1, limit = 20) => {
+  getInvoices: async (
+    supplierId: string,
+    tab: "ACTIVE" | "COMPLETED",
+    page = 1,
+    limit = 20,
+  ) => {
     const params = new URLSearchParams();
-    params.append('supplierId', supplierId);
-    params.append('tab', tab);
-    params.append('page', String(page));
-    params.append('limit', String(limit));
+    params.append("supplierId", supplierId);
+    params.append("tab", tab);
+    params.append("page", String(page));
+    params.append("limit", String(limit));
     const res = await apiClient.get<{
       data: PurchaseInvoiceListItem[];
       meta: PurchasePaginationMeta;
@@ -354,68 +405,116 @@ export const purchasingApi = {
     return { data: res.data.data, meta: res.data.meta };
   },
   getInvoiceDetail: async (id: string) => {
-    const res = await apiClient.get<{ data: PurchaseInvoiceFullDetail }>(`/purchasing/list/invoices/${id}`);
+    const res = await apiClient.get<{ data: PurchaseInvoiceFullDetail }>(
+      `/purchasing/list/invoices/${id}`,
+    );
     return res.data.data;
   },
   getPurchaseReturnContext: async (invoiceId: string) => {
-    const res = await apiClient.get<{ data: PurchaseReturnContext }>(`/purchasing/invoices/${invoiceId}/return-context`);
+    const res = await apiClient.get<{ data: PurchaseReturnContext }>(
+      `/purchasing/invoices/${invoiceId}/return-context`,
+    );
     return res.data.data;
   },
   getInvoiceReturns: async (invoiceId: string) => {
-    const res = await apiClient.get<{ data: PurchaseReturnDetail[] }>(`/purchasing/invoices/${invoiceId}/returns`);
+    const res = await apiClient.get<{ data: PurchaseReturnDetail[] }>(
+      `/purchasing/invoices/${invoiceId}/returns`,
+    );
     return res.data.data;
   },
   getPurchaseReturn: async (returnId: string) => {
-    const res = await apiClient.get<{ data: PurchaseReturnDetail }>(`/purchasing/returns/${returnId}`);
+    const res = await apiClient.get<{ data: PurchaseReturnDetail }>(
+      `/purchasing/returns/${returnId}`,
+    );
     return res.data.data;
   },
   createPurchaseReturn: async (data: SavePurchaseReturnPayload) => {
-    const res = await apiClient.post<{ data: PurchaseReturnDetail }>('/purchasing/returns', data);
+    const res = await apiClient.post<{ data: PurchaseReturnDetail }>(
+      "/purchasing/returns",
+      data,
+    );
     return res.data.data;
   },
-  updatePurchaseReturn: async (returnId: string, data: SavePurchaseReturnPayload) => {
-    const res = await apiClient.put<{ data: PurchaseReturnDetail }>(`/purchasing/returns/${returnId}`, data);
+  updatePurchaseReturn: async (
+    returnId: string,
+    data: SavePurchaseReturnPayload,
+  ) => {
+    const res = await apiClient.put<{ data: PurchaseReturnDetail }>(
+      `/purchasing/returns/${returnId}`,
+      data,
+    );
     return res.data.data;
   },
   markPurchaseReturnReady: async (returnId: string) => {
-    const res = await apiClient.post<{ data: PurchaseReturnDetail }>(`/purchasing/returns/${returnId}/ready`);
+    const res = await apiClient.post<{ data: PurchaseReturnDetail }>(
+      `/purchasing/returns/${returnId}/ready`,
+    );
     return res.data.data;
   },
-  completePurchaseReturn: async (returnId: string, data: { financialAccountId?: string; paymentMethod?: 'CASH' | 'TRANSFER'; appliedPurchaseInvoiceId?: string }) => {
-    const res = await apiClient.post<{ data: PurchaseReturnDetail }>(`/purchasing/returns/${returnId}/complete`, data);
+  completePurchaseReturn: async (
+    returnId: string,
+    data: {
+      financialAccountId?: string;
+      paymentMethod?: "CASH" | "TRANSFER";
+      appliedPurchaseInvoiceId?: string;
+    },
+  ) => {
+    const res = await apiClient.post<{ data: PurchaseReturnDetail }>(
+      `/purchasing/returns/${returnId}/complete`,
+      data,
+    );
     return res.data.data;
   },
   cancelPurchaseReturn: async (returnId: string) => {
     await apiClient.post(`/purchasing/returns/${returnId}/cancel`);
   },
   getPurchaseReturnCompletionOptions: async (returnId: string) => {
-    const res = await apiClient.get<{ data: Array<{ purchaseInvoiceId: string; purchaseInvoiceNumber: string; invoiceDate: string; invoiceTotal: number }> }>(`/purchasing/returns/${returnId}/completion-options`);
+    const res = await apiClient.get<{
+      data: Array<{
+        purchaseInvoiceId: string;
+        purchaseInvoiceNumber: string;
+        invoiceDate: string;
+        invoiceTotal: number;
+      }>;
+    }>(`/purchasing/returns/${returnId}/completion-options`);
     return res.data.data;
   },
 
   // LOOKUPS
   getSuppliers: async () => {
-    const res = await apiClient.get<{ data: SupplierDropdownOption[] }>('/purchasing/lookups/suppliers'); 
+    const res = await apiClient.get<{ data: SupplierDropdownOption[] }>(
+      "/purchasing/lookups/suppliers",
+    );
     return res.data.data;
   },
   getProducts: async () => {
-    const res = await apiClient.get<{ data: ProductLookupOption[] }>('/purchasing/lookups/products'); 
+    const res = await apiClient.get<{ data: ProductLookupOption[] }>(
+      "/purchasing/lookups/products",
+    );
     return res.data.data;
   },
   getSupplierCatalog: async (supplierId: string) => {
-    const res = await apiClient.get<{ data: SupplierCatalogItem[] }>(`/purchasing/lookups/supplier-catalog/${supplierId}`);
+    const res = await apiClient.get<{ data: SupplierCatalogItem[] }>(
+      `/purchasing/lookups/supplier-catalog/${supplierId}`,
+    );
     return res.data.data;
   },
   getSupplierHistory: async (supplierId: string) => {
-    const res = await apiClient.get<{ data: SupplierProductOption[] }>(`/purchasing/lookups/supplier-history/${supplierId}`);
+    const res = await apiClient.get<{ data: SupplierProductOption[] }>(
+      `/purchasing/lookups/supplier-history/${supplierId}`,
+    );
     return res.data.data;
   },
   getReadyOrders: async () => {
-    const res = await apiClient.get<{ data: ReadyPOOption[] }>(`/purchasing/lookups/ready-orders`);
+    const res = await apiClient.get<{ data: ReadyPOOption[] }>(
+      `/purchasing/lookups/ready-orders`,
+    );
     return res.data.data;
   },
   getFinancialAccounts: async () => {
-    const res = await apiClient.get<{ data: FinancialAccountOption[] }>('/purchasing/lookups/financial-accounts');
+    const res = await apiClient.get<{ data: FinancialAccountOption[] }>(
+      "/purchasing/lookups/financial-accounts",
+    );
     return res.data.data;
-  }
+  },
 };

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { purchasingApi, type SupplierFinancialSummaryCard, type PurchaseInvoiceListItem, type PurchaseInvoiceFullDetail, type FinancialAccountOption, type PurchasePaginationMeta } from "../purchasing.api";
+import { defaultFinancialAccount, purchasingApi, type SupplierFinancialSummaryCard, type PurchaseInvoiceListItem, type PurchaseInvoiceFullDetail, type FinancialAccountOption, type PurchasePaginationMeta } from "../purchasing.api";
 import { systemConfigApi } from "@/features/system/system-configuration.api";
+import { createThermalPrintJob, thermalReceiptFooter, thermalReceiptHeader, type ThermalPrintJob } from "@/lib/thermal-print";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -149,7 +150,7 @@ export default function PurchaseInvoiceCardList({ onEditInvoice, initialInvoiceI
   const handleOpenPayment = async (inv: PurchaseInvoiceListItem) => {
     setPaymentTarget(inv);
     setPayAmount(inv.outstandingAmount);
-    setPayAccountId("");
+    setPayAccountId(defaultFinancialAccount(financialAccounts, payMethod));
     setPayRef("");
     try {
       const detail = await purchasingApi.getInvoiceDetail(inv.purchaseInvoiceId);
@@ -187,21 +188,18 @@ export default function PurchaseInvoiceCardList({ onEditInvoice, initialInvoiceI
 
   // CETAK STRUK KASIR TERMAL
   const handlePrintReceipt = async (invDetail: PurchaseInvoiceFullDetail) => {
+    let printJob: ThermalPrintJob | undefined;
     try {
+      printJob = createThermalPrintJob(invDetail.purchaseInvoiceNumber);
       const configRes = await systemConfigApi.get();
       const cfg = configRes.data;
-      const printDate = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
-
-      const printWindow = window.open('', '_blank', 'width=400,height=600');
-      if (!printWindow) return;
-
-      printWindow.document.write(`
+      await printJob.printDocument(`
         <html>
           <head>
             <title>Struk Pembelian - ${invDetail.purchaseInvoiceNumber}</title>
             <style>
-              @page { margin: 0; }
-              body { font-family: 'Courier New', Courier, monospace; font-size: 11px; width: 58mm; margin: 0; padding: 6px; color: #000; background: #fff; }
+              @page { size: 80mm auto; margin: 0; }
+              body { font-family: 'Courier New', Courier, monospace; font-size: 10px; width: 80mm; margin: 0; padding: 4mm; color: #000; background: #fff; }
               .center { text-align: center; }
               .bold { font-weight: bold; }
               .line { border-bottom: 1px dashed #000; margin: 5px 0; }
@@ -213,10 +211,7 @@ export default function PurchaseInvoiceCardList({ onEditInvoice, initialInvoiceI
             </style>
           </head>
           <body>
-            ${cfg.logoBase64 ? `<div class="center"><img src="${cfg.logoBase64}" style="max-height: 40px; filter: grayscale(100%); contrast: 150%;" /></div>` : ''}
-            <div class="center bold" style="font-size: 13px; margin-top: 4px;">${cfg.companyName}</div>
-            <div class="center">${cfg.address}</div>
-            <div class="center">Telp: ${cfg.phone}</div>
+            ${thermalReceiptHeader(cfg)}
             <div class="line"></div><div class="center bold">PURCHASE INVOICE</div><div class="line"></div>
             <div>No. Faktur : ${invDetail.purchaseInvoiceNumber}</div>
             <div>Supplier   : ${invDetail.supplierName}</div>
@@ -249,18 +244,12 @@ export default function PurchaseInvoiceCardList({ onEditInvoice, initialInvoiceI
             <div style="display: flex; justify-content: space-between;"><span>Sudah Bayar:</span> <span>Rp ${invDetail.paidAmount.toLocaleString('id-ID')}</span></div>
             <div style="display: flex; justify-content: space-between;" class="bold"><span>Sisa Hutang:</span> <span>Rp ${invDetail.outstandingAmount.toLocaleString('id-ID')}</span></div>
             ${invDetail.note ? `<div style="margin-top: 4px;"><b>Catatan Faktur:</b> ${escapeHtml(invDetail.note)}</div>` : ''}
-            <div class="line"></div><div class="center">HANYA UNTUK TOKO</div>
-            <div class="center" style="font-size: 9px; margin-top: 6px; color: #555;">Dicetak: ${printDate}</div>
+            ${thermalReceiptFooter(cfg)}
           </body>
         </html>
       `);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 300);
     } catch {
+      printJob?.close();
       alert("Gagal mencetak struk térmal.");
     }
   };
@@ -455,7 +444,7 @@ export default function PurchaseInvoiceCardList({ onEditInvoice, initialInvoiceI
                             <CreditCard className="w-3 h-3 mr-1"/> Bayar
                           </Button>
                         )}
-                        {inv.status === 'COMPLETED' && (canCreate || Boolean(inv.returnSummary?.total)) && (
+                        {inv.status === 'COMPLETED' && inv.documentType !== 'OPENING_BALANCE' && (canCreate || Boolean(inv.returnSummary?.total)) && (
                           <Button size="sm" onClick={() => setReturnInvoiceId(inv.purchaseInvoiceId)} className="h-7 bg-orange-600 px-2.5 text-[11px] font-bold text-white hover:bg-orange-700">
                             <RefreshCw className="mr-1 h-3 w-3" /> {inv.returnSummary?.total ? 'Retur' : 'Buat Retur'}
                           </Button>
@@ -506,8 +495,7 @@ export default function PurchaseInvoiceCardList({ onEditInvoice, initialInvoiceI
                 <div><span className="text-slate-400 block font-bold uppercase text-[10px]">Status Pembayaran</span> <strong className="text-emerald-700 text-sm">{detailData.statusPayment}</strong></div>
               </div>
 
-              {/* TABEL BARANG (Dilengkapi Scroll Max-Height untuk Menangani Banyak Produk) */}
-              <div>
+              {detailData.documentType === 'OPENING_BALANCE' ? <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-center text-xs font-bold text-blue-700">Dokumen ini merupakan saldo awal. Tidak memiliki rincian transaksi barang.</div> : <div>
                 <h4 className="font-extrabold text-slate-700 uppercase mb-2">Daftar Barang Diterima ({detailData.details.length} Item)</h4>
                 <div className="border border-slate-200 rounded-lg overflow-hidden max-h-[260px] overflow-y-auto custom-scrollbar shadow-inner bg-white">
                   <table className="w-full text-left border-collapse">
@@ -535,7 +523,7 @@ export default function PurchaseInvoiceCardList({ onEditInvoice, initialInvoiceI
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </div>}
 
               {/* HISTORI PEMBAYARAN KAS / BANK (Dilengkapi Scroll Max-Height untuk Menangani Banyak Riwayat) */}
               <div>
@@ -586,9 +574,9 @@ export default function PurchaseInvoiceCardList({ onEditInvoice, initialInvoiceI
           )}
 
           <DialogFooter className="mt-4 flex justify-between items-center w-full shrink-0 pt-2 border-t border-slate-100">
-            <Button variant="outline" onClick={() => detailData && handlePrintReceipt(detailData)} className="h-9 text-xs font-bold text-slate-700 border-slate-300">
+            {detailData?.documentType !== 'OPENING_BALANCE' && <Button variant="outline" onClick={() => detailData && handlePrintReceipt(detailData)} className="h-9 text-xs font-bold text-slate-700 border-slate-300">
               <Printer className="w-4 h-4 mr-1.5"/> Cetak Struk Kasir
-            </Button>
+            </Button>}
             <Button variant="outline" onClick={() => setIsDetailOpen(false)} className="h-9 text-xs px-6">Tutup</Button>
           </DialogFooter>
         </DialogContent>
@@ -647,7 +635,7 @@ export default function PurchaseInvoiceCardList({ onEditInvoice, initialInvoiceI
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <Label className="font-bold text-slate-600 uppercase text-[10px]">Metode Bayar</Label>
-                <Select value={payMethod} onValueChange={(v) => { if (v === 'CASH' || v === 'TRANSFER') setPayMethod(v); }}>
+                <Select value={payMethod} onValueChange={(v) => { if (v === 'CASH' || v === 'TRANSFER') { setPayMethod(v); setPayAccountId(defaultFinancialAccount(financialAccounts, v)); } }}>
                   <SelectTrigger className="h-9 text-xs font-bold bg-slate-50 mt-1"><SelectValue/></SelectTrigger>
                   <SelectContent className="bg-white z-[70] border border-slate-200 shadow-2xl">
                     <SelectItem value="CASH" className="text-xs cursor-pointer">CASH</SelectItem>

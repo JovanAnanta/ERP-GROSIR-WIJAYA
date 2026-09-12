@@ -150,5 +150,6 @@ export function hasPermission(
 ): boolean {
   if (!user) return false;
   if (user.roleId === '1' || user.roleId === '2') return true;
+  if (!Array.isArray(user.permissions)) return false;
   return user.permissions.includes('*') || user.permissions.includes(permission);
 }

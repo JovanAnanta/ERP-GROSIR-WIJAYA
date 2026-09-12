@@ -25,7 +25,13 @@ import {
   createAuditTransactionId,
   writeAuditLog,
 } from '../../common/logging/business-logger.js';
+import {
+  postFinancialMovement,
+  postJournalEntry,
+  type JournalPostingLine,
+} from '../../common/financial/financial-posting.js';
 
+const ZERO = new Prisma.Decimal(0);
 const ACTIVE_RETURN_STATUSES = ['READY', 'COMPLETED'] as const;
 const PURCHASE_RETURN_FULL_INCLUDE = {
   supplier: { select: { supplierName: true } },
@@ -59,21 +65,6 @@ export class PurchaseReturnService {
       ? Number(last.purchaseReturnNumber.split('-')[2] ?? 0) + 1
       : 1;
     return `${prefix}${String(sequence).padStart(7, '0')}`;
-  }
-
-  private async generateFinancialTransactionNumber(
-    tx: Prisma.TransactionClient,
-  ) {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('FAT:NUMBER'))`;
-    const last = await tx.financialAccountTransaction.findFirst({
-      where: { transactionNumber: { startsWith: 'FAT-' } },
-      orderBy: { financialAccountTransactionId: 'desc' },
-      select: { transactionNumber: true },
-    });
-    const lastTimestamp = last
-      ? Number(last.transactionNumber.split('-')[1])
-      : 0;
-    return `FAT-${Math.max(Date.now(), lastTimestamp + 1)}-RETURN`;
   }
 
   private validateResolution(dto: SavePurchaseReturnDto) {
@@ -703,6 +694,33 @@ export class PurchaseReturnService {
       where: { purchaseReturnId: returnId },
       data: { status: 'READY', inventoryCostTotal, updatedBy: userId },
     });
+    const valuationDifference =
+      purchaseReturn.returnTotal.sub(inventoryCostTotal);
+    const returnOutLines: JournalPostingLine[] = [
+      { chartAccountCode: '1391', debitAmount: purchaseReturn.returnTotal },
+      { chartAccountCode: '1301', creditAmount: inventoryCostTotal },
+    ];
+    if (valuationDifference.greaterThan(ZERO)) {
+      returnOutLines.push({
+        chartAccountCode: '4201',
+        creditAmount: valuationDifference,
+      });
+    } else if (valuationDifference.lessThan(ZERO)) {
+      returnOutLines.push({
+        chartAccountCode: '6199',
+        debitAmount: valuationDifference.abs(),
+      });
+    }
+    await postJournalEntry(tx, {
+      postingKey: `INVENTORY_OUT:PURCHASE_RETURN:${returnId}`,
+      transactionDate: new Date(),
+      description: `Barang keluar untuk retur ${purchaseReturn.purchaseReturnNumber}`,
+      sourceType: 'PURCHASE_RETURN',
+      sourceId: returnId,
+      sourceNumber: purchaseReturn.purchaseReturnNumber,
+      createdBy: userId,
+      lines: returnOutLines,
+    });
     await this.log(
       tx,
       returnId,
@@ -880,6 +898,40 @@ export class PurchaseReturnService {
             ]),
           });
         }
+        const replacementDifference = purchaseReturn.returnTotal.sub(
+          purchaseReturn.inventoryCostTotal,
+        );
+        const replacementLines: JournalPostingLine[] = [
+          {
+            chartAccountCode: '1301',
+            debitAmount: purchaseReturn.inventoryCostTotal,
+          },
+          {
+            chartAccountCode: '1391',
+            creditAmount: purchaseReturn.returnTotal,
+          },
+        ];
+        if (replacementDifference.greaterThan(ZERO)) {
+          replacementLines.push({
+            chartAccountCode: '6199',
+            debitAmount: replacementDifference,
+          });
+        } else if (replacementDifference.lessThan(ZERO)) {
+          replacementLines.push({
+            chartAccountCode: '4201',
+            creditAmount: replacementDifference.abs(),
+          });
+        }
+        await postJournalEntry(tx, {
+          postingKey: `REPLACEMENT:PURCHASE_RETURN:${returnId}`,
+          transactionDate: now,
+          description: `Barang pengganti ${purchaseReturn.purchaseReturnNumber}`,
+          sourceType: 'PURCHASE_RETURN',
+          sourceId: returnId,
+          sourceNumber: purchaseReturn.purchaseReturnNumber,
+          createdBy: userId,
+          lines: replacementLines,
+        });
       } else if (
         purchaseReturn.resolutionType === 'CURRENT_INVOICE_DEDUCTION'
       ) {
@@ -941,6 +993,25 @@ export class PurchaseReturnService {
             note: purchaseReturn.note,
             createdBy: userId,
           },
+        });
+        await postJournalEntry(tx, {
+          postingKey: `DEDUCTION:PURCHASE_RETURN:${returnId}`,
+          transactionDate: now,
+          description: `Potongan hutang ${purchaseReturn.purchaseReturnNumber}`,
+          sourceType: 'PURCHASE_RETURN',
+          sourceId: returnId,
+          sourceNumber: purchaseReturn.purchaseReturnNumber,
+          createdBy: userId,
+          lines: [
+            {
+              chartAccountCode: '2101',
+              debitAmount: purchaseReturn.returnTotal,
+            },
+            {
+              chartAccountCode: '1391',
+              creditAmount: purchaseReturn.returnTotal,
+            },
+          ],
         });
         await writeAuditLog(tx, {
           userId,
@@ -1032,34 +1103,34 @@ export class PurchaseReturnService {
             'Akun kas/bank tidak valid.',
             HttpStatus.BAD_REQUEST,
           );
-        const updatedAccount = await tx.financialAccount.update({
-          where: { financialAccountId: accountId },
-          data: {
-            currentBalance: { increment: purchaseReturn.returnTotal },
-            updatedAt: now,
-            updatedBy: userId,
-          },
+        const posted = await postFinancialMovement(tx, {
+          financialAccountId: accountId,
+          transactionType: 'PURCHASE_RETURN_CASHBACK',
+          paymentMethod: dto.paymentMethod,
+          direction: 'IN',
+          amount: purchaseReturn.returnTotal,
+          sourceModule: 'PURCHASE',
+          referenceType: 'PURCHASE_RETURN',
+          referenceId: returnId,
+          referenceNumber: purchaseReturn.purchaseReturnNumber,
+          transactionDate: now,
+          description: `Cashback ${purchaseReturn.purchaseReturnNumber}`,
+          note: purchaseReturn.note ?? undefined,
+          createdBy: userId,
+          counterChartAccountCode: '1391',
         });
-        const financialTransaction =
-          await tx.financialAccountTransaction.create({
-            data: {
-              transactionNumber:
-                await this.generateFinancialTransactionNumber(tx),
-              financialAccountId: accountId,
-              transactionType: 'PURCHASE_RETURN_CASHBACK',
-              paymentMethod: dto.paymentMethod,
-              direction: 'IN',
-              amount: purchaseReturn.returnTotal,
-              referenceType: 'PURCHASE_RETURN',
-              referenceId: returnId,
-              transactionDate: now,
-              note: purchaseReturn.note,
-              createdBy: userId,
-            },
-          });
+        const financialTransaction = posted.financialTransaction;
+        const updatedAccount = {
+          ...posted.account,
+          currentBalance: posted.balanceAfter,
+        };
         await tx.purchaseReturn.update({
           where: { purchaseReturnId: returnId },
-          data: { financialAccountId: accountId },
+          data: {
+            financialAccountId: accountId,
+            financialAccountTransactionId:
+              financialTransaction.financialAccountTransactionId,
+          },
         });
         await writeAuditLog(tx, {
           userId,
@@ -1326,6 +1397,11 @@ export class PurchaseReturnService {
       throw new HttpException(
         'PI COMPLETED tidak ditemukan.',
         HttpStatus.NOT_FOUND,
+      );
+    if (invoice.documentType === 'OPENING_BALANCE')
+      throw new HttpException(
+        'Saldo awal hutang tidak memiliki barang yang dapat diretur.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
       );
     const items = [];
     for (const detail of invoice.details) {

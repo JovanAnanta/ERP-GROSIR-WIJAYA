@@ -30,10 +30,35 @@ const loginSchema = z.object({
 
 type LoginForm = z.infer<typeof loginSchema>;
 
-interface LoginResponse {
-  success: boolean;
-  message: string;
-  data: AuthUser;
+function readAuthenticatedUser(value: unknown): AuthUser {
+  let current = value;
+
+  while (
+    current &&
+    typeof current === "object" &&
+    "success" in current &&
+    "data" in current
+  ) {
+    current = (current as { data: unknown }).data;
+  }
+
+  if (!current || typeof current !== "object") {
+    throw new Error("Response login tidak valid.");
+  }
+
+  const user = current as Partial<AuthUser>;
+  if (
+    typeof user.userId !== "string" ||
+    typeof user.username !== "string" ||
+    typeof user.fullName !== "string" ||
+    typeof user.roleId !== "string" ||
+    !Array.isArray(user.permissions) ||
+    !user.permissions.every((permission) => typeof permission === "string")
+  ) {
+    throw new Error("Response login tidak valid.");
+  }
+
+  return user as AuthUser;
 }
 
 export default function LoginPage() {
@@ -89,11 +114,11 @@ export default function LoginPage() {
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const response = await apiClient.post<unknown, LoginResponse>(
+      const response = await apiClient.post<unknown, unknown>(
         "/auth/login",
         data,
       );
-      login(response.data);
+      login(readAuthenticatedUser(response));
       navigate("/dashboard", { replace: true });
     } catch (error: unknown) {
       const msg = parseApiError(error);

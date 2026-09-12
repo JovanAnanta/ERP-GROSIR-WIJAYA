@@ -30,10 +30,11 @@ import {
   createAuditTransactionId,
   writeAuditLog,
 } from '../../common/logging/business-logger.js';
+import { generateBusinessDocumentNumber } from '../../common/financial/transaction-number.utils.js';
 import {
-  generateBusinessDocumentNumber,
-  generateFinancialAccountTransactionNumber,
-} from '../../common/financial/transaction-number.utils.js';
+  postFinancialMovement,
+  postJournalEntry,
+} from '../../common/financial/financial-posting.js';
 
 type CreatedInvoiceWithDetails = Prisma.PurchaseInvoiceGetPayload<{
   include: {
@@ -77,6 +78,29 @@ export class PurchaseInvoiceService {
     tx: Prisma.TransactionClient,
     dto: CreatePurchaseInvoiceDto | UpdatePurchaseInvoiceDto,
   ): Promise<void> {
+    const grossTotal = dto.items.reduce(
+      (sum, item) =>
+        sum.add(new Prisma.Decimal(item.purchasedQty).mul(item.price)),
+      new Prisma.Decimal(0),
+    );
+    const discount = new Prisma.Decimal(dto.discountAmount);
+    const invoiceTotal = new Prisma.Decimal(dto.invoiceTotal);
+    if (discount.greaterThan(grossTotal)) {
+      throw new HttpException(
+        'Diskon Purchase Invoice tidak boleh melebihi subtotal barang.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    if (
+      !invoiceTotal
+        .toDecimalPlaces(2)
+        .equals(grossTotal.sub(discount).toDecimalPlaces(2))
+    ) {
+      throw new HttpException(
+        'Total Purchase Invoice tidak sesuai dengan subtotal dikurangi diskon.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
     const supplierId = BigInt(dto.supplierId);
     const supplier = await tx.supplier.findUnique({
       where: { supplierId },
@@ -203,6 +227,7 @@ export class PurchaseInvoiceService {
           create: dto.items.map((item) => ({
             productUnitId: BigInt(item.productUnitId),
             quantity: item.purchasedQty,
+            bonusQuantity: item.bonusQty ?? 0,
             unitCost: item.price,
             subtotal: new Prisma.Decimal(item.purchasedQty).mul(item.price),
             note: item.note,
@@ -371,6 +396,7 @@ export class PurchaseInvoiceService {
               create: dto.items.map((item) => ({
                 productUnitId: BigInt(item.productUnitId),
                 quantity: item.purchasedQty,
+                bonusQuantity: item.bonusQty ?? 0,
                 unitCost: item.price,
                 subtotal: new Prisma.Decimal(item.purchasedQty).mul(item.price),
                 note: item.note,
@@ -487,43 +513,37 @@ export class PurchaseInvoiceService {
         );
       }
 
+      const posted = await postFinancialMovement(tx, {
+        financialAccountId,
+        direction: 'OUT',
+        amount: payAmt,
+        transactionType: 'PURCHASE_PAYMENT',
+        paymentMethod: dto.paymentMethod,
+        sourceModule: 'PURCHASE',
+        referenceType: 'PURCHASE_INVOICE',
+        referenceId: id,
+        referenceNumber: invoice.purchaseInvoiceNumber,
+        transactionDate: paymentDate,
+        description: `Pembayaran ${invoice.purchaseInvoiceNumber}`,
+        note: dto.note,
+        createdBy: userId,
+        counterChartAccountCode: '2101',
+      });
+      const financialTransaction = posted.financialTransaction;
+      const updatedFinancialAccount = {
+        ...posted.account,
+        currentBalance: posted.balanceAfter,
+      };
       const payment = await tx.purchaseInvoicePayment.create({
         data: {
           purchaseInvoiceId: id,
           financialAccountId,
+          financialAccountTransactionId:
+            financialTransaction.financialAccountTransactionId,
           paymentAmount: payAmt,
           paymentMethod: dto.paymentMethod,
           paymentDate,
           referenceNumber: dto.referenceNumber,
-          note: dto.note,
-          createdBy: userId,
-        },
-      });
-
-      const updatedFinancialAccount = await tx.financialAccount.update({
-        where: { financialAccountId },
-        data: {
-          currentBalance: { decrement: payAmt },
-          updatedBy: userId,
-          updatedAt: now,
-        },
-      });
-
-      const transactionNumber = await generateFinancialAccountTransactionNumber(
-        tx,
-        now,
-      );
-      const financialTransaction = await tx.financialAccountTransaction.create({
-        data: {
-          transactionNumber,
-          financialAccountId,
-          transactionType: 'PURCHASE_PAYMENT',
-          paymentMethod: dto.paymentMethod,
-          direction: 'OUT',
-          amount: payAmt,
-          referenceType: 'PURCHASE_INVOICE',
-          referenceId: id,
-          transactionDate: paymentDate,
           note: dto.note,
           createdBy: userId,
         },
@@ -881,6 +901,7 @@ export class PurchaseInvoiceService {
         productName: d.productUnit.product.productName,
         unitName: d.productUnit.unit.unitName,
         quantity: Number(d.quantity),
+        bonusQuantity: Number(d.bonusQuantity),
         unitCost: Number(d.unitCost),
         subtotal: Number(d.subtotal),
       })),
@@ -908,7 +929,12 @@ export class PurchaseInvoiceService {
     // Barang Loan masuk sudah menambah stok saat Loan diaktifkan. PI hanya
     // mengesahkan kewajiban dan tidak boleh membuat stok/FIFO untuk kedua kali.
     if (loanConversion > 0) return;
-    for (const detail of invoice.details) {
+    const grossTotal = invoice.details.reduce(
+      (sum, detail) => sum.add(detail.subtotal),
+      new Prisma.Decimal(0),
+    );
+    let allocatedInvoiceCost = new Prisma.Decimal(0);
+    for (const [index, detail] of invoice.details.entries()) {
       const selectedUnit = detail.productUnit;
       const parentUnit = selectedUnit.product.productUnits.find(
         (u) => u.isParent,
@@ -919,12 +945,28 @@ export class PurchaseInvoiceService {
           HttpStatus.INTERNAL_SERVER_ERROR,
         );
 
-      const parentQty = toBaseQuantity(
+      const purchasedParentQty = toBaseQuantity(
         detail.quantity,
         selectedUnit.conversionFactor,
         parentUnit.conversionFactor,
       );
-      const baseUnitCost = toBaseUnitCost(detail.subtotal, parentQty);
+      const bonusParentQty = toBaseQuantity(
+        detail.bonusQuantity,
+        selectedUnit.conversionFactor,
+        parentUnit.conversionFactor,
+      );
+      const parentQty = purchasedParentQty.add(bonusParentQty);
+      const inventoryCost =
+        index === invoice.details.length - 1
+          ? invoice.invoiceTotal.sub(allocatedInvoiceCost)
+          : grossTotal.greaterThan(0)
+            ? invoice.invoiceTotal
+                .mul(detail.subtotal)
+                .div(grossTotal)
+                .toDecimalPlaces(2)
+            : new Prisma.Decimal(0);
+      allocatedInvoiceCost = allocatedInvoiceCost.add(inventoryCost);
+      const baseUnitCost = toBaseUnitCost(inventoryCost, parentQty);
 
       const movement = await tx.inventoryMovement.create({
         data: {
@@ -954,8 +996,8 @@ export class PurchaseInvoiceService {
           // FIFO is stored in the parent/base unit, so its unit cost must use
           // the same unit as originalQty/remainingQty.
           unitCost: baseUnitCost,
-          originalCost: detail.subtotal,
-          remainingCost: detail.subtotal,
+          originalCost: inventoryCost,
+          remainingCost: inventoryCost,
           createdBy: userId,
         },
       });
@@ -965,7 +1007,7 @@ export class PurchaseInvoiceService {
         inventoryMovementId: movement.inventoryMovementId,
         quantity: parentQty,
         unitCost: baseUnitCost,
-        totalCost: detail.subtotal,
+        totalCost: inventoryCost,
         createdBy: userId,
       });
 
@@ -1080,6 +1122,21 @@ export class PurchaseInvoiceService {
     now: Date,
     transactionId: string,
   ) {
+    if (invoice.invoiceTotal.greaterThan(0)) {
+      await postJournalEntry(tx, {
+        postingKey: `ACCRUAL:PURCHASE_INVOICE:${invoice.purchaseInvoiceId}`,
+        transactionDate: now,
+        description: `Pengakuan pembelian ${invoice.purchaseInvoiceNumber}`,
+        sourceType: 'PURCHASE_INVOICE',
+        sourceId: invoice.purchaseInvoiceId,
+        sourceNumber: invoice.purchaseInvoiceNumber,
+        createdBy: userId,
+        lines: [
+          { chartAccountCode: '1301', debitAmount: invoice.invoiceTotal },
+          { chartAccountCode: '2101', creditAmount: invoice.invoiceTotal },
+        ],
+      });
+    }
     const latestPaymentDate = payments.reduce<Date | undefined>(
       (latest, payment) => {
         const candidate =
@@ -1133,41 +1190,37 @@ export class PurchaseInvoiceService {
         const pDate =
           'paymentDate' in p && p.paymentDate ? new Date(p.paymentDate) : now;
 
+        const posted = await postFinancialMovement(tx, {
+          financialAccountId: BigInt(p.financialAccountId),
+          direction: 'OUT',
+          amount: amt,
+          transactionType: 'PURCHASE_PAYMENT',
+          paymentMethod: p.paymentMethod,
+          sourceModule: 'PURCHASE',
+          referenceType: 'PURCHASE_INVOICE',
+          referenceId: invoice.purchaseInvoiceId,
+          referenceNumber: invoice.purchaseInvoiceNumber,
+          transactionDate: pDate,
+          description: `Pembayaran ${invoice.purchaseInvoiceNumber}`,
+          createdBy: userId,
+          counterChartAccountCode: '2101',
+        });
+        const accountBefore = posted.account;
+        const accountAfter = {
+          ...posted.account,
+          currentBalance: posted.balanceAfter,
+        };
+        const accountTransaction = posted.financialTransaction;
         const payment = await tx.purchaseInvoicePayment.create({
           data: {
             purchaseInvoiceId: invoice.purchaseInvoiceId,
             financialAccountId: BigInt(p.financialAccountId),
+            financialAccountTransactionId:
+              accountTransaction.financialAccountTransactionId,
             paymentAmount: amt,
             paymentMethod: p.paymentMethod,
             paymentDate: pDate,
             referenceNumber: p.referenceNumber,
-            createdBy: userId,
-          },
-        });
-        const accountBefore = await tx.financialAccount.findUniqueOrThrow({
-          where: { financialAccountId: BigInt(p.financialAccountId) },
-        });
-        const accountAfter = await tx.financialAccount.update({
-          where: { financialAccountId: BigInt(p.financialAccountId) },
-          data: {
-            currentBalance: { decrement: amt },
-            updatedBy: userId,
-            updatedAt: now,
-          },
-        });
-        const transactionNumber =
-          await generateFinancialAccountTransactionNumber(tx, pDate);
-        const accountTransaction = await tx.financialAccountTransaction.create({
-          data: {
-            transactionNumber,
-            financialAccountId: BigInt(p.financialAccountId),
-            transactionType: 'PURCHASE_PAYMENT',
-            paymentMethod: p.paymentMethod,
-            direction: 'OUT',
-            amount: amt,
-            referenceType: 'PURCHASE_INVOICE',
-            referenceId: invoice.purchaseInvoiceId,
-            transactionDate: pDate,
             createdBy: userId,
           },
         });

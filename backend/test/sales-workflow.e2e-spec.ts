@@ -219,8 +219,12 @@ describeSales('Sales workflow against an isolated PostgreSQL database', () => {
       agent.post(`/api/v1/sales/invoices/${invoiceId}/payments`).send(payment),
       agent.post(`/api/v1/sales/invoices/${invoiceId}/payments`).send(payment),
     ]);
-    expect(concurrentPayments.filter((response) => response.status < 300)).toHaveLength(1);
-    expect(concurrentPayments.filter((response) => response.status === 422)).toHaveLength(1);
+    expect(
+      concurrentPayments.filter((response) => response.status < 300),
+    ).toHaveLength(1);
+    expect(
+      concurrentPayments.filter((response) => response.status === 422),
+    ).toHaveLength(1);
 
     const completion = await agent.post(
       `/api/v1/sales/invoices/${invoiceId}/complete`,
@@ -311,7 +315,9 @@ describeSales('Sales workflow against an isolated PostgreSQL database', () => {
       }),
     );
     expect(secondConversion.status).toBe(201);
-    const orderDetailResponse = await agent.get(`/api/v1/sales/orders/${orderId}`);
+    const orderDetailResponse = await agent.get(
+      `/api/v1/sales/orders/${orderId}`,
+    );
     expect(orderDetailResponse.status).toBe(200);
     expect(orderDetailResponse.body.data.hasInvoiceReference).toBe(true);
     expect(orderDetailResponse.body.data.details[0].remainingQuantity).toBe(5);
@@ -433,7 +439,8 @@ describeSales('Sales workflow against an isolated PostgreSQL database', () => {
     const concurrentInvoice = await agent
       .post('/api/v1/sales/invoices')
       .send(invoicePayload(1));
-    const concurrentInvoiceId = concurrentInvoice.body.data.salesInvoiceId as string;
+    const concurrentInvoiceId = concurrentInvoice.body.data
+      .salesInvoiceId as string;
     const [paymentResponse, completionResponse] = await Promise.all([
       agent
         .post(`/api/v1/sales/invoices/${concurrentInvoiceId}/payments`)

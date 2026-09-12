@@ -294,6 +294,7 @@ export class PurchasingController {
         accountName: a.accountName,
         accountType: a.accountType,
         currentBalance: Number(a.currentBalance),
+        isDefault: a.isDefault,
       })),
     };
   }

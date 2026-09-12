@@ -1044,7 +1044,10 @@ export default function SalesDocumentForm({
                       <Field label="Metode Penerimaan">
                         <CompactSelect
                           value={paymentMethod}
-                          onChange={setPaymentMethod}
+                          onChange={(value) => {
+                            setPaymentMethod(value);
+                            setAccountId(defaultSalesAccount(accounts, value));
+                          }}
                           options={[
                             "CASH",
                             "TRANSFER",

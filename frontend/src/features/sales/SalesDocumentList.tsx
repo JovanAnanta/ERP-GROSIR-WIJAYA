@@ -38,12 +38,13 @@ import {
   type SalesOrderDocument,
 } from "./sales.api";
 import SalesReturnDialog from "./SalesReturnDialog";
+import { createThermalPrintJob, type ThermalPrintJob } from "@/lib/thermal-print";
 
 const rupiah = (value: number) => `Rp ${value.toLocaleString("id-ID")}`;
 const dateLabel = (value: string) =>
   new Date(value).toLocaleDateString("id-ID");
-async function printCompletedInvoice(invoice: SalesInvoiceDocument) {
-  await printSalesReceipt({ documentNumber: invoice.salesInvoiceNumber, customerName: invoice.customerName, transactionDate: dateLabel(invoice.invoiceDate), items: (invoice.details ?? []).map(line => ({ productName: line.productName, unitName: line.unitName, quantity: line.quantity, bonusQuantity: line.bonusQuantity, subtotal: line.subtotal })), discountAmount: invoice.discountAmount, grandTotal: invoice.invoiceTotal, paidAmount: invoice.paidAmount, outstandingAmount: invoice.outstandingAmount, note: invoice.note });
+async function printCompletedInvoice(invoice: SalesInvoiceDocument, printJob?: ThermalPrintJob) {
+  await printSalesReceipt({ documentNumber: invoice.salesInvoiceNumber, customerName: invoice.customerName, transactionDate: dateLabel(invoice.invoiceDate), items: (invoice.details ?? []).map(line => ({ productName: line.productName, unitName: line.unitName, quantity: line.quantity, bonusQuantity: line.bonusQuantity, subtotal: line.subtotal })), discountAmount: invoice.discountAmount, grandTotal: invoice.invoiceTotal, paidAmount: invoice.paidAmount, outstandingAmount: invoice.outstandingAmount, note: invoice.note }, 1, printJob);
 }
 
 interface Props {
@@ -662,6 +663,15 @@ export function InvoiceProcessDialog({
             method === "CASH" ? undefined : reference.trim() || undefined,
         }
       : undefined;
+    let printJob: ThermalPrintJob | undefined;
+    try {
+      if (selectedStatus === "COMPLETED" && printAfterComplete) {
+        printJob = createThermalPrintJob(invoice.salesInvoiceNumber);
+      }
+    } catch (caught) {
+      setError(parseApiError(caught));
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -684,7 +694,7 @@ export function InvoiceProcessDialog({
         await salesApi.receivePayment(invoice.salesInvoiceId, payment);
       }
       if (selectedStatus === "COMPLETED" && printAfterComplete) {
-        await printCompletedInvoice(await salesApi.invoice(invoice.salesInvoiceId));
+        await printCompletedInvoice(await salesApi.invoice(invoice.salesInvoiceId), printJob);
       }
       await onProcessed(
         changesStatus && payment
@@ -694,6 +704,7 @@ export function InvoiceProcessDialog({
             : "Pembayaran Sales Invoice berhasil dicatat.",
       );
     } catch (caught) {
+      printJob?.close();
       setError(parseApiError(caught));
     } finally {
       setBusy(false);
@@ -826,7 +837,11 @@ export function InvoiceProcessDialog({
                   METODE PENERIMAAN
                   <select
                     value={method}
-                    onChange={(event) => setMethod(event.target.value)}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setMethod(value);
+                      setAccountId(defaultSalesAccount(accounts, value));
+                    }}
                     className="sales-input mt-1 bg-white"
                   >
                     {[
@@ -1098,7 +1113,7 @@ export function SalesDetailDialog({
               ) : null}
             </div>
           )}
-          <div className="mt-5 overflow-x-auto rounded-xl border">
+          {invoice?.documentType === "OPENING_BALANCE" ? <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-center text-xs font-bold text-blue-700">Dokumen ini merupakan saldo awal. Tidak memiliki rincian transaksi barang.</div> : <div className="mt-5 overflow-x-auto rounded-xl border">
             <table className="min-w-[720px] w-full text-xs">
               <thead className="bg-slate-100 text-[9px] font-black text-slate-500">
                 <tr>
@@ -1172,7 +1187,7 @@ export function SalesDetailDialog({
                 ))}
               </tbody>
             </table>
-          </div>
+          </div>}
           {invoice && (
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
               <div className="rounded-xl border p-4">
@@ -1261,7 +1276,11 @@ export function SalesDetailDialog({
                   METODE
                   <select
                     value={method}
-                    onChange={(event) => setMethod(event.target.value)}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setMethod(value);
+                      setAccountId(defaultSalesAccount(accounts, value));
+                    }}
                     className="sales-input mt-1"
                   >
                     {[
@@ -1311,7 +1330,7 @@ export function SalesDetailDialog({
           )}
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-white pt-3">
-          <div className="flex min-w-0 items-center gap-2">
+          {invoice?.documentType !== "OPENING_BALANCE" && <div className="flex min-w-0 items-center gap-2">
             <select
               aria-label="Pembagian struk"
               value={receiptParts}
@@ -1331,7 +1350,7 @@ export function SalesDetailDialog({
               <Printer className="h-4 w-4" />
               Cetak
             </button>
-          </div>
+          </div>}
           <div className="flex flex-wrap gap-2">
             {invoice &&
               accountsPermission &&

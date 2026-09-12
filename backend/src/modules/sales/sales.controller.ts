@@ -76,7 +76,10 @@ export class SalesController {
   @Get('customer-financial')
   @RequirePermissions(PERMISSIONS.CUSTOMER_FINANCIAL_VIEW)
   async customerOutstanding(@Query() query: CustomerOutstandingQueryDto) {
-    return { success: true, ...(await this.sales.listCustomerOutstanding(query)) };
+    return {
+      success: true,
+      ...(await this.sales.listCustomerOutstanding(query)),
+    };
   }
 
   @Get('customer-financial/:customerId/invoices')
@@ -86,7 +89,9 @@ export class SalesController {
   ) {
     return {
       success: true,
-      data: await this.sales.listCustomerOutstandingInvoices(BigInt(customerId)),
+      data: await this.sales.listCustomerOutstandingInvoices(
+        BigInt(customerId),
+      ),
     };
   }
 
@@ -98,8 +103,14 @@ export class SalesController {
 
   @Get('returns')
   @RequirePermissions(PERMISSIONS.SALES_RETURN_VIEW)
-  async salesReturns(@Query('page') page?: string, @Query('limit') limit?: string) {
-    return { success: true, ...(await this.returns.list(Number(page) || 1, Number(limit) || 20)) };
+  async salesReturns(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return {
+      success: true,
+      ...(await this.returns.list(Number(page) || 1, Number(limit) || 20)),
+    };
   }
 
   @Get('returns/:id')
@@ -115,7 +126,11 @@ export class SalesController {
     @Body() dto: SaveSalesReturnDto,
     @Req() req: AuthRequest,
   ) {
-    return { success: true, message: 'Sales Return berhasil dibuat.', data: await this.returns.create(req.user.userId, BigInt(id), dto) };
+    return {
+      success: true,
+      message: 'Sales Return berhasil dibuat.',
+      data: await this.returns.create(req.user.userId, BigInt(id), dto),
+    };
   }
 
   @Post('returns/:id/complete')
@@ -125,7 +140,11 @@ export class SalesController {
     @Body() dto: SaveSalesReturnDto,
     @Req() req: AuthRequest,
   ) {
-    return { success: true, message: 'Sales Return berhasil diselesaikan.', data: await this.returns.complete(req.user.userId, BigInt(id), dto) };
+    return {
+      success: true,
+      message: 'Sales Return berhasil diselesaikan.',
+      data: await this.returns.complete(req.user.userId, BigInt(id), dto),
+    };
   }
 
   @Get('orders')

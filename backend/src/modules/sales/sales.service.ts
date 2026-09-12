@@ -14,10 +14,11 @@ import {
   writeActivityLog,
   writeAuditLog,
 } from '../../common/logging/business-logger.js';
+import { generateBusinessDocumentNumber } from '../../common/financial/transaction-number.utils.js';
 import {
-  generateBusinessDocumentNumber,
-  generateFinancialAccountTransactionNumber,
-} from '../../common/financial/transaction-number.utils.js';
+  postFinancialMovement,
+  postJournalEntry,
+} from '../../common/financial/financial-posting.js';
 import { generateInventoryMovementNumber } from '../inventory/inventory-movement-number.utils.js';
 import { consumeFifoLayers } from '../../common/inventory/fifo-consumption.utils.js';
 import {
@@ -139,6 +140,7 @@ type InvoiceMapInput = {
   outstandingAmount: Prisma.Decimal;
   statusPayment: SalesPaymentStatus;
   status: SalesInvoiceStatus;
+  documentType: 'STANDARD' | 'OPENING_BALANCE';
   note: string | null;
   createdAt: Date;
   createdByUser?: { fullName: string };
@@ -1350,6 +1352,7 @@ export class SalesService {
       where: { salesInvoiceId: invoice.salesInvoiceId },
     });
     const groups = this.groupBase(prepared);
+    let fifoCostTotal = ZERO;
     if (!loanConversion)
       await this.lockStocks(
         tx,
@@ -1398,13 +1401,14 @@ export class SalesService {
           createdBy: actorId,
         },
       });
-      await consumeFifoLayers(tx, {
+      const consumedCost = await consumeFifoLayers(tx, {
         productUnitId: item.parentProductUnitId,
         quantity: totalQty,
         inventoryMovementId: movement.inventoryMovementId,
         createdBy: actorId,
         insufficientMessage: `FIFO ${item.productName} tidak mencukupi. Seluruh penyelesaian dibatalkan.`,
       });
+      fifoCostTotal = fifoCostTotal.add(consumedCost);
     }
     for (const group of loanConversion ? [] : groups) {
       await tx.inventoryStock.update({
@@ -1492,6 +1496,44 @@ export class SalesService {
         });
       }
     }
+    await postJournalEntry(tx, {
+      postingKey: `ACCRUAL:SALES_INVOICE:${id}`,
+      transactionDate: now,
+      description: `Pengakuan penjualan ${invoice.salesInvoiceNumber}`,
+      sourceType: 'SALES_INVOICE',
+      sourceId: id,
+      sourceNumber: invoice.salesInvoiceNumber,
+      createdBy: actorId,
+      lines: [
+        { chartAccountCode: '1201', debitAmount: invoice.invoiceTotal },
+        { chartAccountCode: '4101', creditAmount: invoice.invoiceTotal },
+      ],
+    });
+    if (invoice.paidAmount.greaterThan(ZERO)) {
+      await postJournalEntry(tx, {
+        postingKey: `ADVANCE_APPLIED:SALES_INVOICE:${id}`,
+        transactionDate: now,
+        description: `Pemakaian uang muka ${invoice.salesInvoiceNumber}`,
+        sourceType: 'SALES_INVOICE',
+        sourceId: id,
+        sourceNumber: invoice.salesInvoiceNumber,
+        createdBy: actorId,
+        lines: [
+          { chartAccountCode: '2201', debitAmount: invoice.paidAmount },
+          { chartAccountCode: '1201', creditAmount: invoice.paidAmount },
+        ],
+      });
+    }
+    if (!loanConversion && fifoCostTotal.greaterThan(ZERO)) {
+      await this.postSalesCostJournalTx(
+        tx,
+        actorId,
+        id,
+        invoice.salesInvoiceNumber,
+        fifoCostTotal,
+        now,
+      );
+    }
     const updated = await tx.salesInvoice.update({
       where: { salesInvoiceId: id },
       data: {
@@ -1512,6 +1554,69 @@ export class SalesService {
       description: `Menyelesaikan Sales Invoice ${invoice.salesInvoiceNumber}`,
     });
     return this.findInvoiceByIdTx(tx, id);
+  }
+
+  private async postSalesCostJournalTx(
+    tx: Prisma.TransactionClient,
+    actorId: bigint,
+    salesInvoiceId: bigint,
+    salesInvoiceNumber: string,
+    cost: Prisma.Decimal,
+    transactionDate: Date,
+  ) {
+    if (cost.lessThanOrEqualTo(ZERO)) return;
+    await postJournalEntry(tx, {
+      postingKey: `COGS:SALES_INVOICE:${salesInvoiceId}`,
+      transactionDate,
+      description: `HPP ${salesInvoiceNumber}`,
+      sourceType: 'SALES_INVOICE',
+      sourceId: salesInvoiceId,
+      sourceNumber: salesInvoiceNumber,
+      createdBy: actorId,
+      lines: [
+        { chartAccountCode: '5101', debitAmount: cost },
+        { chartAccountCode: '1301', creditAmount: cost },
+      ],
+    });
+  }
+
+  async postInventoryLoanCostAccrualTx(
+    tx: Prisma.TransactionClient,
+    actorId: bigint,
+    salesInvoiceId: bigint,
+    inventoryLoanResolutionId: bigint,
+    transactionDate: Date,
+  ) {
+    const [invoice, aggregate] = await Promise.all([
+      tx.salesInvoice.findUnique({
+        where: { salesInvoiceId },
+        select: { salesInvoiceNumber: true },
+      }),
+      tx.inventoryLoanResolutionAllocation.aggregate({
+        where: {
+          role: 'LOAN_OBLIGATION',
+          resolutionDetail: {
+            inventoryLoanResolutionId,
+            resolutionType: 'INVOICE_CONVERSION',
+          },
+        },
+        _sum: { totalCost: true },
+      }),
+    ]);
+    if (!invoice) {
+      throw new HttpException(
+        'Sales Invoice hasil Inventory Loan tidak ditemukan.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+    await this.postSalesCostJournalTx(
+      tx,
+      actorId,
+      salesInvoiceId,
+      invoice.salesInvoiceNumber,
+      new Prisma.Decimal(aggregate._sum.totalCost ?? ZERO),
+      transactionDate,
+    );
   }
 
   async cancelInvoice(actorId: bigint, id: bigint) {
@@ -1636,25 +1741,24 @@ export class SalesService {
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     const paymentDate = new Date(dto.paymentDate);
-    const financialTransaction = await tx.financialAccountTransaction.create({
-      data: {
-        transactionNumber: await generateFinancialAccountTransactionNumber(
-          tx,
-          paymentDate,
-        ),
-        financialAccountId: accountId,
-        transactionType:
-          invoice.status === 'COMPLETED' ? 'SALES_PAYMENT' : 'CUSTOMER_ADVANCE',
-        paymentMethod: method,
-        direction: 'IN',
-        amount,
-        referenceType: 'SALES_INVOICE',
-        referenceId: id,
-        transactionDate: paymentDate,
-        note: this.clean(dto.note),
-        createdBy: actorId,
-      },
+    const posted = await postFinancialMovement(tx, {
+      financialAccountId: accountId,
+      transactionType:
+        invoice.status === 'COMPLETED' ? 'SALES_PAYMENT' : 'CUSTOMER_ADVANCE',
+      direction: 'IN',
+      amount,
+      paymentMethod: method,
+      sourceModule: 'SALES',
+      referenceType: 'SALES_INVOICE',
+      referenceId: id,
+      referenceNumber: invoice.salesInvoiceNumber,
+      transactionDate: paymentDate,
+      description: `${invoice.status === 'COMPLETED' ? 'Pembayaran' : 'Uang muka'} ${invoice.salesInvoiceNumber}`,
+      note: this.clean(dto.note) ?? undefined,
+      createdBy: actorId,
+      counterChartAccountCode: invoice.status === 'COMPLETED' ? '1201' : '2201',
     });
+    const financialTransaction = posted.financialTransaction;
     const payment = await tx.salesInvoicePayment.create({
       data: {
         paymentNumber: await generateBusinessDocumentNumber(
@@ -1672,14 +1776,6 @@ export class SalesService {
         referenceNumber: this.clean(dto.referenceNumber),
         note: this.clean(dto.note),
         createdBy: actorId,
-      },
-    });
-    await tx.financialAccount.update({
-      where: { financialAccountId: accountId },
-      data: {
-        currentBalance: { increment: amount },
-        updatedBy: actorId,
-        updatedAt: new Date(),
       },
     });
     if (invoice.status !== 'COMPLETED') {
@@ -1852,6 +1948,7 @@ export class SalesService {
 
   async listInvoices(query: SalesListQueryDto) {
     const where: Prisma.SalesInvoiceWhereInput = {
+      documentType: 'STANDARD',
       status:
         query.tab === 'ACTIVE'
           ? { in: ['DRAFT', 'READY'] }
@@ -2196,9 +2293,7 @@ export class SalesService {
                         productName: detail.productUnit.product.productName,
                         unitName: detail.productUnit.unit.unitName,
                         remainingQuantity: Number(remainingQuantity),
-                        remainingBonusQuantity: Number(
-                          remainingBonusQuantity,
-                        ),
+                        remainingBonusQuantity: Number(remainingBonusQuantity),
                       },
                     ]
                   : [];
@@ -2220,6 +2315,7 @@ export class SalesService {
       outstandingAmount: Number(invoice.outstandingAmount),
       statusPayment: invoice.statusPayment,
       status: invoice.status,
+      documentType: invoice.documentType,
       note: invoice.note,
       createdAt: invoice.createdAt,
       createdByName: invoice.createdByUser?.fullName,
@@ -2350,6 +2446,7 @@ export class SalesService {
       accountName: row.accountName,
       accountType: row.accountType,
       currentBalance: Number(row.currentBalance),
+      isDefault: row.isDefault,
     }));
   }
 

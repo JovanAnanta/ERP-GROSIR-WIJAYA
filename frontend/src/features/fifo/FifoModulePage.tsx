@@ -9,6 +9,7 @@ import {
   LoaderCircle,
   PackageSearch,
   Search,
+  Warehouse,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +21,8 @@ import {
 import InventoryPageSizeSelect from "@/features/inventory/InventoryPageSizeSelect";
 import { parseApiError } from "@/utils/error";
 import FifoOriginDetailDialog from "./FifoOriginDetailDialog";
+import InventoryOpeningBalancePanel from "@/features/opening-balance/InventoryOpeningBalancePanel";
+import { hasPermission, useAuthStore } from "@/store/authStore";
 import {
   fifoApi,
   type FifoFilterOptions,
@@ -30,7 +33,7 @@ import {
   type PaginationMeta,
 } from "./fifo.api";
 
-type Tab = "COST" | "HISTORY";
+type Tab = "COST" | "HISTORY" | "OPENING";
 const emptyMeta: PaginationMeta = {
   currentPage: 1,
   pageSize: 20,
@@ -53,6 +56,8 @@ const originLabels: Record<string, string> = {
 };
 
 export default function FifoModulePage() {
+  const user = useAuthStore((state) => state.user);
+  const canViewOpening = hasPermission(user, "FIFO_OPENING_BALANCE_VIEW");
   const [tab, setTab] = useState<Tab>("COST");
   const [rows, setRows] = useState<FifoLayerCard[]>([]);
   const [meta, setMeta] = useState(emptyMeta);
@@ -93,6 +98,7 @@ export default function FifoModulePage() {
   }, [searchText]);
 
   const load = useCallback(async () => {
+    if (tab === "OPENING") { setLoading(false); return; }
     setLoading(true);
     setError("");
     try {
@@ -172,8 +178,17 @@ export default function FifoModulePage() {
           <History className="h-4 w-4" />
           Riwayat Layer
         </button>
+        {canViewOpening && <button
+          onClick={() => switchTab("OPENING")}
+          className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition sm:px-5 ${tab === "OPENING" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600"}`}
+        >
+          <Warehouse className="h-4 w-4" />
+          Saldo Awal Persediaan
+        </button>}
       </div>
 
+      {tab === "OPENING" && <InventoryOpeningBalancePanel />}
+      {tab !== "OPENING" && <>
       <div className="mb-4 rounded-xl border bg-white p-3 shadow-sm">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1">
@@ -326,6 +341,7 @@ export default function FifoModulePage() {
         meta={meta}
         onPage={(page) => setFilters((current) => ({ ...current, page }))}
       />
+      </>}
 
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="z-[70] flex h-[94dvh] w-[97vw] max-w-6xl flex-col overflow-hidden bg-white p-4 sm:h-[92vh] sm:p-6">

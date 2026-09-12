@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import SupplierListPage from "./supplier/SupplierListPage";
-import { Users, FileCheck, FileText, ChevronDown, ListOrdered } from "lucide-react";
+import { Users, FileCheck, FileText, ChevronDown, ListOrdered, Landmark } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,14 +14,16 @@ import CreatePurchaseInvoiceTab from "./components/CreatePurchaseInvoiceTab";
 import PurchaseInvoiceCardList from "./components/PurchaseInvoiceCardList";
 import PurchaseOrderCardList from "./components/PurchaseOrderCardList";
 import { hasPermission, useAuthStore } from "@/store/authStore";
+import PartyOpeningBalanceForm from "@/features/opening-balance/PartyOpeningBalanceForm";
 
-type TabType = "purchases" | "transactions" | "suppliers";
+type TabType = "purchases" | "transactions" | "suppliers" | "opening-balance";
 type TransactionSubtype = "po" | "pi";
 
 export default function PurchasingModulePage() {
   const user = useAuthStore((state) => state.user);
   const canCreate = hasPermission(user, 'PURCHASE_CREATE');
   const canUpdate = hasPermission(user, 'PURCHASE_UPDATE');
+  const canCreateOpeningBalance = hasPermission(user, 'PURCHASE_OPENING_BALANCE_CREATE');
   const [searchParams, setSearchParams] = useSearchParams();
   const [purchaseListVersion, setPurchaseListVersion] = useState(0);
   
@@ -100,6 +102,12 @@ export default function PurchasingModulePage() {
         >
           <Users className="w-4 h-4" /> Direktori Supplier
         </button>
+        {canCreateOpeningBalance && <button
+          onClick={() => setSearchParams({ tab: "opening-balance" })}
+          className={`flex items-center gap-2 pb-3 px-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === "opening-balance" ? "border-[#326dc8] text-[#326dc8]" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+        >
+          <Landmark className="h-4 w-4 text-blue-600" /> Saldo Awal Hutang
+        </button>}
       </div>
 
       <div className="flex-1 pt-4 overflow-hidden flex flex-col">
@@ -147,6 +155,9 @@ export default function PurchasingModulePage() {
 
         <div className={`flex-1 flex-col ${activeTab === "suppliers" ? "flex" : "hidden"}`}>
           <SupplierListPage />
+        </div>
+        <div className={`flex-1 flex-col overflow-y-auto ${activeTab === "opening-balance" ? "flex" : "hidden"}`}>
+          {canCreateOpeningBalance && <PartyOpeningBalanceForm type="SUPPLIER" />}
         </div>
       </div>
     </div>

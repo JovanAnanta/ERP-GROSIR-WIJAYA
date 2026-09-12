@@ -21,6 +21,8 @@ import PurchasingModulePage from "@/features/purchasing/PurchasingModulePage";
 import InventoryModulePage from "@/features/inventory/InventoryModulePage";
 
 const FifoModulePage = lazy(() => import("@/features/fifo/FifoModulePage"));
+const FinanceModulePage = lazy(() => import("@/features/finance/FinanceModulePage"));
+const DashboardPage = lazy(() => import("@/features/dashboard/DashboardPage"));
 
 // React StrictMode mounts effects twice in development. Reuse the same
 // server-side session check so hydration never creates duplicate /auth/me calls.
@@ -69,7 +71,16 @@ export default function App() {
         if (active) hydrate(user);
       })
       .catch(() => {
-        if (active) markUnauthenticated();
+        if (!active) return;
+        const state = useAuthStore.getState();
+        // A 403 idle-lock still represents a valid server session. Keep only
+        // the cached display identity long enough to render the unlock dialog;
+        // every protected API remains blocked by SessionGuard until unlock.
+        if (state.isLocked && state.user) {
+          hydrate(state.user);
+          return;
+        }
+        markUnauthenticated();
       });
 
     return () => {
@@ -127,14 +138,15 @@ export default function App() {
             <Route
               path="/dashboard"
               element={
-                <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-100">
-                  <h2 className="text-2xl font-bold text-slate-800 mb-2">
-                    Selamat Datang di Dashboard!
-                  </h2>
-                  <p className="text-slate-500">
-                    Anda berhasil login ke sistem ERP Grosir Wijaya.
-                  </p>
-                </div>
+                <Suspense
+                  fallback={
+                    <div className="flex min-h-64 items-center justify-center text-sm text-slate-500">
+                      Memuat dashboard...
+                    </div>
+                  }
+                >
+                  <DashboardPage />
+                </Suspense>
               }
             />
           </Route>
@@ -205,6 +217,17 @@ export default function App() {
                   }
                 >
                   <FifoModulePage />
+                </Suspense>
+              }
+            />
+          </Route>
+
+          <Route element={<PermissionRoute permission="FINANCIAL_VIEW" />}>
+            <Route
+              path="/finance"
+              element={
+                <Suspense fallback={<div className="flex min-h-64 items-center justify-center text-sm text-slate-500">Memuat Finance &amp; Accounting...</div>}>
+                  <FinanceModulePage />
                 </Suspense>
               }
             />

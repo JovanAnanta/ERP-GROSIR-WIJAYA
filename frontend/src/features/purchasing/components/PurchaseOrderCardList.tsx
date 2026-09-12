@@ -28,6 +28,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { systemConfigApi } from '@/features/system/system-configuration.api';
+import {
+  createThermalPrintJob,
+  thermalReceiptFooter,
+  thermalReceiptHeader,
+  type ThermalPrintJob,
+} from '@/lib/thermal-print';
 import { parseApiError } from '@/utils/error';
 import {
   purchasingApi,
@@ -163,23 +169,20 @@ export default function PurchaseOrderCardList({ onEditOrder, canUpdate = true }:
   };
 
   const printOrder = async (order: PurchaseOrderFullDetail) => {
+    let printJob: ThermalPrintJob | undefined;
     try {
+      printJob = createThermalPrintJob(order.purchaseOrderNumber);
       const configResponse = await systemConfigApi.get();
       const config = configResponse.data;
-      const printWindow = window.open('', '_blank', 'width=420,height=700');
-      if (!printWindow) return;
-
-      printWindow.document.write(`
+      await printJob.printDocument(`
         <html><head><title>Purchase Order - ${escapeHtml(order.purchaseOrderNumber)}</title>
         <style>
-          @page { margin: 0; } body { font-family: 'Courier New', monospace; font-size: 11px; width: 80mm; margin: 0; padding: 8px; color: #000; }
+          @page { size: 80mm auto; margin: 0; } body { font-family: 'Courier New', monospace; font-size: 10px; width: 80mm; margin: 0; padding: 4mm; color: #000; }
           .center { text-align: center; } .bold { font-weight: bold; } .right { text-align: right; }
-          .line { border-bottom: 1px dashed #000; margin: 6px 0; } table { width: 100%; border-collapse: collapse; font-size: 10px; }
+          .line { border-bottom: 1px dashed #000; margin: 5px 0; } table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
           th, td { padding: 3px 1px; vertical-align: top; text-align: left; } .item { font-weight: bold; word-break: break-word; }
         </style></head><body>
-          ${config.logoBase64 ? `<div class="center"><img src="${escapeHtml(config.logoBase64)}" style="max-height:42px" /></div>` : ''}
-          <div class="center bold" style="font-size:14px">${escapeHtml(config.companyName)}</div>
-          <div class="center">${escapeHtml(config.address)}</div><div class="center">Telp: ${escapeHtml(config.phone)}</div>
+          ${thermalReceiptHeader(config)}
           <div class="line"></div><div class="center bold">PURCHASE ORDER</div><div class="line"></div>
           <div>No. PO&nbsp;&nbsp;&nbsp;&nbsp;: ${escapeHtml(order.purchaseOrderNumber)}</div>
           <div>Supplier&nbsp;&nbsp;: ${escapeHtml(order.supplierName)}</div>
@@ -195,17 +198,11 @@ export default function PurchaseOrderCardList({ onEditOrder, canUpdate = true }:
           </tbody></table><div class="line"></div>
           <div>Total jenis item: ${order.totalItem}</div><div>Total quantity: ${order.totalQuantity}</div>
           ${order.note ? `<div>Catatan: ${escapeHtml(order.note)}</div>` : ''}
-          <div class="line"></div><div class="center">HANYA UNTUK TOKO</div>
-          <div class="center" style="font-size:9px;margin-top:6px">Dicetak: ${escapeHtml(new Date().toLocaleString('id-ID'))}</div>
+          ${thermalReceiptFooter(config)}
         </body></html>`,
       );
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 300);
     } catch {
+      printJob?.close();
       setErrorMsg('Gagal menyiapkan cetak Purchase Order.');
     }
   };

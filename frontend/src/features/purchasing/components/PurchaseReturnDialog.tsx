@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Loader2, PackageCheck, Plus, RotateCcw, Save, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Loader2, PackageCheck, Plus, Printer, RotateCcw, Save, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -7,8 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { parseApiError } from '@/utils/error';
+import { systemConfigApi } from '@/features/system/system-configuration.api';
+import { createThermalPrintJob, escapeReceiptHtml, thermalReceiptFooter, thermalReceiptHeader, type ThermalPrintJob } from '@/lib/thermal-print';
 import {
   purchasingApi,
+  defaultFinancialAccount,
   type FinancialAccountOption,
   type PurchaseReturnContext,
   type PurchaseReturnDetail,
@@ -137,7 +140,11 @@ export default function PurchaseReturnDialog({ invoiceId, open, onOpenChange, on
     setSelectedReturn(item);
     setView('detail');
     if (item.status === 'READY' && item.resolutionType === 'CASHBACK' && accounts.length === 0) {
-      setAccounts(await purchasingApi.getFinancialAccounts());
+      const accountRows = await purchasingApi.getFinancialAccounts();
+      setAccounts(accountRows);
+      setFinancialAccountId(
+        defaultFinancialAccount(accountRows, cashbackMethod),
+      );
     }
     if (item.status === 'READY' && item.resolutionType === 'NEXT_INVOICE_DEDUCTION') {
       setInvoiceOptions(await purchasingApi.getPurchaseReturnCompletionOptions(item.purchaseReturnId));
@@ -248,6 +255,18 @@ export default function PurchaseReturnDialog({ invoiceId, open, onOpenChange, on
     }
   };
 
+  const printReturn = async (purchaseReturn: PurchaseReturnDetail) => {
+    let printJob: ThermalPrintJob | undefined;
+    try {
+      printJob = createThermalPrintJob(purchaseReturn.purchaseReturnNumber);
+      const config = await systemConfigApi.get();
+      await printJob.printDocument(`<!doctype html><html><head><title>${escapeReceiptHtml(purchaseReturn.purchaseReturnNumber)}</title><style>@page{size:80mm auto;margin:0}body{width:80mm;margin:0;padding:4mm;font-family:'Courier New',Courier,monospace;font-size:10px;line-height:1.3;color:#000}.line{border-bottom:1px dashed #000;margin:5px 0}.solid{border-bottom:1px solid #000;margin:5px 0}.row{display:flex;justify-content:space-between;gap:3mm}.item{margin:2px 0}.total{font-weight:700;font-size:10.5px}</style></head><body>${thermalReceiptHeader(config)}<div class="line"></div><div class="center bold">PURCHASE RETURN</div><div class="line"></div><div>No. Retur : ${escapeReceiptHtml(purchaseReturn.purchaseReturnNumber)}</div><div>PI : ${escapeReceiptHtml(context?.purchaseInvoiceNumber)}</div><div>Supplier : ${escapeReceiptHtml(context?.supplierName)}</div><div>Status : ${escapeReceiptHtml(purchaseReturn.status)}</div><div>Penyelesaian : ${escapeReceiptHtml(resolutionLabels[purchaseReturn.resolutionType])}</div><div class="solid"></div>${purchaseReturn.details.map((line) => `<div class="item"><div class="bold">${escapeReceiptHtml(line.productName)}</div><div class="row"><span>${escapeReceiptHtml(line.quantity)} ${escapeReceiptHtml(line.unitName)}</span><span>Rp ${escapeReceiptHtml(line.subtotal.toLocaleString('id-ID'))}</span></div></div>`).join('')}<div class="solid"></div><div class="row total"><span>TOTAL RETUR</span><span>Rp ${escapeReceiptHtml(purchaseReturn.returnTotal.toLocaleString('id-ID'))}</span></div><div style="margin-top:2mm"><b>Alasan:</b> ${escapeReceiptHtml(purchaseReturn.reason)}</div>${purchaseReturn.note ? `<div><b>Catatan:</b> ${escapeReceiptHtml(purchaseReturn.note)}</div>` : ''}${thermalReceiptFooter(config)}</body></html>`);
+    } catch (caught) {
+      printJob?.close();
+      setError(parseApiError(caught));
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -315,9 +334,10 @@ export default function PurchaseReturnDialog({ invoiceId, open, onOpenChange, on
                 <div className="grid gap-3 rounded-xl border bg-slate-50 p-4 md:grid-cols-4"><div><span className="text-[10px] font-bold uppercase text-slate-400">Nomor</span><p className="font-black">{selectedReturn.purchaseReturnNumber}</p></div><div><span className="text-[10px] font-bold uppercase text-slate-400">Status</span><p className="font-black">{selectedReturn.status}</p></div><div><span className="text-[10px] font-bold uppercase text-slate-400">Penyelesaian</span><p className="font-black">{resolutionLabels[selectedReturn.resolutionType]}</p></div><div><span className="text-[10px] font-bold uppercase text-slate-400">Nilai</span><p className="font-black">Rp {selectedReturn.returnTotal.toLocaleString('id-ID')}</p></div></div>
                 <div className="erp-scroll-table overflow-auto rounded-xl border"><table className="w-full min-w-[680px] text-xs"><thead className="bg-slate-100"><tr><th className="p-3 text-left">Produk</th><th className="p-3">Unit</th><th className="p-3">Qty</th><th className="p-3 text-right">Modal FIFO</th><th className="p-3 text-right">Nilai Retur</th><th className="p-3 text-right">Subtotal</th></tr></thead><tbody>{selectedReturn.details.map((detail) => <tr key={detail.purchaseReturnDetailId} className="border-t"><td className="p-3 font-bold">{detail.productName}</td><td className="p-3 text-center">{detail.unitName}</td><td className="p-3 text-center">{detail.quantity}</td><td className="p-3 text-right">Rp {(detail.fifoUnitCost * (detail.baseQuantity / detail.quantity)).toLocaleString('id-ID')}</td><td className="p-3 text-right">Rp {detail.unitCost.toLocaleString('id-ID')}</td><td className="p-3 text-right font-black">Rp {detail.subtotal.toLocaleString('id-ID')}</td></tr>)}</tbody></table></div>
                 <div className="rounded-lg border p-3 text-sm"><strong>Alasan:</strong> {selectedReturn.reason}{selectedReturn.note && <p className="mt-1"><strong>Note SOP:</strong> {selectedReturn.note}</p>}</div>
-                {selectedReturn.status === 'READY' && selectedReturn.resolutionType === 'CASHBACK' && <div className="grid max-w-2xl gap-3 md:grid-cols-2"><div><Label>Metode Cashback</Label><Select value={cashbackMethod} onValueChange={(value) => { if (value === 'CASH' || value === 'TRANSFER') { setCashbackMethod(value); setFinancialAccountId(''); } }}><SelectTrigger className="w-full"><SelectValue>{cashbackMethod === 'CASH' ? 'Tunai' : 'Transfer'}</SelectValue></SelectTrigger><SelectContent className="bg-white"><SelectItem value="CASH">Tunai</SelectItem><SelectItem value="TRANSFER">Transfer</SelectItem></SelectContent></Select></div><div><Label>Akun Penerima Cashback</Label><Select value={financialAccountId || null} onValueChange={(value) => setFinancialAccountId(value ?? '')}><SelectTrigger className="w-full"><SelectValue placeholder="Pilih kas/bank">{accounts.find((account) => account.financialAccountId === financialAccountId)?.accountName}</SelectValue></SelectTrigger><SelectContent className="bg-white">{accounts.map((account) => <SelectItem key={account.financialAccountId} value={account.financialAccountId}>{account.accountName} · {account.accountType}</SelectItem>)}</SelectContent></Select></div></div>}
+                {selectedReturn.status === 'READY' && selectedReturn.resolutionType === 'CASHBACK' && <div className="grid max-w-2xl gap-3 md:grid-cols-2"><div><Label>Metode Cashback</Label><Select value={cashbackMethod} onValueChange={(value) => { if (value === 'CASH' || value === 'TRANSFER') { setCashbackMethod(value); setFinancialAccountId(defaultFinancialAccount(accounts, value)); } }}><SelectTrigger className="w-full"><SelectValue>{cashbackMethod === 'CASH' ? 'Tunai' : 'Transfer'}</SelectValue></SelectTrigger><SelectContent className="bg-white"><SelectItem value="CASH">Tunai</SelectItem><SelectItem value="TRANSFER">Transfer</SelectItem></SelectContent></Select></div><div><Label>Akun Penerima Cashback</Label><Select value={financialAccountId || null} onValueChange={(value) => setFinancialAccountId(value ?? '')}><SelectTrigger className="w-full"><SelectValue placeholder="Pilih kas/bank">{accounts.find((account) => account.financialAccountId === financialAccountId)?.accountName}</SelectValue></SelectTrigger><SelectContent className="bg-white">{accounts.map((account) => <SelectItem key={account.financialAccountId} value={account.financialAccountId}>{account.accountName} · {account.accountType}</SelectItem>)}</SelectContent></Select></div></div>}
                 {selectedReturn.status === 'READY' && selectedReturn.resolutionType === 'NEXT_INVOICE_DEDUCTION' && <div className="max-w-md"><Label>Faktur Tempat Potongan Diterapkan</Label><Select value={appliedInvoiceId} onValueChange={(value) => setAppliedInvoiceId(value ?? '')}><SelectTrigger><SelectValue placeholder="Pilih PI berikutnya" /></SelectTrigger><SelectContent className="z-[100] bg-white">{invoiceOptions.map((invoice) => <SelectItem key={invoice.purchaseInvoiceId} value={invoice.purchaseInvoiceId}>{invoice.purchaseInvoiceNumber} · {invoice.invoiceDate.slice(0, 10)}</SelectItem>)}</SelectContent></Select></div>}
                 <div className="flex flex-wrap justify-end gap-2">
+                  <Button variant="outline" className="mr-auto" onClick={() => void printReturn(selectedReturn)}><Printer className="mr-1 h-4 w-4" /> Cetak PR</Button>
                   {selectedReturn.status === 'DRAFT' && <Button variant="outline" onClick={() => openEdit(selectedReturn)}>Edit</Button>}
                   {selectedReturn.status === 'DRAFT' && <Button onClick={() => void runAction('ready')} className="bg-blue-600 text-white">Barang Diambil</Button>}
                   {selectedReturn.status === 'READY' && <Button onClick={() => void runAction('complete')} className="bg-emerald-600 text-white"><CheckCircle2 className="mr-1 h-4 w-4" />{selectedReturn.resolutionType === 'REPLACEMENT' ? 'Barang Pengganti Diterima' : selectedReturn.resolutionType === 'CASHBACK' ? 'Cashback Diterima' : 'Selesaikan'}</Button>}

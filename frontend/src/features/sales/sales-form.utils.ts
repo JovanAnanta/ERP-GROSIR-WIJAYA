@@ -37,12 +37,17 @@ export function salesOrderReference(order: SalesOrderDocument) {
   };
 }
 
-export function defaultSalesAccount(accounts: SalesFinancialAccount[]) {
+export function defaultSalesAccount(
+  accounts: SalesFinancialAccount[],
+  paymentMethod = "CASH",
+) {
+  const accountType = paymentMethod === "CASH" ? "CASH" : "BANK";
   return (
     (
       accounts.find(
-        (account) => account.accountName.trim().toUpperCase() === "KAS",
-      ) ?? accounts.find((account) => account.accountType === "CASH")
+        (account) =>
+          account.accountType === accountType && account.isDefault,
+      ) ?? accounts.find((account) => account.accountType === accountType)
     )?.financialAccountId ?? ""
   );
 }

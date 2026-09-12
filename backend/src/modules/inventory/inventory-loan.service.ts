@@ -1643,6 +1643,15 @@ export class InventoryLoanService {
             data: increment,
           });
         }
+        if (salesInvoiceId) {
+          await this.sales.postInventoryLoanCostAccrualTx(
+            tx,
+            userId,
+            salesInvoiceId,
+            resolution.inventoryLoanResolutionId,
+            date,
+          );
+        }
         const remaining = await tx.inventoryLoanDetail.findMany({
           where: { inventoryLoanId: key },
         });

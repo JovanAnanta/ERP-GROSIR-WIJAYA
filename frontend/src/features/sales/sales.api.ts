@@ -43,6 +43,7 @@ export interface SalesFinancialAccount {
   accountName: string;
   accountType: string;
   currentBalance: number;
+  isDefault: boolean;
 }
 
 export interface WhatsappImportRow {
@@ -140,6 +141,7 @@ export interface SalesInvoiceDocument {
   outstandingAmount: number;
   statusPayment: PaymentStatus;
   status: SalesStatus;
+  documentType?: "STANDARD" | "OPENING_BALANCE";
   note?: string | null;
   createdAt: string;
   createdByName?: string;

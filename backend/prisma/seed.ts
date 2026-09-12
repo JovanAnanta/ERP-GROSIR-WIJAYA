@@ -74,6 +74,7 @@ async function main(): Promise<void> {
       openingBalance: 0,
       currentBalance: 0,
       isActive: true,
+      isDefault: true,
       createdBy: user.userId,
     },
   });
@@ -86,6 +87,7 @@ async function main(): Promise<void> {
       openingBalance: 0,
       currentBalance: 0,
       isActive: true,
+      isDefault: true,
       createdBy: user.userId,
     },
   });

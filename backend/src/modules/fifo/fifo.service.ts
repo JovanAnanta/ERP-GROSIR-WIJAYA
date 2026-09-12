@@ -405,7 +405,7 @@ export class FifoService {
       idsByType.set(reference.originType, set);
     }
     const ids = (type: string) => [...(idsByType.get(type) ?? [])];
-    const [invoices, returns, adjustments, transformations, loans] =
+    const [invoices, returns, adjustments, transformations, loans, openings] =
       await Promise.all([
         ids(INVENTORY_ORIGIN_TYPES.PURCHASE_INVOICE).length
           ? this.prisma.purchaseInvoice.findMany({
@@ -495,6 +495,21 @@ export class FifoService {
               },
             })
           : [],
+        ids(INVENTORY_ORIGIN_TYPES.OPENING_BALANCE).length
+          ? this.prisma.inventoryOpeningBalance.findMany({
+              where: {
+                inventoryOpeningBalanceId: {
+                  in: ids(INVENTORY_ORIGIN_TYPES.OPENING_BALANCE),
+                },
+              },
+              select: {
+                inventoryOpeningBalanceId: true,
+                openingBalanceNumber: true,
+                openingBalanceDate: true,
+                status: true,
+              },
+            })
+          : [],
       ]);
     const result = new Map<string, OriginSummary>();
     invoices.forEach((item) =>
@@ -568,6 +583,19 @@ export class FifoService {
         });
       }
     }
+    openings.forEach((item) =>
+      result.set(
+        `${INVENTORY_ORIGIN_TYPES.OPENING_BALANCE}:${item.inventoryOpeningBalanceId.toString()}`,
+        {
+          type: INVENTORY_ORIGIN_TYPES.OPENING_BALANCE,
+          id: item.inventoryOpeningBalanceId.toString(),
+          number: item.openingBalanceNumber,
+          status: item.status,
+          date: item.openingBalanceDate,
+          detailAvailable: true,
+        },
+      ),
+    );
     return result;
   }
 }

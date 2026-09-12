@@ -143,7 +143,8 @@ export class CustomerOutstandingQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 20;
   @IsOptional() @IsString() @MaxLength(100) search?: string;
-  @IsOptional() @IsIn(['OUTSTANDING_DESC', 'NAME_ASC', 'OVERDUE_FIRST'])
+  @IsOptional()
+  @IsIn(['OUTSTANDING_DESC', 'NAME_ASC', 'OVERDUE_FIRST'])
   sort: 'OUTSTANDING_DESC' | 'NAME_ASC' | 'OVERDUE_FIRST' = 'OUTSTANDING_DESC';
 }
 
@@ -160,14 +161,19 @@ export class SaveSalesReturnDto {
   @IsIn(['DRAFT', 'COMPLETED']) status!: 'DRAFT' | 'COMPLETED';
   @IsIn(['REFUND', 'REPLACEMENT']) resolutionType!: 'REFUND' | 'REPLACEMENT';
   @IsOptional() @IsString() financialAccountId?: string;
-  @IsOptional() @IsIn(PAYMENT_METHODS)
+  @IsOptional()
+  @IsIn(PAYMENT_METHODS)
   refundPaymentMethod?: (typeof PAYMENT_METHODS)[number];
   @IsOptional() @IsString() @MaxLength(50) otherRefundPaymentMethod?: string;
   @IsOptional() @IsString() @MaxLength(500) note?: string;
-  @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
   @Type(() => SalesReturnItemDto)
   items!: SalesReturnItemDto[];
-  @ValidateIf((value: SaveSalesReturnDto) => value.resolutionType === 'REPLACEMENT')
+  @ValidateIf(
+    (value: SaveSalesReturnDto) => value.resolutionType === 'REPLACEMENT',
+  )
   @ValidateNested()
   @Type(() => SaveSalesInvoiceDto)
   replacementInvoice?: SaveSalesInvoiceDto;

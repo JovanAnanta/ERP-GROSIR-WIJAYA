@@ -27,6 +27,9 @@ import { PurchasingModule } from './modules/purchasing/purchasing.module.js';
 import { AuthorizationModule } from './common/authorization/authorization.module.js';
 import { InventoryModule } from './modules/inventory/inventory.module.js';
 import { FifoModule } from './modules/fifo/fifo.module.js';
+import { FinanceModule } from './modules/finance/finance.module.js';
+import { DashboardModule } from './modules/dashboard/dashboard.module.js';
+import { OpeningBalanceModule } from './modules/opening-balance/opening-balance.module.js';
 
 @Module({
   imports: [
@@ -58,6 +61,9 @@ import { FifoModule } from './modules/fifo/fifo.module.js';
     PurchasingModule,
     InventoryModule,
     FifoModule,
+    FinanceModule,
+    DashboardModule,
+    OpeningBalanceModule,
   ],
   controllers: [AppController],
   providers: [
