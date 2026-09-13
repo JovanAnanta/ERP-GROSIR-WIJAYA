@@ -9,7 +9,7 @@ ENV VITE_API_URL=${VITE_API_URL}
 ENV VITE_APP_ENV=${VITE_APP_ENV}
 RUN npm run build
 
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.30.4-alpine AS runtime
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80

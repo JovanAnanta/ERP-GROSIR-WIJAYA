@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client.js';
 import * as bcrypt from 'bcrypt';
+import { readFileSync } from 'node:fs';
 import { PERMISSION_CATALOG } from '../src/common/authorization/permission-catalog.js';
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -14,7 +15,10 @@ const adapter = new PrismaPg({ connectionString: databaseUrl });
 const prisma = new PrismaClient({ adapter });
 
 async function main(): Promise<void> {
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  const passwordFile = process.env.SEED_ADMIN_PASSWORD_FILE;
+  const adminPassword = passwordFile
+    ? readFileSync(passwordFile, 'utf8').trim()
+    : process.env.SEED_ADMIN_PASSWORD;
   if (!adminPassword) {
     throw new Error(
       'SEED_ADMIN_PASSWORD wajib diatur sebelum menjalankan seed.',

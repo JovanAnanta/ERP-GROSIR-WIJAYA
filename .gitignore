@@ -8,6 +8,10 @@ build/
 !.env.production.example
 
 docker-data/
+secrets/
+.deployment/
+*.dump
+*.backup
 
 coverage/
 

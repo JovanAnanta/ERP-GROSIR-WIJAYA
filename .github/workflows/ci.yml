@@ -2,41 +2,122 @@ name: ERP CI Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
+    tags: ['v*']
   pull_request:
-    branches: [ main ]
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '22'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
 
-    - name: Install and Build Backend
-      run: |
-        cd backend
-        npm ci
-        npx prisma generate
-        npm run lint
-        npm test -- --runInBand
-        npm run build
+      - name: Verify backend
+        working-directory: backend
+        run: |
+          npm ci
+          npx prisma generate
+          npm run lint
+          npm test -- --runInBand
+          npm run build
+          npm audit --omit=dev --omit=optional --omit=peer
 
-    - name: Install and Build Frontend
-      run: |
-        cd frontend
-        npm ci
-        npm run lint
-        npm test
-        npm run build
+      - name: Verify frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run lint
+          npm test
+          npm run build
+          npm audit --omit=dev
 
-    - name: Validate Production Images
-      run: |
-        docker build --target runtime -t erp-grosir-backend-ci ./backend
-        docker build --build-arg VITE_API_URL=/api/v1 --build-arg VITE_APP_ENV=production -t erp-grosir-frontend-ci ./frontend
+      - name: Validate production images and deployment configuration
+        run: |
+          docker build --target runtime -t erp-grosir-backend-ci ./backend
+          docker build --target migration -t erp-grosir-migration-ci ./backend
+          docker build --target runtime --build-arg VITE_API_URL=/api/v1 --build-arg VITE_APP_ENV=production -t erp-grosir-frontend-ci ./frontend
+          docker build --target runtime -t erp-grosir-backup-ci ./deployment/backup
+          cp .env.production.example .env
+          mkdir -p secrets
+          printf 'ci-only\n' > secrets/cloudflare_tunnel_token.txt
+          printf 'ci-only\n' > secrets/restic_password.txt
+          printf 'ci-only\n' > secrets/r2_access_key_id.txt
+          printf 'ci-only\n' > secrets/r2_secret_access_key.txt
+          printf 'ci-only-password\n' > secrets/initial_admin_password.txt
+          docker compose -f docker-compose.production.yml config --quiet
+
+  publish:
+    if: github.event_name == 'push'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            context: ./backend
+            target: runtime
+          - name: migration
+            context: ./backend
+            target: migration
+          - name: frontend
+            context: ./frontend
+            target: runtime
+          - name: backup
+            context: ./deployment/backup
+            target: runtime
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/jovanananta/erp-grosir-wijaya-${{ matrix.name }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and publish ${{ matrix.name }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          target: ${{ matrix.target }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VITE_API_URL=/api/v1
+            VITE_APP_ENV=production
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}

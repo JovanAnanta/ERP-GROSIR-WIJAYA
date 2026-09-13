@@ -14,6 +14,9 @@ RUN npx prisma generate
 COPY src ./src
 RUN npm run build
 
+FROM builder AS migration
+CMD ["npx", "prisma", "migrate", "deploy"]
+
 FROM base AS production-dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./

@@ -1,0 +1,24 @@
+services:
+  migrate:
+    build:
+      context: ./backend
+      target: migration
+  bootstrap:
+    build:
+      context: ./backend
+      target: migration
+  backend:
+    build:
+      context: ./backend
+      target: runtime
+  frontend:
+    build:
+      context: ./frontend
+      target: runtime
+      args:
+        VITE_API_URL: /api/v1
+        VITE_APP_ENV: production
+  backup:
+    build:
+      context: ./deployment/backup
+      target: runtime

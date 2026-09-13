@@ -1,6 +1,14 @@
+name: erp-grosir-wijaya
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
-    image: postgres:18
+    image: postgres:18-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: erp_grosir_wijaya
@@ -14,24 +22,37 @@ services:
       timeout: 5s
       retries: 10
     networks: [erp_internal]
+    logging: *default-logging
 
   migrate:
-    build:
-      context: ./backend
-      target: builder
+    image: ${MIGRATION_IMAGE:?MIGRATION_IMAGE wajib diatur}:${APP_VERSION:?APP_VERSION wajib diatur}
     environment:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL internal wajib diatur}
-    command: ["npx", "prisma", "migrate", "deploy"]
     depends_on:
       postgres:
         condition: service_healthy
     networks: [erp_internal]
     restart: "no"
+    logging: *default-logging
+
+  bootstrap:
+    image: ${MIGRATION_IMAGE:?MIGRATION_IMAGE wajib diatur}:${APP_VERSION:?APP_VERSION wajib diatur}
+    profiles: [setup]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL internal wajib diatur}
+      SEED_ADMIN_PASSWORD_FILE: /run/secrets/initial_admin_password
+    command: ["node", "--loader", "ts-node/esm", "prisma/seed.ts"]
+    secrets:
+      - initial_admin_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [erp_internal]
+    restart: "no"
+    logging: *default-logging
 
   backend:
-    build:
-      context: ./backend
-      target: runtime
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE wajib diatur}:${APP_VERSION:?APP_VERSION wajib diatur}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -48,20 +69,65 @@ services:
       start_period: 20s
       retries: 5
     networks: [erp_internal]
+    logging: *default-logging
 
   frontend:
-    build:
-      context: ./frontend
-      args:
-        VITE_API_URL: /api/v1
-        VITE_APP_ENV: production
+    image: ${FRONTEND_IMAGE:?FRONTEND_IMAGE wajib diatur}:${APP_VERSION:?APP_VERSION wajib diatur}
     restart: unless-stopped
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:80"
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
     networks: [erp_internal]
+    logging: *default-logging
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.1
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN_FILE: /run/secrets/cloudflare_tunnel_token
+    secrets:
+      - cloudflare_tunnel_token
+    depends_on:
+      frontend:
+        condition: service_healthy
+    networks: [erp_internal]
+    logging: *default-logging
+
+  backup:
+    image: ${BACKUP_IMAGE:?BACKUP_IMAGE wajib diatur}:${APP_VERSION:?APP_VERSION wajib diatur}
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: erp_grosir_wijaya
+      PGUSER: erp_admin
+      PGPASSWORD: ${DB_PASSWORD:?DB_PASSWORD wajib diatur}
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:?RESTIC_REPOSITORY wajib diatur}
+      TZ: ${TZ:-Asia/Jakarta}
+      BACKUP_KEEP_DAILY: ${BACKUP_KEEP_DAILY:-7}
+      BACKUP_KEEP_WEEKLY: ${BACKUP_KEEP_WEEKLY:-4}
+      BACKUP_KEEP_MONTHLY: ${BACKUP_KEEP_MONTHLY:-12}
+    secrets:
+      - restic_password
+      - r2_access_key_id
+      - r2_secret_access_key
+    volumes:
+      - backup_cache:/root/.cache/restic
+      - backup_work:/backup-work
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [erp_internal]
+    logging: *default-logging
 
 networks:
   erp_internal:
@@ -69,3 +135,17 @@ networks:
 
 volumes:
   postgres_data:
+  backup_cache:
+  backup_work:
+
+secrets:
+  cloudflare_tunnel_token:
+    file: ./secrets/cloudflare_tunnel_token.txt
+  restic_password:
+    file: ./secrets/restic_password.txt
+  r2_access_key_id:
+    file: ./secrets/r2_access_key_id.txt
+  r2_secret_access_key:
+    file: ./secrets/r2_secret_access_key.txt
+  initial_admin_password:
+    file: ./secrets/initial_admin_password.txt
