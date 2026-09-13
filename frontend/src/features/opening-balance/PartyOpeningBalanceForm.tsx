@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { CalendarDays, Landmark, Loader2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { openingBalanceApi } from "./openingBalance.api";
 import { salesApi } from "@/features/sales/sales.api";
 import { purchasingApi } from "@/features/purchasing/purchasing.api";
@@ -75,10 +77,27 @@ export default function PartyOpeningBalanceForm({ type }: { type: "CUSTOMER" | "
     {message && <div className="mb-4 rounded-xl bg-emerald-50 p-3 text-xs font-bold text-emerald-700">{message}</div>}
     {error && <div className="mb-4 min-h-10 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-700">{error}</div>}
     <div className="grid gap-4 sm:grid-cols-2">
-      <label className="text-xs font-bold text-slate-600 sm:col-span-2">{partyLabel}<select disabled={loading} value={partyId} onChange={(e) => setPartyId(e.target.value)} className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-sm"><option value="">{loading ? "Memuat..." : `Pilih ${partyLabel.toLowerCase()}`}</option>{parties.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+      <div className="sm:col-span-2">
+        <label className="text-xs font-bold text-slate-600 block mb-1">{partyLabel}</label>
+        <SearchableSelect
+          disabled={loading}
+          value={partyId}
+          onChange={setPartyId}
+          placeholder={loading ? "Memuat..." : `Pilih ${partyLabel.toLowerCase()}...`}
+          options={parties.map((item) => ({ value: item.id, label: item.name }))}
+        />
+      </div>
       <label className="text-xs font-bold text-slate-600">Tanggal Saldo Awal<div className="relative mt-1"><CalendarDays className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400"/><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="h-10 w-full rounded-lg border pl-9 pr-3 text-sm"/></div></label>
       <label className="text-xs font-bold text-slate-600">Jatuh Tempo (Opsional)<input type="date" value={dueDate} onChange={(e)=>setDueDate(e.target.value)} className="mt-1 h-10 w-full rounded-lg border px-3 text-sm"/></label>
-      <label className="text-xs font-bold text-slate-600">Nominal<input inputMode="decimal" value={amount} onChange={(e)=>setAmount(e.target.value.replace(/[^0-9.]/g,""))} placeholder="0" className="mt-1 h-10 w-full rounded-lg border px-3 text-sm font-bold"/></label>
+      <label className="text-xs font-bold text-slate-600">
+        Nominal
+        <FormattedNumberInput
+          value={Number(amount) || 0}
+          onChange={(val) => setAmount(String(val))}
+          placeholder="0"
+          className="mt-1 h-10 w-full rounded-lg border px-3 text-sm font-bold"
+        />
+      </label>
       <label className="text-xs font-bold text-slate-600">Referensi Lama (Opsional)<input value={referenceNumber} onChange={(e)=>setReferenceNumber(e.target.value)} maxLength={100} placeholder="Nomor bon/faktur lama" className="mt-1 h-10 w-full rounded-lg border px-3 text-sm"/></label>
       <label className="text-xs font-bold text-slate-600 sm:col-span-2">Catatan (Opsional)<textarea value={note} onChange={(e)=>setNote(e.target.value)} maxLength={500} rows={3} className="mt-1 w-full rounded-lg border p-3 text-sm" placeholder="Keterangan saldo awal..."/></label>
     </div>

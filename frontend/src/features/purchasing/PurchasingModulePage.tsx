@@ -42,12 +42,7 @@ export default function PurchasingModulePage() {
   };
 
   return (
-    <div className="p-6 bg-slate-50 min-h-full flex flex-col">
-      <div className="mb-2">
-        <h1 className="text-2xl font-extrabold text-slate-900">Purchasing Workspace</h1>
-        <p className="text-slate-500 font-medium text-sm">Pusat monitoring tagihan supplier, pembuatan pesanan (PO), penerimaan faktur (A/P), dan direktori.</p>
-      </div>
-
+    <div className="flex min-h-full flex-col bg-slate-50 p-3 sm:p-4 lg:p-5">
       <div className="flex shrink-0 items-center gap-2 overflow-x-auto rounded-t-xl border-b border-slate-200 bg-white px-2 pt-3 shadow-sm sm:px-4">
         
         <button

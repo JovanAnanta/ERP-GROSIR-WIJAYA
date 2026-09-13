@@ -55,17 +55,8 @@ export default function PricingModulePage() {
   };
 
   return (
-    <div className="p-6 bg-slate-50 min-h-full flex flex-col">
-      <div className="mb-2">
-        <h1 className="text-2xl font-extrabold text-slate-900">
-          Pricing Workspace
-        </h1>
-        <p className="text-slate-500 font-medium text-sm">
-          Pusat pengelolaan harga jual dasar, cetak brosur, dan import massal.
-        </p>
-      </div>
-
-      <div className="flex border-b border-slate-200 mt-4 bg-white px-6 pt-4 rounded-t-xl shadow-sm overflow-x-auto custom-scrollbar shrink-0">
+    <div className="flex min-h-full flex-col bg-slate-50 p-3 sm:p-4 lg:p-5">
+      <div className="flex border-b border-slate-200 bg-white px-6 pt-4 rounded-t-xl shadow-sm overflow-x-auto custom-scrollbar shrink-0">
         {canExport && (
           <button
             onClick={() => handleTabClick("guest")}

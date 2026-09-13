@@ -7,8 +7,8 @@
 
 @layer base {
   @theme {
-    --font-sans: "Montserrat", sans-serif;
-    --font-heading: "Montserrat", sans-serif;
+    --font-sans: "Geist Variable", "Segoe UI", sans-serif;
+    --font-heading: "Geist Variable", "Segoe UI", sans-serif;
   }
 
   :root {
@@ -85,7 +85,7 @@
   }
 
   body {
-    font-family: "Montserrat", sans-serif;
+    font-family: "Geist Variable", "Segoe UI", sans-serif;
     font-optical-sizing: auto;
     font-style: normal;
     @apply bg-background text-foreground;
@@ -105,11 +105,37 @@
   body {
     overflow-x: hidden;
   }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
 }
 
 @layer components {
   .sales-input {
     @apply h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100;
+  }
+
+  .erp-page {
+    @apply min-w-0 space-y-4 p-3 sm:p-4 lg:p-5;
+  }
+
+  .erp-card {
+    @apply min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm;
+  }
+
+  .erp-action {
+    @apply min-h-9 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .erp-clickable-card {
+    @apply cursor-pointer transition hover:border-blue-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2;
   }
 }
 
@@ -125,10 +151,6 @@
 }
 
 @media (max-width: 767px) {
-  .erp-content > div {
-    padding: 1rem !important;
-  }
-
   [data-slot="dialog-content"] {
     width: calc(100vw - 0.75rem) !important;
     max-width: calc(100vw - 0.75rem) !important;
@@ -154,5 +176,11 @@
   select,
   textarea {
     font-size: 16px !important;
+  }
+
+  button,
+  [role="button"],
+  [role="combobox"] {
+    touch-action: manipulation;
   }
 }

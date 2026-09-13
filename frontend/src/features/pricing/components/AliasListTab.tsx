@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Dialog,
   DialogContent,
@@ -351,21 +352,19 @@ function TargetPicker({
           className="text-xs mt-1"
         />
       </label>
-      <select
-        aria-label={placeholder}
-        value={value?.id ?? ""}
-        onChange={(event) =>
-          onChange(all.find((item) => item.id === event.target.value) ?? null)
-        }
-        className="mt-1 h-8 border border-slate-300 rounded-lg w-full text-xs px-2 bg-white"
-      >
-        <option value="">{placeholder}</option>
-        {all.map((item) => (
-          <option key={item.id} value={item.id}>
-            {item.name}
-          </option>
-        ))}
-      </select>
+      <div className="mt-1">
+        <SearchableSelect
+          value={value?.id ?? ""}
+          onChange={(id) =>
+            onChange(all.find((item) => item.id === id) ?? null)
+          }
+          options={all.map((item) => ({
+            value: item.id,
+            label: item.name,
+          }))}
+          placeholder={placeholder}
+        />
+      </div>
       {error && <p className="text-xs text-rose-600">{error}</p>}
     </div>
   );

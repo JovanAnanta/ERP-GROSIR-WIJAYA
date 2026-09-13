@@ -24,6 +24,8 @@ import {
   DialogOverlay,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { parseApiError } from "@/utils/error";
 import { defaultSalesAccount } from "./sales-form.utils";
 import {
@@ -800,14 +802,12 @@ export function InvoiceProcessDialog({
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <label className="text-[10px] font-black text-slate-600">
                   NOMINAL DITERIMA
-                  <input
-                    type="number"
-                    min="0.01"
+                  <FormattedNumberInput
                     max={invoice.outstandingAmount}
                     disabled={invoice.partyType === "GUEST"}
-                    value={paymentAmount || ""}
-                    onChange={(event) => setAmount(Number(event.target.value))}
-                    className="sales-input mt-1 bg-white disabled:bg-slate-100"
+                    value={paymentAmount || 0}
+                    onChange={(val) => setAmount(val)}
+                    className="sales-input mt-1 bg-white disabled:bg-slate-100 font-bold"
                   />
                   {invoice.partyType === "GUEST" && (
                     <span className="mt-1 block text-[9px] text-amber-700">
@@ -815,24 +815,20 @@ export function InvoiceProcessDialog({
                     </span>
                   )}
                 </label>
-                <label className="text-[10px] font-black text-slate-600">
-                  AKUN PENERIMA
-                  <select
+                <div>
+                  <label className="text-[10px] font-black text-slate-600 block mb-1">
+                    AKUN PENERIMA
+                  </label>
+                  <SearchableSelect
                     value={accountId}
-                    onChange={(event) => setAccountId(event.target.value)}
-                    className="sales-input mt-1 bg-white"
-                  >
-                    <option value="">Pilih Kas/Bank...</option>
-                    {accounts.map((account) => (
-                      <option
-                        key={account.financialAccountId}
-                        value={account.financialAccountId}
-                      >
-                        {account.accountName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    onChange={setAccountId}
+                    placeholder="Pilih Kas/Bank..."
+                    options={accounts.map((account) => ({
+                      value: account.financialAccountId,
+                      label: account.accountName,
+                    }))}
+                  />
+                </div>
                 <label className="text-[10px] font-black text-slate-600">
                   METODE PENERIMAAN
                   <select
@@ -1240,14 +1236,12 @@ export function SalesDetailDialog({
               <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <label className="text-[10px] font-black">
                   NOMINAL
-                  <input
-                    type="number"
-                    min="0.01"
+                  <FormattedNumberInput
                     max={invoice.outstandingAmount}
                     disabled={invoice.partyType === "GUEST"}
-                    value={amount || ""}
-                    onChange={(event) => setAmount(Number(event.target.value))}
-                    className="sales-input mt-1"
+                    value={amount || 0}
+                    onChange={(val) => setAmount(val)}
+                    className="sales-input mt-1 font-bold"
                   />
                   {invoice.partyType === "GUEST" && (
                     <span className="mt-1 block text-[9px] font-semibold text-amber-700">
@@ -1255,23 +1249,20 @@ export function SalesDetailDialog({
                     </span>
                   )}
                 </label>
-                <label className="text-[10px] font-black">
-                  AKUN
-                  <select
+                <div>
+                  <label className="text-[10px] font-black block mb-1">
+                    AKUN
+                  </label>
+                  <SearchableSelect
                     value={accountId}
-                    onChange={(event) => setAccountId(event.target.value)}
-                    className="sales-input mt-1"
-                  >
-                    {accounts.map((account) => (
-                      <option
-                        key={account.financialAccountId}
-                        value={account.financialAccountId}
-                      >
-                        {account.accountName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    onChange={setAccountId}
+                    placeholder="Pilih Kas/Bank..."
+                    options={accounts.map((account) => ({
+                      value: account.financialAccountId,
+                      label: account.accountName,
+                    }))}
+                  />
+                </div>
                 <label className="text-[10px] font-black">
                   METODE
                   <select

@@ -116,7 +116,7 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="w-full space-y-4 px-2 pb-8 pt-2 sm:px-3 sm:pt-3">
+    <div className="w-full space-y-4 p-3 pb-8 sm:p-4 lg:p-5">
       <header className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>

@@ -1,3 +1,6 @@
+/* Supertest exposes response.body as `any`; assertions below deliberately
+ * validate that external JSON contract end to end. */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 import { ValidationPipe } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';

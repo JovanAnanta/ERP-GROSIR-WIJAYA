@@ -13,13 +13,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import {
   defaultSalesAccount,
   resolveSalesPaymentAmount,
@@ -852,7 +847,7 @@ export default function SalesDocumentForm({
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label={sourceOrderId ? "Tetap sebagai sisa SO" : "Qty dibuat SO"}>
-                    <Input type="number" min="0" max={line.quantity} step="any" value={deferredQuantity || ""} placeholder="Isi qty yang ditunda" onChange={(event)=>setDeferredQuantity(Number(event.target.value))} />
+                    <FormattedNumberInput allowDecimal min={0} max={line.quantity} value={deferredQuantity || 0} placeholder="Isi qty yang ditunda" onChange={(val)=>setDeferredQuantity(val)} className="h-10 text-center font-bold" />
                   </Field>
                   <Field label="Qty dibuat SI">
                     <Input value={`${remainingQty.toLocaleString("id-ID")} ${unit?.unitName ?? ""}`} disabled className="bg-slate-100 font-bold" />
@@ -860,7 +855,7 @@ export default function SalesDocumentForm({
                   {line.bonusQuantity > 0 && (
                     <>
                       <Field label={sourceOrderId ? "Bonus tersisa di SO" : "Bonus dibuat SO"}>
-                        <Input type="number" min="0" max={line.bonusQuantity} step="any" value={deferredBonusQuantity || ""} placeholder="0" onChange={(event)=>setDeferredBonusQuantity(Number(event.target.value))} />
+                        <FormattedNumberInput allowDecimal min={0} max={line.bonusQuantity} value={deferredBonusQuantity || 0} placeholder="0" onChange={(val)=>setDeferredBonusQuantity(val)} className="h-10 text-center font-bold" />
                       </Field>
                       <Field label="Bonus dibuat SI">
                         <Input value={remainingBonus.toLocaleString("id-ID")} disabled className="bg-slate-100 font-bold" />
@@ -1074,12 +1069,10 @@ export default function SalesDocumentForm({
                       </Field>
                     </div>
                     <Field label="Nominal Diterima">
-                      <Input
-                        type="number"
-                        min="0"
+                      <FormattedNumberInput
+                        min={0}
                         value={paymentAmount || ""}
-                        onChange={(event) => {
-                          const amount = Number(event.target.value);
+                        onChange={(amount) => {
                           setPaymentOverride(amount);
                           setPaymentChoice(
                             amount <= 0
@@ -1144,11 +1137,10 @@ export default function SalesDocumentForm({
         <div className="w-full md:max-w-[350px] space-y-2">
           <Summary label="Subtotal" value={totals.invoice + discount} />
           <Field label="Diskon Dokumen (Rp)">
-            <Input
-              type="number"
-              min="0"
+            <FormattedNumberInput
+              min={0}
               value={discount || ""}
-              onChange={(event) => setDiscount(Number(event.target.value))}
+              onChange={(val) => setDiscount(val)}
               className="h-8 text-xs font-bold text-right bg-white"
             />
           </Field>
@@ -1227,45 +1219,21 @@ function CompactSelect({
 }: {
   value: string;
   onChange: (value: string) => void;
-  options: Array<{ value: string; label: string }>;
+  options: Array<{ value: string; label: string; sublabel?: string }>;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
 }) {
   return (
-    <Select
-      value={value || "NONE"}
-      onValueChange={(next) => onChange(next === "NONE" ? "" : (next ?? ""))}
+    <SearchableSelect
+      value={value}
+      onChange={onChange}
+      options={options}
+      placeholder={placeholder}
       disabled={disabled}
-    >
-      <SelectTrigger
-        className={
-          "w-full font-bold h-8 text-xs bg-white border-slate-300 " + className
-        }
-      >
-        <SelectValue>
-          {options.find((item) => item.value === value)?.label ??
-            placeholder ??
-            "Pilih..."}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent className="bg-white z-50 max-h-[250px] border-slate-200 shadow-lg">
-        {placeholder && (
-          <SelectItem value="NONE" className="text-xs italic text-slate-500">
-            {placeholder}
-          </SelectItem>
-        )}
-        {options.map((item) => (
-          <SelectItem
-            key={item.value}
-            value={item.value}
-            className="text-xs cursor-pointer"
-          >
-            {item.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+      className={className}
+      size="sm"
+    />
   );
 }
 
@@ -1482,16 +1450,15 @@ function LinePanel(props: LinePanelProps) {
                   </td>
                   {numericFields.map(([field, label, width]) => (
                     <td key={field} className="p-1 border-r border-slate-200">
-                      <Input
-                        type="number"
-                        min="0"
-                        step="any"
+                      <FormattedNumberInput
+                        min={0}
+                        allowDecimal={field === "quantity" || field === "bonusQuantity"}
                         aria-label={label + " baris " + (index + 1)}
                         value={line[field] || ""}
                         placeholder="0"
-                        onChange={(event) =>
+                        onChange={(val) =>
                           props.onUpdate(props.side, line.key, {
-                            [field]: Number(event.target.value),
+                            [field]: val,
                           })
                         }
                         className={

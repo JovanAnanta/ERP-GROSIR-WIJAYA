@@ -3,6 +3,7 @@ import { productApi, type ImportProductsPayload } from "@/features/master/produc
 import { parseApiError } from "@/utils/error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertTriangle, CheckCircle2, Loader2, Plus, Star, Trash2, UploadCloud, ArrowLeft, Save, X } from "lucide-react";
@@ -300,7 +301,7 @@ export default function ImportProductTab() {
                 </div>
                 <div className="w-20 shrink-0 space-y-1">
                   <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Min Stok</Label>
-                  <Input type="number" value={row.minimumInventoryQty} onChange={(e) => updateRowField(row.id, 'minimumInventoryQty', e.target.value)} className="h-8 border-slate-300 text-xs font-semibold text-center" />
+                  <FormattedNumberInput value={row.minimumInventoryQty} onChange={(value) => updateRowField(row.id, 'minimumInventoryQty', value ? String(value) : "")} className="h-8 border-slate-300 text-xs font-semibold" />
                 </div>
                 <Button variant="ghost" onClick={() => removeProductRow(row.id)} className="h-8 w-8 p-0 text-rose-500 hover:bg-rose-50 hover:text-rose-600 shrink-0 self-end mb-0.5">
                   <Trash2 className="w-4 h-4" />
@@ -333,12 +334,12 @@ export default function ImportProductTab() {
                     </div>
                     <div className="space-y-1">
                       <Label className="text-[9px] font-bold text-slate-500 uppercase">Konversi</Label>
-                      <Input 
-                        type="number" min="1" 
-                        value={u.conversionFactor} onChange={(e) => updateUnitField(row.id, u.key, 'conversionFactor', e.target.value)}
+                      <FormattedNumberInput
+                        allowDecimal min={1}
+                        value={u.conversionFactor} onChange={(value) => updateUnitField(row.id, u.key, 'conversionFactor', String(value))}
                         onClick={(e) => e.stopPropagation()}
                         disabled={u.isParent}
-                        className={`w-16 h-7 text-xs font-bold text-center border-slate-300 ${u.isParent ? 'bg-slate-100 text-slate-400' : ''}`}
+                        className={`w-16 h-7 text-xs font-bold border-slate-300 ${u.isParent ? 'bg-slate-100 text-slate-400' : ''}`}
                       />
                     </div>
 

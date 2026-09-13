@@ -3,9 +3,10 @@ import { purchasingApi, type SupplierDropdownOption, type SupplierCatalogItem, t
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogOverlay } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Loader2, Trash2, Save, FileCheck, AlertTriangle, FileText, Download, CheckSquare, Plus } from "lucide-react";
 import { parseApiError } from "@/utils/error";
 
@@ -300,16 +301,15 @@ export default function CreatePurchaseOrderTab({ editingOrderId, onSuccess, onCa
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 bg-slate-50 p-4 rounded-lg border border-slate-200 shrink-0">
         <div className="col-span-1 md:col-span-2">
           <Label className="font-bold text-slate-600 text-[10px] uppercase">Supplier (Dari Database) *</Label>
-          <Select value={supplierId || null} onValueChange={handleSupplierChange}>
-            <SelectTrigger className="bg-white font-bold h-8 text-xs border-slate-300">
-              <SelectValue placeholder="-- Pilih Supplier --">
-                {suppliers.find(s => s.supplierId === supplierId)?.supplierName}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent className="bg-white z-50 border border-slate-200 shadow-lg">
-              {suppliers.map(s => <SelectItem key={s.supplierId} value={s.supplierId} className="text-xs">{s.supplierName}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={supplierId}
+            onChange={handleSupplierChange}
+            placeholder="-- Pilih Supplier --"
+            options={suppliers.map((s) => ({
+              value: s.supplierId,
+              label: s.supplierName,
+            }))}
+          />
         </div>
         <div>
           <Label className="font-bold text-slate-600 text-[10px] uppercase">Ekspektasi Tgl Datang</Label>
@@ -359,32 +359,37 @@ export default function CreatePurchaseOrderTab({ editingOrderId, onSuccess, onCa
                 
                 {/* KOLOM PRODUK */}
                 <td className="p-1 border-r border-slate-200">
-                  <Select value={item.productId || null} onValueChange={(val) => handleProductChange(index, val)}>
-                    <SelectTrigger className="h-7 text-[11px] font-bold border-none shadow-none focus:ring-1 focus:ring-[#00509e] rounded-sm bg-transparent">
-                      <SelectValue placeholder="Pilih Produk...">
-                        {allProducts.find(p => p.productId === item.productId)?.productName}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent className="bg-white z-50 max-h-[250px] border-slate-200 shadow-lg">
-                      {allProducts.map(p => <SelectItem key={p.productId} value={p.productId} className="text-xs cursor-pointer">{p.productName}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    size="sm"
+                    value={item.productId}
+                    onChange={(val) => handleProductChange(index, val)}
+                    placeholder="Pilih Produk..."
+                    options={allProducts.map((p) => ({
+                      value: p.productId,
+                      label: p.productName,
+                    }))}
+                    className="border-none shadow-none bg-transparent"
+                  />
                 </td>
 
                 {/* KOLOM SATUAN UNIT */}
                 <td className="p-1 border-r border-slate-200">
-                  <Select value={item.productUnitId || null} onValueChange={(val) => handleUnitChange(index, val)} disabled={!item.productId}>
-                    <SelectTrigger className="h-7 text-[11px] font-bold border-none shadow-none focus:ring-1 focus:ring-[#00509e] rounded-sm bg-transparent">
-                      <SelectValue placeholder="Satuan...">
-                        {allProducts.find(p => p.productId === item.productId)?.units.find(u => u.productUnitId === item.productUnitId)?.unitName}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent className="bg-white z-50 border-slate-200 shadow-lg">
-                      {allProducts.find(p => p.productId === item.productId)?.units.map(u => (
-                        <SelectItem key={u.productUnitId} value={u.productUnitId} className="text-xs cursor-pointer">{u.unitName}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    size="sm"
+                    value={item.productUnitId}
+                    onChange={(val) => handleUnitChange(index, val)}
+                    disabled={!item.productId}
+                    placeholder="Satuan..."
+                    options={
+                      allProducts
+                        .find((p) => p.productId === item.productId)
+                        ?.units.map((u) => ({
+                          value: u.productUnitId,
+                          label: u.unitName,
+                        })) || []
+                    }
+                    className="border-none shadow-none bg-transparent"
+                  />
                 </td>
 
                 {/* KOLOM STOK (READONLY) */}
@@ -396,7 +401,14 @@ export default function CreatePurchaseOrderTab({ editingOrderId, onSuccess, onCa
 
                 {/* KOLOM QTY PESAN */}
                 <td className="p-1 border-r border-slate-200 bg-blue-50/30">
-                  <Input type="number" min="1" disabled={!item.productId} value={item.productId ? item.quantity : ''} onChange={e => updateItem(index, 'quantity', Number(e.target.value))} className="h-7 text-xs font-bold text-center border-none shadow-none focus-visible:ring-1 focus-visible:ring-[#00509e] rounded-sm bg-transparent text-[#00509e] disabled:opacity-50"/>
+                  <FormattedNumberInput
+                    min={1}
+                    allowDecimal={true}
+                    disabled={!item.productId}
+                    value={item.productId ? item.quantity : ''}
+                    onChange={(val) => updateItem(index, 'quantity', val)}
+                    className="h-7 text-xs font-bold text-center border-none shadow-none bg-transparent text-[#00509e] disabled:opacity-50"
+                  />
                 </td>
 
                 {/* KOLOM NOTE */}

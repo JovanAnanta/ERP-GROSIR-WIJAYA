@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
+import type { ReactNode } from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 
 import { hasPermission, useAuthStore } from "@/store/authStore";
@@ -8,21 +9,30 @@ import { apiClient } from "@/lib/axios";
 import AppLayout from "@/components/layout/AppLayout";
 
 import LoginPage from "@/features/auth/LoginPage";
-import UserManagementPage from "@/features/system/user/UserManagementPage";
-import RolePermissionPage from "@/features/system/role-permission/RolePermissionPage";
-import SystemConfigurationPage from "@/features/system/system-configuration/SystemConfigurationPage";
-import SystemLogsPage from "@/features/system/logs/SystemLogsPage";
-import CatalogModulePage from "@/features/master/CatalogModulePage";
-import PricingModulePage from "@/features/pricing/PricingModulePage"; // <--- Import PricingModulePage
-
-// TAMBAHKAN IMPORT INI DI SINI
-import SalesModulePage from "@/features/sales/SalesModulePage";
-import PurchasingModulePage from "@/features/purchasing/PurchasingModulePage";
-import InventoryModulePage from "@/features/inventory/InventoryModulePage";
-
+const UserManagementPage = lazy(() => import("@/features/system/user/UserManagementPage"));
+const RolePermissionPage = lazy(() => import("@/features/system/role-permission/RolePermissionPage"));
+const SystemConfigurationPage = lazy(() => import("@/features/system/system-configuration/SystemConfigurationPage"));
+const SystemLogsPage = lazy(() => import("@/features/system/logs/SystemLogsPage"));
+const CatalogModulePage = lazy(() => import("@/features/master/CatalogModulePage"));
+const PricingModulePage = lazy(() => import("@/features/pricing/PricingModulePage"));
+const SalesModulePage = lazy(() => import("@/features/sales/SalesModulePage"));
+const PurchasingModulePage = lazy(() => import("@/features/purchasing/PurchasingModulePage"));
+const InventoryModulePage = lazy(() => import("@/features/inventory/InventoryModulePage"));
 const FifoModulePage = lazy(() => import("@/features/fifo/FifoModulePage"));
 const FinanceModulePage = lazy(() => import("@/features/finance/FinanceModulePage"));
 const DashboardPage = lazy(() => import("@/features/dashboard/DashboardPage"));
+
+function ModuleLoader({ label }: { label: string }) {
+  return (
+    <div className="flex min-h-64 items-center justify-center text-sm font-medium text-slate-500">
+      Memuat {label}...
+    </div>
+  );
+}
+
+function LazyModule({ label, children }: { label: string; children: ReactNode }) {
+  return <Suspense fallback={<ModuleLoader label={label} />}>{children}</Suspense>;
+}
 
 // React StrictMode mounts effects twice in development. Reuse the same
 // server-side session check so hydration never creates duplicate /auth/me calls.
@@ -167,42 +177,42 @@ export default function App() {
 
           {/* FR-SYS-002: Hanya Role 1 (Super Owner) & 2 (Owner) yang boleh akses */}
           <Route element={<RoleGuard allowedRoles={["1", "2"]} />}>
-            <Route path="/system/users" element={<UserManagementPage />} />
+            <Route path="/system/users" element={<LazyModule label="User Management"><UserManagementPage /></LazyModule>} />
           </Route>
 
           {/* Rute Role & Permission (Eksklusif Super Owner) */}
           <Route element={<RoleGuard allowedRoles={["1"]} />}>
             <Route
               path="/system/role-permissions"
-              element={<RolePermissionPage />}
+              element={<LazyModule label="Role & Permission"><RolePermissionPage /></LazyModule>}
             />
           </Route>
 
           {/* Log sistem bersifat read-only untuk Super Owner dan Owner */}
           <Route element={<RoleGuard allowedRoles={["1", "2"]} />}>
-            <Route path="/system/logs" element={<SystemLogsPage />} />
+            <Route path="/system/logs" element={<LazyModule label="System Logs"><SystemLogsPage /></LazyModule>} />
           </Route>
 
           {/* Rute System Configuration (Eksklusif Super Owner) */}
           <Route element={<RoleGuard allowedRoles={["1"]} />}>
             <Route
               path="/system/configuration"
-              element={<SystemConfigurationPage />}
+              element={<LazyModule label="System Configuration"><SystemConfigurationPage /></LazyModule>}
             />
           </Route>
 
           {/* Rute Khusus Sales & Customer */}
           <Route element={<PermissionRoute permission="SALES_VIEW" />}>
-            <Route path="/sales" element={<SalesModulePage />} />
-            <Route path="/sales/customers" element={<SalesModulePage />} />
+            <Route path="/sales" element={<LazyModule label="Sales"><SalesModulePage /></LazyModule>} />
+            <Route path="/sales/customers" element={<LazyModule label="Sales"><SalesModulePage /></LazyModule>} />
           </Route>
 
           <Route element={<PermissionRoute permission="PURCHASE_VIEW" />}>
-            <Route path="/purchasing" element={<PurchasingModulePage />} />
+            <Route path="/purchasing" element={<LazyModule label="Purchasing"><PurchasingModulePage /></LazyModule>} />
           </Route>
 
           <Route element={<PermissionRoute permission="INVENTORY_VIEW" />}>
-            <Route path="/inventory" element={<InventoryModulePage />} />
+            <Route path="/inventory" element={<LazyModule label="Inventory"><InventoryModulePage /></LazyModule>} />
           </Route>
 
           <Route element={<PermissionRoute permission="FIFO_VIEW" />}>
@@ -234,12 +244,12 @@ export default function App() {
           </Route>
 
           <Route element={<PermissionRoute permission="MASTER_VIEW" />}>
-            <Route path="/catalog" element={<CatalogModulePage />} />
+            <Route path="/catalog" element={<LazyModule label="Master Data"><CatalogModulePage /></LazyModule>} />
           </Route>
 
           {/* Rute Pricing Module */}
           <Route element={<PermissionRoute permission="PRICING_VIEW" />}>
-            <Route path="/pricing" element={<PricingModulePage />} />
+            <Route path="/pricing" element={<LazyModule label="Pricing"><PricingModulePage /></LazyModule>} />
           </Route>
         </Route>
       </Route>

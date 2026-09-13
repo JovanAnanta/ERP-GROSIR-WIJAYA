@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { parseApiError } from '@/utils/error';
 import { inventoryApi, type PaginationMeta, type StockFilterOptions, type StockHistoryItem } from './inventory.api';
 import InventorySectionNav, { type InventorySection } from './InventorySectionNav';
@@ -54,14 +55,51 @@ export default function StockMovementHistoryPanel({ onNavigate }: { onNavigate: 
   };
 
   return <div className="min-h-full bg-slate-50 p-3 sm:p-6">
-    <div className="mb-4"><h1 className="text-xl font-black text-slate-900 sm:text-2xl">Inventory & Warehouse</h1><p className="text-xs font-medium text-slate-500 sm:text-sm">Pantau posisi stok setiap produk dengan satuan yang mudah dibaca.</p></div>
-    <InventorySectionNav current="MOVEMENTS" onChange={onNavigate}/>
+    <div className="mb-4">
+      <InventorySectionNav current="MOVEMENTS" onChange={onNavigate}/>
+    </div>
     <div className="mt-3 rounded-xl border bg-white p-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center"><div className="relative flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-400"/><input value={search} onChange={(event) => setSearch(event.target.value)} className="h-10 w-full rounded-lg border bg-white pl-9 pr-10 text-sm outline-none focus:border-blue-400" placeholder="Cari nama produk dalam filter yang dipilih..."/>{loading && <span className="absolute right-3 top-3 h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"/>}</div><InventoryPageSizeSelect value={limit} onChange={(value) => { setLimit(value); setPage(1); }}/></div>
       <div className="mt-2 grid gap-2 sm:grid-cols-3">
-        <select value={categoryId} onChange={(event) => selectFilter(setCategoryId, event.target.value)} className="h-9 rounded-md border bg-white px-2 text-xs font-semibold"><option value="">Semua kategori</option>{options.categories.map((item) => <option key={item.categoryId} value={item.categoryId}>{item.categoryName}</option>)}</select>
-        <select value={brandId} onChange={(event) => selectFilter(setBrandId, event.target.value)} className="h-9 rounded-md border bg-white px-2 text-xs font-semibold"><option value="">Semua merek</option>{options.brands.map((item) => <option key={item.brandId} value={item.brandId}>{item.brandName}</option>)}</select>
-        <select value={supplierId} onChange={(event) => selectFilter(setSupplierId, event.target.value)} className="h-9 rounded-md border bg-white px-2 text-xs font-semibold"><option value="">Semua supplier</option>{options.suppliers.map((item) => <option key={item.supplierId} value={item.supplierId}>{item.supplierName}</option>)}</select>
+        <SearchableSelect
+          value={categoryId}
+          onChange={(val) => selectFilter(setCategoryId, val)}
+          placeholder="Semua kategori"
+          options={[
+            { value: "", label: "Semua kategori" },
+            ...options.categories.map((item) => ({
+              value: item.categoryId,
+              label: item.categoryName,
+            })),
+          ]}
+          className="text-xs font-semibold"
+        />
+        <SearchableSelect
+          value={brandId}
+          onChange={(val) => selectFilter(setBrandId, val)}
+          placeholder="Semua merek"
+          options={[
+            { value: "", label: "Semua merek" },
+            ...options.brands.map((item) => ({
+              value: item.brandId,
+              label: item.brandName,
+            })),
+          ]}
+          className="text-xs font-semibold"
+        />
+        <SearchableSelect
+          value={supplierId}
+          onChange={(val) => selectFilter(setSupplierId, val)}
+          placeholder="Semua supplier"
+          options={[
+            { value: "", label: "Semua supplier" },
+            ...options.suppliers.map((item) => ({
+              value: item.supplierId,
+              label: item.supplierName,
+            })),
+          ]}
+          className="text-xs font-semibold"
+        />
       </div>
       <p className="mt-2 text-[10px] font-medium text-slate-400">Pencarian hanya menampilkan produk yang sesuai dengan seluruh filter aktif.</p>
     </div>

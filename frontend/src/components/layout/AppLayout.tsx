@@ -38,6 +38,43 @@ import logoImage from "../../assets/WIJAYA LOGISTICS.png";
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const ACTIVITY_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
+function getModuleTitle(pathname: string): string {
+  if (pathname.startsWith("/system/users")) {
+    return "User Management";
+  }
+  if (pathname.startsWith("/system/role-permissions")) {
+    return "Role & Permission";
+  }
+  if (pathname.startsWith("/system/logs")) {
+    return "System Logs";
+  }
+  if (pathname.startsWith("/system/configuration")) {
+    return "System Configuration";
+  }
+  if (pathname.startsWith("/sales")) {
+    return "Sales & Customers";
+  }
+  if (pathname.startsWith("/purchasing")) {
+    return "Purchases & Suppliers";
+  }
+  if (pathname.startsWith("/catalog")) {
+    return "Catalog & Master Data";
+  }
+  if (pathname.startsWith("/pricing")) {
+    return "Pricing Workspace";
+  }
+  if (pathname.startsWith("/inventory")) {
+    return "Inventory & Warehouse";
+  }
+  if (pathname.startsWith("/fifo")) {
+    return "FIFO & Cost";
+  }
+  if (pathname.startsWith("/finance")) {
+    return "Finance & Accounting";
+  }
+  return "Dashboard";
+}
+
 export default function AppLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, logout, lockSession, isLocked, hydrate } = useAuthStore();
@@ -326,7 +363,7 @@ export default function AppLayout() {
 
       {/* Main Content Area */}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-slate-50">
-        <header className="z-20 flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-3 shadow-sm sm:px-4 md:h-20 md:px-8">
+        <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-3 shadow-sm sm:h-16 sm:px-4 md:px-6">
           <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
             <button
               type="button"
@@ -337,28 +374,9 @@ export default function AppLayout() {
             >
               <Menu className="h-5 w-5" />
             </button>
-            <div className="min-w-0">
-              <h1 className="truncate text-sm font-extrabold tracking-tight text-slate-800 sm:text-base md:text-xl">
-                {isActive("/system/users")
-                  ? "User Management"
-                  : isActive("/system/role-permissions")
-                    ? "Role & Permission"
-                    : isActive("/system/logs")
-                      ? "System Logs"
-                      : isActive("/system/configuration")
-                        ? "System Configuration"
-                        : isActive("/sales/customers")
-                          ? "Sales & Customers"
-                          : isActive("/inventory")
-                            ? "Inventory & Warehouse"
-                            : isActive("/fifo")
-                              ? "FIFO & Cost"
-                              : "Dashboard"}
-              </h1>
-              <p className="hidden text-[10px] font-medium uppercase tracking-wider text-slate-500 sm:block md:text-xs">
-                Modul ERP Terintegrasi
-              </p>
-            </div>
+            <h1 className="truncate text-sm font-extrabold tracking-tight text-slate-800 sm:text-base md:text-lg">
+              {getModuleTitle(location.pathname)}
+            </h1>
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-3 md:gap-6">

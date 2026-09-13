@@ -17,7 +17,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '22'
 
     - name: Install and Build Backend
       run: |
@@ -33,4 +33,10 @@ jobs:
         cd frontend
         npm ci
         npm run lint
+        npm test
         npm run build
+
+    - name: Validate Production Images
+      run: |
+        docker build --target runtime -t erp-grosir-backend-ci ./backend
+        docker build --build-arg VITE_API_URL=/api/v1 --build-arg VITE_APP_ENV=production -t erp-grosir-frontend-ci ./frontend

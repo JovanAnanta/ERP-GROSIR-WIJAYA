@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { parseApiError } from "@/utils/error";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { financeApi, type FinanceAccount } from "./finance.api";
 
 const today = new Date().toLocaleDateString("en-CA");
@@ -411,17 +412,13 @@ function AccountFormDialog({
             <>
               <label className="text-xs font-bold text-slate-700">
                 SALDO AWAL
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.openingBalance === "0" ? "" : form.openingBalance}
-                  onChange={(event) =>
-                    setForm({ ...form, openingBalance: event.target.value })
+                <FormattedNumberInput
+                  value={form.openingBalance ? Number(form.openingBalance) : 0}
+                  onChange={(val) =>
+                    setForm({ ...form, openingBalance: String(val) })
                   }
-                  onWheel={(event) => event.currentTarget.blur()}
                   placeholder="0"
-                  className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                  className="mt-1 w-full rounded-lg border px-3 py-2 text-sm font-semibold"
                 />
               </label>
               <label className="text-xs font-bold text-slate-700">

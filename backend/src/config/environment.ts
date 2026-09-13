@@ -15,6 +15,23 @@ export function validateEnvironment(
   if (config.NODE_ENV === 'production') {
     if (typeof config.FRONTEND_URL !== 'string' || !config.FRONTEND_URL) {
       missing.push('FRONTEND_URL');
+    } else {
+      const origins = config.FRONTEND_URL.split(',').map((value) =>
+        value.trim(),
+      );
+      for (const origin of origins) {
+        let parsed: URL;
+        try {
+          parsed = new URL(origin);
+        } catch {
+          throw new Error('FRONTEND_URL contains an invalid origin.');
+        }
+        if (parsed.origin !== origin || parsed.protocol !== 'https:') {
+          throw new Error(
+            'Production FRONTEND_URL must contain HTTPS origins without paths.',
+          );
+        }
+      }
     }
   }
 

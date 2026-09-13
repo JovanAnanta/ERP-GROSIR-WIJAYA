@@ -26,6 +26,7 @@ BigInt.prototype.toJSON = function (this: bigint): string {
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
+  app.enableShutdownHooks();
   const trustedOrigins = getTrustedOrigins();
   const isProduction = process.env.NODE_ENV === 'production';
 

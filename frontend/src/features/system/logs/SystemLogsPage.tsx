@@ -250,10 +250,6 @@ export default function SystemLogsPage() {
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
             <div>
               <div className="flex items-center gap-2">
-                <FileClock className="h-6 w-6 text-[#326dc8]" />
-                <h2 className="text-2xl font-extrabold tracking-tight text-slate-800">
-                  System Logs
-                </h2>
                 <Badge
                   variant="outline"
                   className="border-slate-200 bg-slate-50 text-slate-600"
@@ -261,7 +257,7 @@ export default function SystemLogsPage() {
                   Read-only
                 </Badge>
               </div>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-2 text-sm text-slate-500">
                 Telusuri aktivitas pengguna, perubahan data, dan kejadian keamanan sistem.
               </p>
             </div>

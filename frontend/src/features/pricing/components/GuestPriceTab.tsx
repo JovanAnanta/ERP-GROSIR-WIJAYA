@@ -4,6 +4,7 @@ import { parseApiError } from "@/utils/error";
 import { hasPermission, useAuthStore } from "@/store/authStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertTriangle, Loader2, Save, X, Edit2, Search } from "lucide-react";
 
@@ -66,25 +67,6 @@ export default function GuestPriceTab({ onUnsavedChanges }: GuestPriceTabProps) 
     const hasChanges = Object.keys(editValues).length > 0;
     onUnsavedChanges(hasChanges);
   }, [editValues, onUnsavedChanges]);
-
-  // Helper formatting angka ke ribuan (contoh: 17000 -> 17.000)
-  const formatNumberInput = (val: number | undefined) => {
-    if (val === undefined || val === 0) return "";
-    return val.toLocaleString('id-ID');
-  };
-
-  const handlePriceChange = (productUnitId: string, rawInput: string) => {
-    // Hanya ambil angka
-    const cleanDigits = rawInput.replace(/\D/g, "");
-    const numValue = cleanDigits === "" ? 0 : Number(cleanDigits);
-    
-    setEditValues(prev => {
-      const updated = { ...prev, [productUnitId]: numValue };
-      const originalPrice = data.find(d => d.productUnitId === productUnitId)?.suggestedPrice || 0;
-      if (updated[productUnitId] === originalPrice) delete updated[productUnitId];
-      return updated;
-    });
-  };
 
   const cancelEdit = () => {
     setIsEditing(false);
@@ -177,10 +159,16 @@ export default function GuestPriceTab({ onUnsavedChanges }: GuestPriceTabProps) 
                         {isEditing ? (
                           <div className={`flex items-center justify-end ${isChanged ? 'border-amber-400' : ''}`}>
                             <span className="text-slate-400 text-xs mr-2">Rp</span>
-                            <Input 
-                              type="text"
-                              value={formatNumberInput(activeDisplayVal)}
-                              onChange={(e) => handlePriceChange(row.productUnitId, e.target.value)}
+                            <FormattedNumberInput
+                              value={activeDisplayVal}
+                              onChange={(val) => {
+                                setEditValues(prev => {
+                                  const updated = { ...prev, [row.productUnitId]: val };
+                                  const originalPrice = data.find(d => d.productUnitId === row.productUnitId)?.suggestedPrice || 0;
+                                  if (updated[row.productUnitId] === originalPrice) delete updated[row.productUnitId];
+                                  return updated;
+                                });
+                              }}
                               placeholder="0"
                               className={`w-32 text-right font-bold ${isChanged ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white'}`}
                             />

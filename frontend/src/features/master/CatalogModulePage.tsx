@@ -30,7 +30,7 @@ export default function CatalogModulePage() {
   };
 
   return (
-    <div className="p-6 bg-slate-50 min-h-full flex flex-col">
+    <div className="flex min-h-full flex-col bg-slate-50 p-3 sm:p-4 lg:p-5">
       {/* Header Navigasi Berjejer Seperti Semula + Dropdown untuk Kategori/Satuan/Brand */}
       <div className="flex border-b border-slate-200 mb-6 bg-white px-6 pt-4 rounded-t-xl shadow-sm overflow-x-auto custom-scrollbar items-center gap-2">
         {/* Tab 1: Master Produk */}

@@ -62,21 +62,12 @@ export default function SalesModulePage() {
   };
 
   return (
-    <div className="flex min-h-full flex-col bg-slate-50 p-3 sm:p-6">
+    <div className="flex min-h-full flex-col bg-slate-50 p-3 sm:p-4 lg:p-5">
       {message && (
         <div className="fixed right-4 top-4 z-[100] rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-xl">
           {message}
         </div>
       )}
-      <div className="mb-3">
-        <h1 className="text-xl font-black text-slate-900 sm:text-2xl">
-          Sales &amp; Customer Workspace
-        </h1>
-        <p className="mt-1 text-xs text-slate-500 sm:text-sm">
-          Pesanan, penjualan, reservasi stok, pembayaran, dan histori pelanggan
-          dalam satu alur.
-        </p>
-      </div>
       <div className="mb-4 flex shrink-0 items-center gap-1 overflow-x-auto rounded-t-xl border-b bg-white px-2 pt-3 shadow-sm sm:px-4">
         <Nav
           active={activeTab === "sales"}

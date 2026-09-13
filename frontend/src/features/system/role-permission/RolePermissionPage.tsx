@@ -16,7 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Shield, Save, X, Edit2, AlertTriangle } from "lucide-react";
+import { Save, X, Edit2, AlertTriangle } from "lucide-react";
 
 export default function RolePermissionPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -119,12 +119,7 @@ export default function RolePermissionPage() {
   return (
     <div className="p-6 bg-slate-50 min-h-full">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Shield className="w-6 h-6 text-slate-700" /> Role & Permission
-          </h2>
-          <p className="text-slate-500 text-sm mt-1">Konfigurasi hak akses (Permission) untuk Role ADMIN.</p>
-        </div>
+        <p className="text-sm text-slate-500">Konfigurasi hak akses (Permission) untuk Role ADMIN.</p>
 
         <div className="flex flex-wrap items-center gap-2">
           {!isEditing ? (

@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import InventoryPageSizeSelect from "@/features/inventory/InventoryPageSizeSelect";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { parseApiError } from "@/utils/error";
 import FifoOriginDetailDialog from "./FifoOriginDetailDialog";
 import InventoryOpeningBalancePanel from "@/features/opening-balance/InventoryOpeningBalancePanel";
@@ -152,17 +153,8 @@ export default function FifoModulePage() {
       ].filter((key) => Boolean(filters[key as keyof FifoFilters])).length,
     [filters],
   );
-
   return (
-    <div className="mx-auto w-full max-w-[1500px] p-3 sm:p-5 lg:p-7">
-      <div className="mb-4">
-        <h1 className="text-xl font-black text-slate-900 sm:text-2xl">
-          FIFO & Cost
-        </h1>
-        <p className="text-xs font-medium text-slate-500 sm:text-sm">
-          Pantau modal dan perjalanan setiap layer persediaan.
-        </p>
-      </div>
+    <div className="w-full p-3 sm:p-4 lg:p-5">
       <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl bg-slate-200/70 p-1.5 sm:flex sm:w-fit">
         <button
           onClick={() => switchTab("COST")}
@@ -225,62 +217,67 @@ export default function FifoModulePage() {
               label="Produk"
               value={filters.productId}
               onChange={(value) => patchFilter({ productId: value })}
-            >
-              <option value="">Semua produk</option>
-              {options?.products.map((item) => (
-                <option key={item.productId} value={item.productId}>
-                  {item.productName}
-                </option>
-              ))}
-            </FilterSelect>
+              placeholder="Semua produk"
+              options={[
+                { value: "", label: "Semua produk" },
+                ...(options?.products.map((item) => ({
+                  value: item.productId,
+                  label: item.productName,
+                })) ?? []),
+              ]}
+            />
             <FilterSelect
               label="Kategori"
               value={filters.categoryId}
               onChange={(value) => patchFilter({ categoryId: value })}
-            >
-              <option value="">Semua kategori</option>
-              {options?.categories.map((item) => (
-                <option key={item.categoryId} value={item.categoryId}>
-                  {item.categoryName}
-                </option>
-              ))}
-            </FilterSelect>
+              placeholder="Semua kategori"
+              options={[
+                { value: "", label: "Semua kategori" },
+                ...(options?.categories.map((item) => ({
+                  value: item.categoryId,
+                  label: item.categoryName,
+                })) ?? []),
+              ]}
+            />
             <FilterSelect
               label="Brand"
               value={filters.brandId}
               onChange={(value) => patchFilter({ brandId: value })}
-            >
-              <option value="">Semua brand</option>
-              {options?.brands.map((item) => (
-                <option key={item.brandId} value={item.brandId}>
-                  {item.brandName}
-                </option>
-              ))}
-            </FilterSelect>
+              placeholder="Semua brand"
+              options={[
+                { value: "", label: "Semua brand" },
+                ...(options?.brands.map((item) => ({
+                  value: item.brandId,
+                  label: item.brandName,
+                })) ?? []),
+              ]}
+            />
             <FilterSelect
               label="Supplier"
               value={filters.supplierId}
               onChange={(value) => patchFilter({ supplierId: value })}
-            >
-              <option value="">Semua supplier</option>
-              {options?.suppliers.map((item) => (
-                <option key={item.supplierId} value={item.supplierId}>
-                  {item.supplierName}
-                </option>
-              ))}
-            </FilterSelect>
+              placeholder="Semua supplier"
+              options={[
+                { value: "", label: "Semua supplier" },
+                ...(options?.suppliers.map((item) => ({
+                  value: item.supplierId,
+                  label: item.supplierName,
+                })) ?? []),
+              ]}
+            />
             <FilterSelect
               label="Sumber layer"
               value={filters.originType}
               onChange={(value) => patchFilter({ originType: value })}
-            >
-              <option value="">Semua sumber</option>
-              {options?.originTypes.map((type) => (
-                <option key={type} value={type}>
-                  {originLabels[type] ?? type}
-                </option>
-              ))}
-            </FilterSelect>
+              placeholder="Semua sumber"
+              options={[
+                { value: "", label: "Semua sumber" },
+                ...(options?.originTypes.map((type) => ({
+                  value: type,
+                  label: originLabels[type] ?? type,
+                })) ?? []),
+              ]}
+            />
             {tab === "HISTORY" && (
               <FilterSelect
                 label="Status layer"
@@ -288,11 +285,13 @@ export default function FifoModulePage() {
                 onChange={(value) =>
                   patchFilter({ status: value as FifoFilters["status"] })
                 }
-              >
-                <option value="ALL">Semua status</option>
-                <option value="ACTIVE">Masih tersedia</option>
-                <option value="DEPLETED">Sudah habis</option>
-              </FilterSelect>
+                placeholder="Semua status"
+                options={[
+                  { value: "ALL", label: "Semua status" },
+                  { value: "ACTIVE", label: "Masih tersedia" },
+                  { value: "DEPLETED", label: "Sudah habis" },
+                ]}
+              />
             )}
             <DateFilter
               label="Dari tanggal dibuat"
@@ -579,24 +578,28 @@ function FilterSelect({
   label,
   value,
   onChange,
-  children,
+  placeholder,
+  options,
 }: {
   label: string;
   value?: string;
   onChange: (value: string) => void;
-  children: React.ReactNode;
+  placeholder: string;
+  options: { value: string; label: string }[];
 }) {
   return (
-    <label className="text-[10px] font-bold uppercase text-slate-500">
-      {label}
-      <select
+    <div>
+      <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+        {label}
+      </label>
+      <SearchableSelect
         value={value ?? ""}
-        onChange={(event) => onChange(event.target.value)}
-        className="mt-1 h-9 w-full rounded-md border bg-white px-2 text-xs font-medium normal-case"
-      >
-        {children}
-      </select>
-    </label>
+        onChange={onChange}
+        placeholder={placeholder}
+        options={options}
+        className="text-xs font-medium"
+      />
+    </div>
   );
 }
 function DateFilter({

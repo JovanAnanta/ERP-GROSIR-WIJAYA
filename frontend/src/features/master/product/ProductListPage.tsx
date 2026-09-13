@@ -5,6 +5,7 @@ import { hasPermission, useAuthStore } from "@/store/authStore";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -307,7 +308,7 @@ export default function ProductListPage() {
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label className="font-bold text-slate-700">Peringatan Stok Minimum (Inventory)</Label>
-                <Input type="number" min="0" value={formData.minimumInventoryQty} onChange={(e) => setFormData({ ...formData, minimumInventoryQty: e.target.value })} disabled={isSubmitting} className="bg-white border-slate-300 max-w-[200px]" />
+                <FormattedNumberInput min={0} value={formData.minimumInventoryQty} onChange={(value) => setFormData({ ...formData, minimumInventoryQty: value ? String(value) : "" })} disabled={isSubmitting} className="h-10 max-w-[200px] bg-white border-slate-300" />
               </div>
             </div>
 
@@ -331,11 +332,11 @@ export default function ProductListPage() {
                     </div>
                     <div className="w-full sm:w-28 space-y-2">
                       <Label className={`text-xs font-extrabold ${u.isActive ? 'text-slate-600' : 'text-slate-400'}`}>Konversi</Label>
-                      <Input type="number" min="1" value={u.conversionFactor} onChange={(e) => updateUnitField(u.key, 'conversionFactor', e.target.value)} disabled={u.isParent || isSubmitting || !u.isActive} className={`h-10 font-bold ${u.isParent || !u.isActive ? 'bg-slate-100 text-slate-500' : 'bg-white border-slate-300'}`} />
+                      <FormattedNumberInput allowDecimal min={1} value={u.conversionFactor} onChange={(value) => updateUnitField(u.key, 'conversionFactor', String(value))} disabled={u.isParent || isSubmitting || !u.isActive} className={`h-10 font-bold ${u.isParent || !u.isActive ? 'bg-slate-100 text-slate-500' : 'bg-white border-slate-300'}`} />
                     </div>
                     <div className="w-full sm:w-24 space-y-2">
                       <Label className={`text-xs font-extrabold ${u.isActive ? 'text-slate-600' : 'text-slate-400'}`}>Urutan Tampil</Label>
-                      <Input type="number" min="1" value={u.displayOrder} onChange={(e) => updateUnitField(u.key, 'displayOrder', e.target.value)} disabled={isSubmitting || !u.isActive} className="bg-white h-10 border-slate-300 font-bold" />
+                      <FormattedNumberInput min={1} value={u.displayOrder} onChange={(value) => updateUnitField(u.key, 'displayOrder', String(value))} disabled={isSubmitting || !u.isActive} className="bg-white h-10 border-slate-300 font-bold" />
                     </div>
 
                     <div className="flex items-end gap-2 pt-2 sm:pt-0">

@@ -47,16 +47,16 @@ export default function PriceBrochureTab() {
         <html>
           <head>
             <title></title>
-            <script src="https://cdn.tailwindcss.com"></script>
             <style>
-              @page { size: A4 portrait; margin: 5mm; }
+              @page { size: A4 portrait; margin: 5mm 6mm; }
               body { font-family: ui-sans-serif, system-ui, sans-serif; background: white; color: black; -webkit-print-color-adjust: exact; }
-              table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; }
-              th { background-color: #f1f5f9 !important; text-transform: uppercase; font-weight: bold; border: 1px solid #cbd5e1; padding: 5px 6px; text-align: left; }
-              td { border-bottom: 1px solid #e2e8f0; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; padding: 4px 6px; font-weight: 500; }
+              #printable-brochure { padding: 4mm !important; }
+              table { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 9.5px; }
+              th { background-color: #f1f5f9 !important; text-transform: uppercase; font-weight: 700; border: 1px solid #cbd5e1; padding: 3px 5px; text-align: left; font-size: 9px; }
+              td { border-bottom: 1px solid #e2e8f0; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; padding: 2.5px 5px; font-weight: 500; font-size: 9.5px; }
               tr { border-bottom: 1px solid #cbd5e1; page-break-inside: avoid; }
               .text-right { text-align: right; }
-              h2 { font-size: 12px; font-weight: 900; text-transform: uppercase; background: #f8fafc; border-left: 4px solid #326dc8; padding: 3px 6px; margin-bottom: 4px; color: #1e293b; }
+              h2 { font-size: 10.5px; font-weight: 800; text-transform: uppercase; background: #f8fafc; border-left: 3px solid #326dc8; padding: 2px 5px; margin-bottom: 3px; color: #1e293b; }
               thead { display: table-header-group; }
               input { 
                 background: transparent; border: none; outline: none; width: 100%; 
@@ -131,32 +131,32 @@ export default function PriceBrochureTab() {
         </Button>
       </div>
 
-      <div className="flex-1 overflow-auto p-4 sm:p-8 flex justify-center">
-        <div id="printable-brochure" className="bg-white w-full max-w-[210mm] shadow-xl border border-slate-200 rounded-sm p-8 sm:p-10">
+      <div className="flex-1 overflow-auto p-3 sm:p-6 flex justify-center">
+        <div id="printable-brochure" className="bg-white w-full max-w-[210mm] shadow-xl border border-slate-200 rounded-sm p-5 sm:p-7">
           
-          <div className="text-center border-b-2 border-slate-800 pb-4 mb-4">
+          <div className="text-center border-b-2 border-slate-800 pb-2.5 mb-2.5">
             {storeInfo.logoBase64 && (
-              <img src={storeInfo.logoBase64} alt="Logo" className="h-16 object-contain mx-auto mb-2" />
+              <img src={storeInfo.logoBase64} alt="Logo" className="h-10 object-contain mx-auto mb-1" />
             )}
-            <h1 className="text-3xl font-black text-slate-900 uppercase tracking-widest">
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-wider">
               {storeInfo.companyName.replace(/ERP\s*/gi, '')}
             </h1>
-            <p className="text-xs font-semibold text-slate-600 mt-1 whitespace-pre-wrap">{storeInfo.address}</p>
-            <p className="text-xs font-semibold text-slate-600 mt-0.5">Tlp/WA: {storeInfo.phone}</p>
-            <p className="text-[11px] text-slate-500 mt-2 tracking-wide font-bold uppercase bg-slate-100 inline-block px-3 py-1 rounded">
+            <p className="text-[11px] font-medium text-slate-600 mt-0.5 whitespace-pre-wrap">{storeInfo.address}</p>
+            <p className="text-[11px] font-medium text-slate-600 mt-0.5">Tlp/WA: {storeInfo.phone}</p>
+            <p className="text-[10px] text-slate-600 mt-1 tracking-wide font-bold uppercase bg-slate-100 inline-block px-2.5 py-0.5 rounded">
               Daftar Harga Grosir Khusus Pelanggan Terdaftar
             </p>
           </div>
 
-          <div className="text-[11px] font-bold text-slate-700 mb-6">
+          <div className="text-[10px] font-bold text-slate-700 mb-3">
             Periode Berlaku: Harga per {currentDate}
           </div>
 
           {/* TABEL 1: ROKOK */}
           {b?.rokok && b.rokok.length > 0 && (
-            <div className="mb-6">
+            <div className="mb-4">
               <h2>Kategori Rokok</h2>
-              <table className="w-full text-xs text-left">
+              <table className="w-full text-[10.5px] text-left">
                 <thead>
                   <tr>
                     <th className="w-[35%]">Nama Barang</th>
@@ -169,17 +169,17 @@ export default function PriceBrochureTab() {
                 <tbody>
                   {b.rokok.map(item => (
                     <tr key={item.productId} className="hover:bg-blue-50/50 border-b border-slate-200">
-                      <td className="font-bold text-slate-800 p-1.5">{item.productName}</td>
-                      <td className="text-right p-1">
+                      <td className="font-bold text-slate-800 p-1">{item.productName}</td>
+                      <td className="text-right p-0.5">
                         <input type="text" defaultValue={getPrice(item.units, ['DUS'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded transition-colors" />
                       </td>
-                      <td className="text-right p-1">
+                      <td className="text-right p-0.5">
                         <input type="text" defaultValue={getPrice(item.units, ['BAL'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded transition-colors" />
                       </td>
-                      <td className="text-right p-1">
+                      <td className="text-right p-0.5">
                         <input type="text" defaultValue={getPrice(item.units, ['SLOF'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded transition-colors" />
                       </td>
-                      <td className="text-right p-1">
+                      <td className="text-right p-0.5">
                         <input type="text" defaultValue={getPrice(item.units, ['BUNGKUS', 'BKS', 'PCS'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded transition-colors" />
                       </td>
                     </tr>
@@ -191,9 +191,9 @@ export default function PriceBrochureTab() {
 
           {/* TABEL 2: ACAK / KELONTONG */}
           {b?.acak && b.acak.length > 0 && (
-            <div className="mb-6">
+            <div className="mb-4">
               <h2>Barang Kelontong & Kebutuhan Lainnya</h2>
-              <table className="w-full text-xs text-left">
+              <table className="w-full text-[10.5px] text-left">
                 <thead>
                   <tr>
                     <th className="w-[35%]">Nama Barang</th>
@@ -206,17 +206,17 @@ export default function PriceBrochureTab() {
                 <tbody>
                   {b.acak.map(item => (
                     <tr key={item.productId} className="hover:bg-blue-50/50 border-b border-slate-200">
-                      <td className="font-bold text-slate-800 p-1.5">{item.productName}</td>
-                      <td className="text-right p-1">
+                      <td className="font-bold text-slate-800 p-1">{item.productName}</td>
+                      <td className="text-right p-0.5">
                         <input type="text" defaultValue={getPrice(item.units, ['DUS', 'KARTON', 'BAL'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded transition-colors" />
                       </td>
-                      <td className="text-right p-1">
+                      <td className="text-right p-0.5">
                         <input type="text" defaultValue={getPrice(item.units, ['PAK', 'PACK', 'BOX', 'RENCENG', 'SLOF'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded transition-colors" />
                       </td>
-                      <td className="text-right p-1">
+                      <td className="text-right p-0.5">
                         <input type="text" defaultValue={getPrice(item.units, ['LUSIN'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded transition-colors" />
                       </td>
-                      <td className="text-right p-1">
+                      <td className="text-right p-0.5">
                         <input type="text" defaultValue={getPrice(item.units, ['PCS', 'BUNGKUS', 'BKS', 'SACHET', 'BOTOL', 'GELAS', 'BIJI', 'ROLL', 'LEMBAR'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded transition-colors" />
                       </td>
                     </tr>
@@ -228,9 +228,9 @@ export default function PriceBrochureTab() {
 
           {/* TABEL 3: MINUMAN */}
           {b?.minuman && b.minuman.length > 0 && (
-            <div className="mb-6">
+            <div className="mb-4">
               <h2>Kategori Minuman</h2>
-              <table className="w-full text-xs text-left">
+              <table className="w-full text-[10.5px] text-left">
                 <thead>
                   <tr>
                     <th className="w-[35%]">Nama Barang</th>
@@ -243,17 +243,17 @@ export default function PriceBrochureTab() {
                 <tbody>
                   {b.minuman.map(item => (
                     <tr key={item.productId} className="hover:bg-blue-50/50 border-b border-slate-200">
-                      <td className="font-bold text-slate-800 p-1.5">{item.productName}</td>
-                      <td className="text-right p-1">
+                      <td className="font-bold text-slate-800 p-1">{item.productName}</td>
+                      <td className="text-right p-0.5">
                         <input type="text" defaultValue={getPrice(item.units, ['10 DUS', '10DUS'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded transition-colors" />
                       </td>
-                      <td className="text-right p-1">
+                      <td className="text-right p-0.5">
                         <input type="text" defaultValue={getPrice(item.units, ['DUS', 'KARTON'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded transition-colors" />
                       </td>
-                      <td className="text-right p-1">
+                      <td className="text-right p-0.5">
                         <input type="text" defaultValue={getPrice(item.units, ['LUSIN', 'PAK', 'PACK'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded transition-colors" />
                       </td>
-                      <td className="text-right p-1">
+                      <td className="text-right p-0.5">
                         <input type="text" defaultValue={getPrice(item.units, ['PCS', 'BOTOL', 'GELAS', 'KALENG', 'CUP'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded transition-colors" />
                       </td>
                     </tr>
@@ -265,23 +265,23 @@ export default function PriceBrochureTab() {
 
           {/* TABEL 4: BAHAN CURAH & REPACK */}
           {b?.bulkRepack && b.bulkRepack.length > 0 && (
-            <div className="mb-6">
+            <div className="mb-4">
               <h2>Bahan Curah & Repack</h2>
-              <table className="w-full text-xs text-left">
+              <table className="w-full text-[10.5px] text-left">
                 <thead><tr><th className="w-[40%]">Nama Barang</th><th className="text-right">Harga Bal</th><th className="text-right">Harga Kilogram</th><th className="text-right">Harga Pcs</th></tr></thead>
                 <tbody>{b.bulkRepack.map(item => (
                   <tr key={item.productId} className="hover:bg-blue-50/50 border-b border-slate-200">
-                    <td className="font-bold text-slate-800 p-1.5">{item.productName}</td>
-                    <td className="text-right p-1"><input type="text" defaultValue={getPrice(item.units, ['BAL'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded" /></td>
-                    <td className="text-right p-1"><input type="text" defaultValue={getPrice(item.units, ['KG', 'KILOGRAM'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded" /></td>
-                    <td className="text-right p-1"><input type="text" defaultValue={getPrice(item.units, ['PCS', 'BUNGKUS', 'BKS'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded" /></td>
+                    <td className="font-bold text-slate-800 p-1">{item.productName}</td>
+                    <td className="text-right p-0.5"><input type="text" defaultValue={getPrice(item.units, ['BAL'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded" /></td>
+                    <td className="text-right p-0.5"><input type="text" defaultValue={getPrice(item.units, ['KG', 'KILOGRAM'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded" /></td>
+                    <td className="text-right p-0.5"><input type="text" defaultValue={getPrice(item.units, ['PCS', 'BUNGKUS', 'BKS'])} onChange={handleEditChange} className="w-full text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 ring-blue-400 outline-none px-1 rounded" /></td>
                   </tr>
                 ))}</tbody>
               </table>
             </div>
           )}
 
-          <div className="mt-6 pt-3 border-t-2 border-slate-300 text-[10px] text-slate-600 font-medium leading-relaxed italic">
+          <div className="mt-4 pt-2 border-t-2 border-slate-300 text-[9px] text-slate-600 font-medium leading-relaxed italic">
             * Harga yang tertera pada katalog ini dapat berubah sewaktu-waktu tanpa pemberitahuan sebelumnya sesuai dengan kebijakan harga grosir terbaru. Jika barang yang Anda butuhkan tidak tertera di daftar ini, silakan hubungi Admin kami.
           </div>
         </div>

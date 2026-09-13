@@ -21,7 +21,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Settings,
   Save,
   X,
   Edit2,
@@ -158,14 +157,9 @@ export default function SystemConfigurationPage() {
   return (
     <div className="p-6 bg-slate-50 min-h-full">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Settings className="w-6 h-6 text-slate-700" /> System Configuration
-          </h2>
-          <p className="text-slate-500 text-sm mt-1">
-            Pengaturan identitas perusahaan dan format global sistem.
-          </p>
-        </div>
+        <p className="text-sm text-slate-500">
+          Pengaturan identitas perusahaan dan format global sistem.
+        </p>
 
         <div className="flex items-center gap-2">
           {!isEditing ? (

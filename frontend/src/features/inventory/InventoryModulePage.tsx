@@ -9,6 +9,8 @@ import {
   DialogOverlay,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -442,31 +444,19 @@ export default function InventoryModulePage() {
   }
 
   return (
-    <div className="min-h-full bg-slate-50 p-6">
-      <div className="mb-5 flex flex-col items-start gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-xl font-extrabold text-slate-900 sm:text-2xl">
-            Inventory & Warehouse
-          </h1>
-
-          <p className="text-sm font-medium text-slate-500">
-            Koreksi stok dan hasil perhitungan fisik yang dapat ditelusuri.
-          </p>
-        </div>
-
+    <div className="min-h-full bg-slate-50 p-3 sm:p-4 lg:p-5">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <InventorySectionNav current={workspace} onChange={changeWorkspace} />
         {canCreate && (
           <Button
             onClick={resetForm}
-            className="w-full bg-[#326dc8] text-white sm:w-auto"
+            className="w-full bg-[#326dc8] text-white sm:w-auto shadow-sm"
           >
             <Plus className="mr-2 h-4 w-4" />
             Buat {kind === "adjustments" ? "Adjustment" : "Opname"}
           </Button>
         )}
       </div>
-
-      <div className="mb-4 space-y-2">
-        <InventorySectionNav current={workspace} onChange={changeWorkspace} />
         <div className="grid gap-2 rounded-lg border bg-white p-3 sm:ml-auto sm:w-fit sm:grid-cols-2">
           <label className="text-[10px] font-bold uppercase text-slate-500">
             Dari tanggal
@@ -527,7 +517,6 @@ export default function InventoryModulePage() {
             }}
           />
         </div>
-      </div>
 
       {!formOpen && error && (
         <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">
@@ -663,25 +652,24 @@ export default function InventoryModulePage() {
             </label>
 
             {kind === "opnames" && (
-              <label className="text-[11px] font-bold uppercase text-slate-600">
-                Supplier (Opsional)
-                <select
+              <div>
+                <label className="text-[11px] font-bold uppercase text-slate-600 block mb-1">
+                  Supplier (Opsional)
+                </label>
+                <SearchableSelect
                   value={supplierId}
-                  onChange={(event) => setSupplierId(event.target.value)}
-                  className="mt-1 h-9 w-full rounded-md border bg-white px-3 text-xs font-semibold"
-                >
-                  <option value="">Tanpa filter supplier</option>
-
-                  {suppliers.map((supplier) => (
-                    <option
-                      key={supplier.supplierId}
-                      value={supplier.supplierId}
-                    >
-                      {supplier.supplierName}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  onChange={setSupplierId}
+                  placeholder="Tanpa filter supplier"
+                  options={[
+                    { value: "", label: "Tanpa filter supplier" },
+                    ...suppliers.map((supplier) => ({
+                      value: supplier.supplierId,
+                      label: supplier.supplierName,
+                    })),
+                  ]}
+                  className="text-xs font-semibold"
+                />
+              </div>
             )}
 
             <label
@@ -861,14 +849,13 @@ export default function InventoryModulePage() {
                         </td>
 
                         <td className="border-r p-1">
-                          <select
+                          <SearchableSelect
                             value=""
-                            onChange={(event) => addItem(event.target.value)}
-                            className="h-8 w-full border-none bg-transparent px-2 font-semibold outline-none"
-                          >
-                            <option value="">Pilih produk...</option>
-
-                            {products
+                            onChange={(val) => {
+                              if (val) addItem(val);
+                            }}
+                            placeholder="Pilih produk..."
+                            options={products
                               .filter(
                                 (product) =>
                                   !items.some(
@@ -877,16 +864,12 @@ export default function InventoryModulePage() {
                                       product.productUnitId,
                                   ),
                               )
-                              .map((product) => (
-                                <option
-                                  key={product.productUnitId}
-                                  value={product.productUnitId}
-                                >
-                                  {product.productName} · Stok{" "}
-                                  {product.stockDisplay}
-                                </option>
-                              ))}
-                          </select>
+                              .map((product) => ({
+                                value: product.productUnitId,
+                                label: `${product.productName} · Stok ${product.stockDisplay}`,
+                              }))}
+                            className="text-xs font-semibold"
+                          />
                         </td>
 
                         <td
@@ -943,14 +926,12 @@ export default function InventoryModulePage() {
                           </td>
 
                           <td className="border-r p-1">
-                            <input
-                              type="number"
-                              min="0.001"
-                              step="0.001"
-                              value={item.quantity || ""}
-                              onChange={(event) =>
+                            <FormattedNumberInput
+                              allowDecimal
+                              value={item.quantity || 0}
+                              onChange={(val) =>
                                 patchItem(index, {
-                                  quantity: Number(event.target.value),
+                                  quantity: val,
                                 })
                               }
                               className="h-8 w-full rounded border text-center font-bold"
@@ -959,18 +940,14 @@ export default function InventoryModulePage() {
 
                           <td className="border-r p-1">
                             {item.direction === "IN" ? (
-                              <input
-                                type="number"
-                                min="0"
-                                value={item.unitCost ?? ""}
-                                onChange={(event) =>
+                              <FormattedNumberInput
+                                value={item.unitCost ?? 0}
+                                onChange={(val) =>
                                   patchItem(index, {
-                                    unitCost: event.target.value
-                                      ? Number(event.target.value)
-                                      : undefined,
+                                    unitCost: val || undefined,
                                   })
                                 }
-                                className="h-8 w-full rounded border px-2"
+                                className="h-8 w-full rounded border px-2 text-right"
                                 placeholder="Isi jika belum ada histori"
                               />
                             ) : (
@@ -987,14 +964,12 @@ export default function InventoryModulePage() {
                           </td>
 
                           <td className="border-r p-1">
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.001"
-                              value={item.warehouseQty || ""}
-                              onChange={(event) =>
+                            <FormattedNumberInput
+                              allowDecimal
+                              value={item.warehouseQty || 0}
+                              onChange={(val) =>
                                 patchItem(index, {
-                                  warehouseQty: Number(event.target.value),
+                                  warehouseQty: val,
                                 })
                               }
                               className="h-8 w-full rounded border text-center font-bold"
@@ -1016,23 +991,19 @@ export default function InventoryModulePage() {
 
                           <td className="border-r p-1">
                             {variance > 0 ? (
-                              <input
-                                type="number"
-                                min="0"
-                                value={item.unitCost ?? ""}
-                                onChange={(event) =>
+                              <FormattedNumberInput
+                                value={item.unitCost ?? 0}
+                                onChange={(val) =>
                                   patchItem(index, {
-                                    unitCost: event.target.value
-                                      ? Number(event.target.value)
-                                      : undefined,
+                                    unitCost: val || undefined,
                                   })
                                 }
-                                className="h-8 w-full rounded border px-2"
+                                className="h-8 w-full rounded border px-2 text-right"
                                 placeholder="Harga modal per unit"
                               />
                             ) : (
-                              <span className="px-2 text-slate-400">
-                                Tidak diperlukan
+                              <span className="px-2 text-[10px] font-semibold text-slate-400">
+                                Mengikuti FIFO tertua
                               </span>
                             )}
                           </td>

@@ -14,6 +14,8 @@ import { createThermalPrintJob, escapeReceiptHtml, thermalReceiptFooter, thermal
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import {
   Select,
   SelectContent,
@@ -72,17 +74,6 @@ const createEmptyRow = (): PIItemForm => ({
   availableQty: 0,
   note: "",
 });
-
-const formatNumberId = (val: number): string => {
-  if (isNaN(val) || val === 0) return "";
-  return val.toLocaleString("id-ID");
-};
-
-const parseNumberId = (str: string): number => {
-  const clean = str.replace(/\./g, "").replace(/,/g, ".");
-  const num = parseFloat(clean);
-  return isNaN(num) ? 0 : num;
-};
 
 const escapeHtml = (value: string): string =>
   value.replace(
@@ -711,67 +702,34 @@ export default function CreatePurchaseInvoiceTab({
           <Label className="font-bold text-emerald-700 text-[10px] uppercase">
             Tarik Referensi PO (Opsional)
           </Label>
-          <Select value={purchaseOrderId} onValueChange={handlePOChange}>
-            <SelectTrigger className="bg-emerald-50 font-bold h-8 text-xs border-emerald-200 focus:ring-emerald-500">
-              <SelectValue placeholder="-- Buat Faktur Manual --">
-                {purchaseOrderId === "NONE"
-                  ? "-- Buat Faktur Manual (Tanpa PO) --"
-                  : readyPOs.find(
-                      (po) => po.purchaseOrderId === purchaseOrderId,
-                    )?.purchaseOrderNumber}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent className="bg-white z-50 border border-slate-200 shadow-lg">
-              <SelectItem
-                value="NONE"
-                className="text-xs italic text-slate-500"
-              >
-                -- Buat Faktur Manual (Tanpa PO) --
-              </SelectItem>
-              {readyPOs.map((po) => (
-                <SelectItem
-                  key={po.purchaseOrderId}
-                  value={po.purchaseOrderId}
-                  className="text-xs font-bold text-[#326dc8]"
-                >
-                  {po.purchaseOrderNumber} - {po.supplierName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={purchaseOrderId === "NONE" ? "" : purchaseOrderId}
+            onChange={(val) => handlePOChange(val || "NONE")}
+            placeholder="-- Buat Faktur Manual (Tanpa PO) --"
+            options={readyPOs.map((po) => ({
+              value: po.purchaseOrderId,
+              label: `${po.purchaseOrderNumber} - ${po.supplierName}`,
+            }))}
+            allowClear
+            triggerClassName="bg-emerald-50 font-bold border-emerald-200"
+          />
         </div>
 
         <div className="col-span-1 md:col-span-2">
           <Label className="font-bold text-slate-600 text-[10px] uppercase">
             Supplier *
           </Label>
-          <Select
-            value={supplierId || null}
-            onValueChange={handleSupplierChange}
+          <SearchableSelect
+            value={supplierId}
+            onChange={handleSupplierChange}
             disabled={purchaseOrderId !== "NONE"}
-          >
-            <SelectTrigger
-              className={`bg-white font-bold h-8 text-xs border-slate-300 ${purchaseOrderId !== "NONE" ? "opacity-70 bg-slate-100" : ""}`}
-            >
-              <SelectValue placeholder="-- Pilih Supplier --">
-                {
-                  suppliers.find((s) => s.supplierId === supplierId)
-                    ?.supplierName
-                }
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent className="bg-white z-50 border border-slate-200 shadow-lg">
-              {suppliers.map((s) => (
-                <SelectItem
-                  key={s.supplierId}
-                  value={s.supplierId}
-                  className="text-xs"
-                >
-                  {s.supplierName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            placeholder="-- Pilih Supplier --"
+            options={suppliers.map((s) => ({
+              value: s.supplierId,
+              label: s.supplierName,
+            }))}
+            triggerClassName={purchaseOrderId !== "NONE" ? "opacity-70 bg-slate-100" : ""}
+          />
         </div>
 
         <div className="col-span-1 md:col-span-2">
@@ -885,63 +843,36 @@ export default function CreatePurchaseInvoiceTab({
                 </td>
 
                 <td className="p-1 border-r border-slate-200">
-                  <Select
-                    value={item.productId || null}
-                    onValueChange={(val) => handleProductChange(index, val)}
-                  >
-                    <SelectTrigger className="h-7 w-full justify-between rounded-sm border-none bg-transparent text-left text-[11px] font-bold shadow-none focus:ring-1 focus:ring-[#00509e]">
-                      <SelectValue placeholder="Pilih Produk...">
-                        {allProducts.find((p) => p.productId === item.productId)
-                          ?.productName ||
-                          item.productName ||
-                          "Pilih Produk..."}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent className="bg-white z-50 max-h-[250px] border-slate-200 shadow-lg">
-                      {allProducts.map((p) => (
-                        <SelectItem
-                          key={p.productId}
-                          value={p.productId}
-                          className="text-xs cursor-pointer"
-                        >
-                          {p.productName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    size="sm"
+                    value={item.productId}
+                    onChange={(val) => handleProductChange(index, val)}
+                    placeholder="Pilih Produk..."
+                    options={allProducts.map((p) => ({
+                      value: p.productId,
+                      label: p.productName,
+                    }))}
+                    className="border-none shadow-none bg-transparent"
+                  />
                 </td>
 
                 <td className="p-1 border-r border-slate-200">
-                  <Select
-                    value={item.productUnitId || null}
-                    onValueChange={(val) => handleUnitChange(index, val)}
+                  <SearchableSelect
+                    size="sm"
+                    value={item.productUnitId}
+                    onChange={(val) => handleUnitChange(index, val)}
                     disabled={!item.productId}
-                  >
-                    <SelectTrigger className="h-7 w-full justify-between rounded-sm border-none bg-transparent text-left text-[11px] font-bold shadow-none focus:ring-1 focus:ring-[#00509e]">
-                      <SelectValue placeholder="Pilih Satuan...">
-                        {allProducts
-                          .find((p) => p.productId === item.productId)
-                          ?.units.find(
-                            (u) => u.productUnitId === item.productUnitId,
-                          )?.unitName ||
-                          item.unitName ||
-                          "Pilih Satuan..."}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent className="bg-white z-50 border-slate-200 shadow-lg">
-                      {allProducts
+                    placeholder="Pilih Satuan..."
+                    options={
+                      allProducts
                         .find((p) => p.productId === item.productId)
-                        ?.units.map((u) => (
-                          <SelectItem
-                            key={u.productUnitId}
-                            value={u.productUnitId}
-                            className="text-xs cursor-pointer"
-                          >
-                            {u.unitName}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                        ?.units.map((u) => ({
+                          value: u.productUnitId,
+                          label: u.unitName,
+                        })) || []
+                    }
+                    className="border-none shadow-none bg-transparent"
+                  />
                 </td>
 
                 <td className="p-1 border-r border-slate-200 bg-slate-50 text-center">
@@ -953,26 +884,22 @@ export default function CreatePurchaseInvoiceTab({
                 </td>
 
                 <td className="p-1 border-r border-slate-200 bg-blue-50/30">
-                  <Input
-                    type="number"
-                    min="1"
+                  <FormattedNumberInput
+                    min={1}
+                    allowDecimal={true}
                     disabled={!item.productId}
                     value={item.productId ? item.purchasedQty : ""}
-                    onChange={(e) =>
-                      updateItemField(
-                        index,
-                        "purchasedQty",
-                        e.target.value === "" ? 0 : parseFloat(e.target.value),
-                      )
+                    onChange={(val) =>
+                      updateItemField(index, "purchasedQty", val)
                     }
-                    className="h-7 text-xs font-bold text-center border-none shadow-none focus-visible:ring-1 focus-visible:ring-[#00509e] rounded-sm bg-transparent text-[#00509e] disabled:opacity-50"
+                    className="h-7 text-xs font-bold text-center border-none shadow-none bg-transparent text-[#00509e] disabled:opacity-50"
                   />
                 </td>
 
                 <td className="p-1 border-r border-slate-200 bg-emerald-50/30">
-                  <Input
-                    type="number"
-                    min="0"
+                  <FormattedNumberInput
+                    min={0}
+                    allowDecimal={true}
                     disabled={!item.productId}
                     value={
                       item.productId
@@ -981,60 +908,48 @@ export default function CreatePurchaseInvoiceTab({
                           : item.bonusQty
                         : ""
                     }
-                    onChange={(e) =>
-                      updateItemField(
-                        index,
-                        "bonusQty",
-                        e.target.value === "" ? 0 : parseFloat(e.target.value),
-                      )
+                    onChange={(val) =>
+                      updateItemField(index, "bonusQty", val)
                     }
                     placeholder="0"
-                    className="h-7 text-xs font-bold text-center text-emerald-700 border-none shadow-none focus-visible:ring-1 focus-visible:ring-emerald-500 rounded-sm bg-transparent disabled:opacity-50"
+                    className="h-7 text-xs font-bold text-center text-emerald-700 border-none shadow-none bg-transparent disabled:opacity-50"
                   />
                 </td>
 
                 <td className="p-1 border-r border-slate-200 bg-white">
-                  <Input
-                    type="text"
+                  <FormattedNumberInput
+                    min={0}
                     disabled={!item.productId}
                     value={
                       item.productId
                         ? item.price === 0
                           ? ""
-                          : formatNumberId(item.price)
+                          : item.price
                         : ""
                     }
-                    onChange={(e) =>
-                      updateItemField(
-                        index,
-                        "price",
-                        parseNumberId(e.target.value),
-                      )
+                    onChange={(val) =>
+                      updateItemField(index, "price", val)
                     }
-                    className="h-7 text-xs font-bold text-right border-none shadow-none focus-visible:ring-1 focus-visible:ring-[#00509e] rounded-sm bg-transparent disabled:opacity-50"
+                    className="h-7 text-xs font-bold text-right border-none shadow-none bg-transparent disabled:opacity-50"
                     placeholder="0"
                   />
                 </td>
 
                 <td className="p-1 border-r border-slate-200 bg-amber-50/20">
-                  <Input
-                    type="text"
+                  <FormattedNumberInput
+                    min={0}
                     disabled={!item.productId}
                     value={
                       item.productId
                         ? item.subtotal === 0
                           ? ""
-                          : formatNumberId(item.subtotal)
+                          : item.subtotal
                         : ""
                     }
-                    onChange={(e) =>
-                      updateItemField(
-                        index,
-                        "subtotal",
-                        parseNumberId(e.target.value),
-                      )
+                    onChange={(val) =>
+                      updateItemField(index, "subtotal", val)
                     }
-                    className="h-7 text-xs font-bold text-right border-none shadow-none focus-visible:ring-1 focus-visible:ring-[#00509e] rounded-sm bg-transparent disabled:opacity-50 text-slate-800"
+                    className="h-7 text-xs font-bold text-right border-none shadow-none bg-transparent disabled:opacity-50 text-slate-800"
                     placeholder="0"
                   />
                 </td>
@@ -1186,43 +1101,28 @@ export default function CreatePurchaseInvoiceTab({
                       </SelectItem>
                     </SelectContent>
                   </Select>
-                  <Select
-                    value={financialAccountId || null}
-                    onValueChange={(val) => setFinancialAccountId(val || "")}
-                  >
-                    <SelectTrigger className="h-7 text-[10px] font-bold flex-1 bg-[#fff8e1] border-amber-300">
-                      <SelectValue placeholder="Pilih Kas/Bank *">
-                        {
-                          financialAccounts.find(
-                            (a) => a.financialAccountId === financialAccountId,
-                          )?.accountName
-                        }
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent className="bg-white z-50 border-slate-200 shadow-lg">
-                      {financialAccounts.map((a) => (
-                        <SelectItem
-                          key={a.financialAccountId}
-                          value={a.financialAccountId}
-                          className="text-[10px]"
-                        >
-                          {a.accountName} (Saldo: Rp{" "}
-                          {a.currentBalance.toLocaleString("id-ID")})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    size="sm"
+                    value={financialAccountId}
+                    onChange={(val) => setFinancialAccountId(val || "")}
+                    placeholder="Pilih Kas/Bank *"
+                    options={financialAccounts.map((a) => ({
+                      value: a.financialAccountId,
+                      label: a.accountName,
+                      sublabel: `Saldo: Rp ${a.currentBalance.toLocaleString("id-ID")}`,
+                    }))}
+                    className="flex-1 bg-[#fff8e1] border-amber-300 rounded-md"
+                  />
                 </div>
                 <div className="flex items-center gap-2">
                   <Label className="text-[10px] font-bold text-slate-500 uppercase w-[100px]">
                     Nominal Bayar:
                   </Label>
-                  <Input
-                    type="number"
-                    min="1"
+                  <FormattedNumberInput
+                    min={1}
                     value={paymentAmount || ""}
-                    onChange={(e) =>
-                      setPaymentAmount(parseFloat(e.target.value) || 0)
+                    onChange={(val) =>
+                      setPaymentAmount(val || 0)
                     }
                     className="h-7 text-xs font-bold flex-1 text-emerald-700 bg-emerald-50 border-emerald-300"
                   />
@@ -1259,15 +1159,14 @@ export default function CreatePurchaseInvoiceTab({
               <span className="font-bold text-slate-500">
                 Diskon Faktur Global (-)
               </span>
-              <Input
-                type="number"
-                min="0"
+              <FormattedNumberInput
+                min={0}
                 value={discountAmount === 0 ? "" : discountAmount}
-                onChange={(e) =>
-                  setDiscountAmount(parseFloat(e.target.value) || 0)
+                onChange={(val) =>
+                  setDiscountAmount(val || 0)
                 }
                 placeholder="0"
-                className="h-6 w-28 text-right text-xs font-bold text-rose-600 border-slate-300 focus-visible:ring-rose-500"
+                className="h-6 w-28 text-right text-xs font-bold text-rose-600 border-slate-300"
               />
             </div>
             <div className="flex justify-between items-center mt-1">

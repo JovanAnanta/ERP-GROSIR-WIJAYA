@@ -108,6 +108,7 @@ export function createThermalPrintJob(title: string): ThermalPrintJob {
       "Jendela cetak diblokir browser. Izinkan popup untuk aplikasi ERP ini.",
     );
   }
+  popup.opener = null;
 
   popup.document.write(
     `<!doctype html><html><head><title>${escapeReceiptHtml(title)}</title></head><body><div style="padding:16px;font-family:Arial,sans-serif;font-size:13px">Menyiapkan struk...</div></body></html>`,

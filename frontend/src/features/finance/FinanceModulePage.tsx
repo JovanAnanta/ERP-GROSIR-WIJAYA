@@ -23,6 +23,8 @@ import FinanceSourceDetailDialog from "./FinanceSourceDetailDialog";
 import FinanceAccountingReports from "./FinanceAccountingReports";
 import FinancialAccountBalanceCards from "./FinancialAccountBalanceCards";
 import FinancialAccountsManager from "./FinancialAccountsManager";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 
 const money = (value: number | string | null | undefined) =>
   `Rp ${Number(value ?? 0).toLocaleString("id-ID")}`;
@@ -191,22 +193,32 @@ export default function FinanceModulePage() {
   );
 
   return (
-    <div className="space-y-4 pb-10">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-xl font-black tracking-tight text-slate-900 sm:text-2xl">
-            Finance & Accounting
-          </h1>
-          <p className="text-sm text-slate-500">
-            Saldo kas/bank, arus uang, dan jejak dokumen dalam satu tempat.
-          </p>
+    <div className="flex min-h-full flex-col space-y-4 bg-slate-50 p-3 pb-10 sm:p-4 lg:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-1 gap-1 overflow-x-auto rounded-xl border bg-white p-1 shadow-sm">
+          {(
+            [
+              ["CASH", "Buku Kas"],
+              ["ACCOUNTS", "Akun Kas & Bank"],
+              ["JOURNAL", "Jurnal Umum"],
+              ["PROFIT_LOSS", "Laba Rugi"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => setActiveTab(value)}
+              className={`min-w-max flex-1 rounded-lg px-4 py-2 text-xs font-bold transition ${activeTab === value ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"}`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
         {activeTab === "CASH" && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 shrink-0">
             {canCreate && (
               <button
                 onClick={() => setModal("IN")}
-                className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white"
+                className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition"
               >
                 <Plus className="mr-1 inline h-4 w-4" />
                 Kas Masuk
@@ -215,7 +227,7 @@ export default function FinanceModulePage() {
             {canCreate && (
               <button
                 onClick={() => setModal("OUT")}
-                className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white"
+                className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-rose-700 transition"
               >
                 <Plus className="mr-1 inline h-4 w-4" />
                 Kas Keluar
@@ -224,7 +236,7 @@ export default function FinanceModulePage() {
             {canTransfer && (
               <button
                 onClick={() => setModal("TRANSFER")}
-                className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white"
+                className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-slate-800 transition"
               >
                 <ArrowRightLeft className="mr-1 inline h-4 w-4" />
                 Transfer
@@ -232,25 +244,6 @@ export default function FinanceModulePage() {
             )}
           </div>
         )}
-      </div>
-
-      <div className="flex gap-1 overflow-x-auto rounded-xl border bg-white p-1 shadow-sm">
-        {(
-          [
-            ["CASH", "Buku Kas"],
-            ["ACCOUNTS", "Akun Kas & Bank"],
-            ["JOURNAL", "Jurnal Umum"],
-            ["PROFIT_LOSS", "Laba Rugi"],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            onClick={() => setActiveTab(value)}
-            className={`min-w-max flex-1 rounded-lg px-4 py-2 text-xs font-bold transition ${activeTab === value ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"}`}
-          >
-            {label}
-          </button>
-        ))}
       </div>
 
       <div className={activeTab === "CASH" ? "contents" : "hidden"}>
@@ -355,27 +348,24 @@ export default function FinanceModulePage() {
           </label>
           <label className="text-[11px] font-bold text-slate-600">
             AKUN
-            <select
+            <SearchableSelect
+              size="sm"
               value={filters.accountId}
-              onChange={(event) =>
+              onChange={(val) =>
                 setFilters({
                   ...filters,
                   page: 1,
-                  accountId: event.target.value,
+                  accountId: val,
                 })
               }
-              className="mt-1 w-full rounded-lg border px-2 py-2 text-sm"
-            >
-              <option value="">Semua akun</option>
-              {accounts.map((account) => (
-                <option
-                  key={account.financialAccountId}
-                  value={account.financialAccountId}
-                >
-                  {account.accountName}
-                </option>
-              ))}
-            </select>
+              placeholder="Semua akun"
+              allowClear
+              options={accounts.map((account) => ({
+                value: account.financialAccountId,
+                label: account.accountName,
+              }))}
+              className="mt-1"
+            />
           </label>
           <label className="text-[11px] font-bold text-slate-600">
             ARAH
@@ -741,85 +731,69 @@ function FinanceEntryModal({
           {mode === "TRANSFER" ? (
             <>
               <Field label="AKUN ASAL">
-                <select
+                <SearchableSelect
                   value={selectedSourceAccountId}
-                  onChange={(e) =>
-                    setForm({ ...form, sourceAccountId: e.target.value })
+                  onChange={(val) =>
+                    setForm({ ...form, sourceAccountId: val })
                   }
-                  className="input"
-                >
-                  {accounts.map((a) => (
-                    <option
-                      key={a.financialAccountId}
-                      value={a.financialAccountId}
-                    >
-                      {a.accountName} · {money(a.currentBalance)}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Pilih akun asal..."
+                  options={accounts.map((a) => ({
+                    value: a.financialAccountId,
+                    label: a.accountName,
+                    sublabel: money(a.currentBalance),
+                  }))}
+                />
               </Field>
               <Field label="AKUN TUJUAN">
-                <select
+                <SearchableSelect
                   value={selectedDestinationAccountId}
-                  onChange={(e) =>
-                    setForm({ ...form, destinationAccountId: e.target.value })
+                  onChange={(val) =>
+                    setForm({ ...form, destinationAccountId: val })
                   }
-                  className="input"
-                >
-                  {accounts.map((a) => (
-                    <option
-                      key={a.financialAccountId}
-                      value={a.financialAccountId}
-                    >
-                      {a.accountName}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Pilih akun tujuan..."
+                  options={accounts.map((a) => ({
+                    value: a.financialAccountId,
+                    label: a.accountName,
+                    sublabel: money(a.currentBalance),
+                  }))}
+                />
               </Field>
             </>
           ) : (
             <>
               <Field label="AKUN KAS / BANK">
-                <select
+                <SearchableSelect
                   value={selectedAccountId}
-                  onChange={(e) =>
-                    setForm({ ...form, financialAccountId: e.target.value })
+                  onChange={(val) =>
+                    setForm({ ...form, financialAccountId: val })
                   }
-                  className="input"
-                >
-                  {accounts.map((a) => (
-                    <option
-                      key={a.financialAccountId}
-                      value={a.financialAccountId}
-                    >
-                      {a.accountName} · {money(a.currentBalance)}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Pilih akun..."
+                  options={accounts.map((a) => ({
+                    value: a.financialAccountId,
+                    label: a.accountName,
+                    sublabel: money(a.currentBalance),
+                  }))}
+                />
               </Field>
               <Field label="KATEGORI">
-                <select
+                <SearchableSelect
                   value={form.source}
-                  onChange={(e) => setForm({ ...form, source: e.target.value })}
-                  className="input"
-                >
-                  {categories[direction].map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setForm({ ...form, source: val })}
+                  placeholder="Pilih kategori..."
+                  options={categories[direction].map(([value, label]) => ({
+                    value,
+                    label,
+                  }))}
+                />
               </Field>
             </>
           )}
           <Field label="NOMINAL">
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
+            <FormattedNumberInput
+              min={1}
               value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value })}
-              className="input"
+              onChange={(val) => setForm({ ...form, amount: String(val) })}
+              className="h-10 bg-white text-xs font-bold"
               placeholder="Rp 0"
             />
           </Field>

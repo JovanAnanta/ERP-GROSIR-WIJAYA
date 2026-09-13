@@ -14,6 +14,8 @@ import {
   DialogOverlay,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { hasPermission, useAuthStore } from "@/store/authStore";
 import { parseApiError } from "@/utils/error";
 import { systemConfigApi } from "@/features/system/system-configuration.api";
@@ -459,27 +461,18 @@ export default function InventoryLoanPanel({
 
   return (
     <div className="min-h-full bg-slate-50 p-3 sm:p-6">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-xl font-black text-slate-900 sm:text-2xl">
-            Inventory & Warehouse
-          </h1>
-          <p className="text-xs font-medium text-slate-500 sm:text-sm">
-            Catat barang yang dipinjamkan atau dipinjam tanpa mencampurkannya
-            dengan transaksi jual-beli.
-          </p>
-        </div>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <InventorySectionNav current="LOAN" onChange={onNavigate} />
         {canCreate && (
           <Button
             onClick={reset}
-            className="w-full bg-[#326dc8] text-white sm:w-auto"
+            className="bg-[#326dc8] text-white shadow-sm shrink-0"
           >
             <Plus className="mr-2 h-4 w-4" />
             Buat Inventory Loan
           </Button>
         )}
       </div>
-      <InventorySectionNav current="LOAN" onChange={onNavigate} />
       <div className="mt-3 grid gap-2 rounded-xl border bg-white p-3 sm:grid-cols-2 lg:grid-cols-5">
         <input
           value={search}
@@ -650,26 +643,23 @@ export default function InventoryLoanPanel({
             </label>
             <label className="text-xs font-bold">
               {direction === "OUTGOING" ? "CUSTOMER" : "SUPPLIER"}
-              <select
+              <SearchableSelect
                 value={partnerId}
-                onChange={(e) => setPartnerId(e.target.value)}
-                className="mt-1 h-10 w-full rounded-md border bg-white px-3"
-              >
-                <option value="">
-                  Pilih {direction === "OUTGOING" ? "customer" : "supplier"}...
-                </option>
-                {direction === "OUTGOING"
-                  ? lookups.customers.map((x) => (
-                      <option key={x.customerId} value={x.customerId}>
-                        {x.customerName}
-                      </option>
-                    ))
-                  : lookups.suppliers.map((x) => (
-                      <option key={x.supplierId} value={x.supplierId}>
-                        {x.supplierName}
-                      </option>
-                    ))}
-              </select>
+                onChange={setPartnerId}
+                placeholder={`Pilih ${direction === "OUTGOING" ? "customer" : "supplier"}...`}
+                options={
+                  direction === "OUTGOING"
+                    ? lookups.customers.map((x) => ({
+                        value: x.customerId,
+                        label: x.customerName,
+                      }))
+                    : lookups.suppliers.map((x) => ({
+                        value: x.supplierId,
+                        label: x.supplierName,
+                      }))
+                }
+                className="mt-1"
+              />
             </label>
             <label className="text-xs font-bold">
               TANGGAL
@@ -717,67 +707,56 @@ export default function InventoryLoanPanel({
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.key} className="border-t">
-                    <td className="p-2">
-                      <select
+                    <td className="p-2 min-w-[240px]">
+                      <SearchableSelect
                         value={row.productUnitId}
-                        onChange={(e) => selectProduct(row, e.target.value)}
-                        className="h-9 w-full rounded border bg-white px-2"
-                      >
-                        <option value="">Pilih produk...</option>
-                        {lookups.products.map((p) => (
-                          <option key={p.productUnitId} value={p.productUnitId}>
-                            {p.productName} · stok {p.availableQty} {p.unitName}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(val) => selectProduct(row, val)}
+                        options={lookups.products.map((p) => ({
+                          value: p.productUnitId,
+                          label: `${p.productName} · stok ${p.availableQty} ${p.unitName}`,
+                        }))}
+                        placeholder="Pilih produk..."
+                        className="w-full text-xs"
+                      />
                     </td>
                     <td className="bg-slate-50 px-3 text-center font-bold text-slate-500">
                       {productMap.get(row.productUnitId)?.unitName ?? "-"}
                     </td>
                     <td>
-                      <input
-                        type="number"
-                        min="0"
-                        value={row.quantity || ""}
-                        onChange={(e) => {
-                          const quantity = Number(e.target.value);
+                      <FormattedNumberInput
+                        value={row.quantity || 0}
+                        onChange={(quantity) => {
                           patchRow(row.key, {
                             quantity,
                             totalCost: quantity * row.unitCost,
                           });
                         }}
-                        className="h-9 w-24 rounded border text-center"
+                        className="h-9 w-24 rounded border text-center font-medium"
                       />
                     </td>
                     <td>
-                      <input
-                        type="number"
-                        min="0"
-                        value={row.unitCost || ""}
-                        onChange={(e) => {
-                          const unitCost = Number(e.target.value);
+                      <FormattedNumberInput
+                        value={row.unitCost || 0}
+                        onChange={(unitCost) => {
                           patchRow(row.key, {
                             unitCost,
                             totalCost: row.quantity * unitCost,
                           });
                         }}
-                        className="h-9 w-32 rounded border px-2"
+                        className="h-9 w-32 rounded border px-2 text-right font-medium"
                       />
                     </td>
                     <td>
-                      <input
-                        type="number"
-                        min="0"
-                        value={row.totalCost || ""}
-                        onChange={(e) => {
-                          const totalCost = Number(e.target.value);
+                      <FormattedNumberInput
+                        value={row.totalCost || 0}
+                        onChange={(totalCost) => {
                           patchRow(row.key, {
                             totalCost,
                             unitCost:
                               row.quantity > 0 ? totalCost / row.quantity : 0,
                           });
                         }}
-                        className="h-9 w-36 rounded border px-2"
+                        className="h-9 w-36 rounded border px-2 text-right font-medium"
                       />
                     </td>
                     <td>
@@ -1140,56 +1119,48 @@ export default function InventoryLoanPanel({
                       </select>
                     </td>
                     <td>
-                      <input
-                        type="number"
-                        min="0"
+                      <FormattedNumberInput
+                        min={0}
                         max={row.outstanding}
-                        value={row.quantity || ""}
-                        onChange={(e) =>
+                        value={row.quantity || 0}
+                        onChange={(val) =>
                           patchResolution(row.key, {
-                            quantity: Number(e.target.value),
+                            quantity: val,
                           })
                         }
-                        className="h-9 w-24 rounded border text-center"
+                        className="h-9 w-24 rounded border text-center font-medium"
                       />
                     </td>
                     <td>
                       {row.type === "REPLACEMENT_PRODUCT" ? (
-                        <select
+                        <SearchableSelect
                           value={row.replacementProductUnitId}
-                          onChange={(e) =>
+                          onChange={(val) =>
                             patchResolution(row.key, {
-                              replacementProductUnitId: e.target.value,
+                              replacementProductUnitId: val,
                             })
                           }
-                          className="h-9 w-56 rounded border bg-white px-2"
-                        >
-                          <option value="">Pilih barang...</option>
-                          {lookups.products.map((p) => (
-                            <option
-                              key={p.productUnitId}
-                              value={p.productUnitId}
-                            >
-                              {p.productName} · {p.unitName}
-                            </option>
-                          ))}
-                        </select>
+                          options={lookups.products.map((p) => ({
+                            value: p.productUnitId,
+                            label: `${p.productName} · ${p.unitName}`,
+                          }))}
+                          placeholder="Pilih barang..."
+                          className="w-56 text-xs"
+                        />
                       ) : (
                         <span className="text-slate-400">-</span>
                       )}
                     </td>
                     <td>
                       {row.type === "REPLACEMENT_PRODUCT" ? (
-                        <input
-                          type="number"
-                          min="0"
-                          value={row.replacementQuantity || ""}
-                          onChange={(e) =>
+                        <FormattedNumberInput
+                          value={row.replacementQuantity || 0}
+                          onChange={(replacementQuantity) =>
                             patchResolution(row.key, {
-                              replacementQuantity: Number(e.target.value),
+                              replacementQuantity,
                             })
                           }
-                          className="h-9 w-24 rounded border text-center"
+                          className="h-9 w-24 rounded border text-center font-medium"
                         />
                       ) : (
                         "-"
@@ -1200,16 +1171,14 @@ export default function InventoryLoanPanel({
                     </td>
                     <td>
                       {row.type === "INVOICE_CONVERSION" ? (
-                        <input
-                          type="number"
-                          min="0"
-                          value={row.invoiceUnitPrice || ""}
-                          onChange={(e) =>
+                        <FormattedNumberInput
+                          value={row.invoiceUnitPrice || 0}
+                          onChange={(invoiceUnitPrice) =>
                             patchResolution(row.key, {
-                              invoiceUnitPrice: Number(e.target.value),
+                              invoiceUnitPrice,
                             })
                           }
-                          className="h-9 w-32 rounded border px-2"
+                          className="h-9 w-32 rounded border px-2 text-right font-medium"
                         />
                       ) : (
                         "-"

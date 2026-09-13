@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogOverlay } from "@/components/ui/dialog";
 import { Loader2, AlertTriangle, Eye, CreditCard, ArrowLeft, Building2, CheckCircle2, Clock, RefreshCw, Save, Printer, Receipt } from "lucide-react";
 import { parseApiError } from "@/utils/error";
@@ -616,20 +618,18 @@ export default function PurchaseInvoiceCardList({ onEditInvoice, initialInvoiceI
 
             <div>
               <Label className="font-bold text-slate-600 uppercase text-[10px]">Pilih Akun Kas / Bank Tujuan (Dari Database) *</Label>
-              <Select value={payAccountId || null} onValueChange={(val) => setPayAccountId(val || "")}>
-                <SelectTrigger className="h-10 text-xs font-bold bg-[#fff8e1] border-amber-300 mt-1">
-                  <SelectValue placeholder="-- Klik di sini untuk pilih sumber dana --">
-                    {financialAccounts.find(a => a.financialAccountId === payAccountId)?.accountName}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent className="bg-white z-[70] border border-slate-200 shadow-2xl max-h-60">
-                  {financialAccounts.map(a => (
-                    <SelectItem key={a.financialAccountId} value={a.financialAccountId} className="text-xs cursor-pointer py-2">
-                      {a.accountName} (Saldo: Rp {a.currentBalance.toLocaleString('id-ID')})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={payAccountId}
+                onChange={(val) => setPayAccountId(val || "")}
+                placeholder="-- Klik di sini untuk pilih sumber dana --"
+                options={financialAccounts.map((a) => ({
+                  value: a.financialAccountId,
+                  label: a.accountName,
+                  sublabel: `Saldo: Rp ${a.currentBalance.toLocaleString('id-ID')}`,
+                }))}
+                className="mt-1"
+                triggerClassName="h-10 text-xs font-bold bg-[#fff8e1] border-amber-300"
+              />
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -651,7 +651,12 @@ export default function PurchaseInvoiceCardList({ onEditInvoice, initialInvoiceI
 
             <div>
               <Label className="font-bold text-slate-600 uppercase text-[10px]">Nominal Pembayaran (Rp) *</Label>
-              <Input type="number" min="1" value={payAmount || ''} onChange={e => setPayAmount(parseFloat(e.target.value) || 0)} className="h-9 text-xs font-bold text-emerald-700 bg-emerald-50 border-emerald-300 mt-1"/>
+              <FormattedNumberInput
+                min={1}
+                value={payAmount || ""}
+                onChange={(val) => setPayAmount(val || 0)}
+                className="h-9 text-xs font-bold text-emerald-700 bg-emerald-50 border-emerald-300 mt-1"
+              />
             </div>
 
             <div>
