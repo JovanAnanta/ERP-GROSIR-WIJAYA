@@ -9,6 +9,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Loader2, Trash2, Save, FileCheck, AlertTriangle, FileText, Download, CheckSquare, Plus } from "lucide-react";
 import { parseApiError } from "@/utils/error";
+import { getProductWarehouseDisplay } from "../purchasing-stock";
 
 interface POItemForm {
   rowId: string; // Kunci unik agar UI React tidak bingung saat baris dihapus
@@ -17,14 +18,14 @@ interface POItemForm {
   productName: string;
   unitName: string;
   quantity: number;
-  availableQty: number; // Stok Gudang
+  warehouseDisplay: string;
   note: string;
 }
 
 // Helper untuk menciptakan baris kosong yang unik
 const createEmptyRow = (): POItemForm => ({
   rowId: crypto.randomUUID(),
-  productId: "", productUnitId: "", productName: "", unitName: "", quantity: 1, availableQty: 0, note: ""
+  productId: "", productUnitId: "", productName: "", unitName: "", quantity: 1, warehouseDisplay: "—", note: ""
 });
 
 interface Props {
@@ -81,8 +82,6 @@ export default function CreatePurchaseOrderTab({ editingOrderId, onSuccess, onCa
           throw new Error('Purchase Order yang sudah selesai atau dibatalkan tidak dapat diedit.');
         }
         const loadedItems: POItemForm[] = order.details.map((detail) => {
-          const product = allProducts.find((item) => item.productId === detail.productId);
-          const unit = product?.units.find((item) => item.productUnitId === detail.productUnitId);
           return {
             rowId: crypto.randomUUID(),
             productId: detail.productId,
@@ -90,7 +89,9 @@ export default function CreatePurchaseOrderTab({ editingOrderId, onSuccess, onCa
             productName: detail.productName,
             unitName: detail.unitName,
             quantity: detail.quantity,
-            availableQty: unit?.availableQty ?? 0,
+            warehouseDisplay: getProductWarehouseDisplay(allProducts, {
+              productId: detail.productId,
+            }),
             note: detail.note ?? '',
           };
         });
@@ -118,14 +119,6 @@ export default function CreatePurchaseOrderTab({ editingOrderId, onSuccess, onCa
     setSupplierId(safeVal);
     // Reset form item kembali menjadi 7 baris kosong yang bersih
     setItems(Array.from({ length: 7 }, () => createEmptyRow())); 
-  };
-
-  const getStock = (puId: string) => {
-    for (const p of allProducts) {
-      const u = p.units.find(un => un.productUnitId === puId);
-      if (u) return u.availableQty;
-    }
-    return 0;
   };
 
   const openCatalog = async (type: 'MASTER' | 'HISTORY') => {
@@ -175,7 +168,7 @@ export default function CreatePurchaseOrderTab({ editingOrderId, onSuccess, onCa
       }
 
       if (unitId && pName && !items.some(existing => existing.productUnitId === unitId)) {
-        newItems.push({ rowId: crypto.randomUUID(), productId: pId, productUnitId: unitId, productName: pName, unitName: uName, quantity: 1, availableQty: getStock(unitId), note: "" });
+        newItems.push({ rowId: crypto.randomUUID(), productId: pId, productUnitId: unitId, productName: pName, unitName: uName, quantity: 1, warehouseDisplay: getProductWarehouseDisplay(allProducts, { productId: pId }), note: "" });
       }
     });
 
@@ -223,7 +216,7 @@ export default function CreatePurchaseOrderTab({ editingOrderId, onSuccess, onCa
     const prod = allProducts.find(p => p.productId === safeId);
     if (!prod) return;
     const newItems = [...items];
-    newItems[index] = { ...newItems[index], productId: prod.productId, productName: prod.productName, productUnitId: "", unitName: "", availableQty: 0 };
+    newItems[index] = { ...newItems[index], productId: prod.productId, productName: prod.productName, productUnitId: "", unitName: "", warehouseDisplay: getProductWarehouseDisplay(allProducts, { productId: prod.productId }) };
     setItems(newItems);
   };
 
@@ -237,7 +230,7 @@ export default function CreatePurchaseOrderTab({ editingOrderId, onSuccess, onCa
     if (!unit) return;
 
     const newItems = [...items];
-    newItems[index] = { ...newItems[index], productUnitId: unit.productUnitId, unitName: unit.unitName, availableQty: unit.availableQty };
+    newItems[index] = { ...newItems[index], productUnitId: unit.productUnitId, unitName: unit.unitName };
     setItems(newItems);
   };
 
@@ -346,7 +339,7 @@ export default function CreatePurchaseOrderTab({ editingOrderId, onSuccess, onCa
               <th className="p-2 text-[10px] font-bold text-slate-600 uppercase border-r border-slate-300 w-10 text-center">No</th>
               <th className="p-2 text-[10px] font-bold text-slate-600 uppercase border-r border-slate-300 min-w-[250px]">Pilih Produk (Master)</th>
               <th className="p-2 text-[10px] font-bold text-slate-600 uppercase border-r border-slate-300 w-36">Satuan Unit</th>
-              <th className="p-2 text-[10px] font-bold text-slate-600 uppercase border-r border-slate-300 w-24 text-center">Stok Gudang</th>
+              <th className="p-2 text-[10px] font-bold text-slate-600 uppercase border-r border-slate-300 min-w-[140px] text-center">Stok Gudang</th>
               <th className="p-2 text-[10px] font-bold text-[#00509e] uppercase border-r border-slate-300 w-24 text-center">Qty Pesan</th>
               <th className="p-2 text-[10px] font-bold text-slate-600 uppercase border-r border-slate-300 w-48">Keterangan</th>
               <th className="p-2 w-10 text-center">Aksi</th>
@@ -395,7 +388,7 @@ export default function CreatePurchaseOrderTab({ editingOrderId, onSuccess, onCa
                 {/* KOLOM STOK (READONLY) */}
                 <td className="p-1 border-r border-slate-200 bg-slate-50 text-center">
                   <span className={`text-[11px] font-bold ${item.productId ? 'text-slate-700' : 'text-slate-300'}`}>
-                    {item.productId ? item.availableQty : '-'}
+                    {item.productId ? item.warehouseDisplay : '-'}
                   </span>
                 </td>
 

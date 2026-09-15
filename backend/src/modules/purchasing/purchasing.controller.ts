@@ -30,6 +30,7 @@ import { PERMISSIONS } from '../../common/authorization/permission-catalog.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import type { Request } from 'express';
 import { PositiveBigIntPipe } from '../../common/pipes/positive-bigint.pipe.js';
+import { getPurchasingStockQuantities } from './purchase-stock.utils.js';
 
 interface AuthRequest extends Request {
   user: { userId: bigint; role: { roleCode: string } };
@@ -324,7 +325,11 @@ export class PurchasingController {
       include: {
         productUnits: {
           where: { isActive: true },
-          include: { unit: true, inventoryStocks: true },
+          include: {
+            unit: true,
+            inventoryStocks: true,
+            parentUnit: { include: { inventoryStocks: true } },
+          },
         },
       },
       orderBy: { productName: 'asc' },
@@ -335,14 +340,28 @@ export class PurchasingController {
       data: products.map((p) => ({
         productId: p.productId.toString(),
         productName: p.productName,
-        units: p.productUnits.map((pu) => ({
-          productUnitId: pu.productUnitId.toString(),
-          unitName: pu.unit.unitName,
-          availableQty:
-            pu.inventoryStocks.length > 0
-              ? Number(pu.inventoryStocks[0].availableQty)
-              : 0,
-        })),
+        units: p.productUnits.map((pu) => {
+          const parentStock = pu.isParent
+            ? pu.inventoryStocks[0]
+            : pu.parentUnit?.inventoryStocks[0];
+          const quantities = getPurchasingStockQuantities({
+            actualQty: parentStock?.actualQty,
+            availableQty: parentStock?.availableQty,
+            packedQty: parentStock?.packedQty,
+            selectedConversionFactor: pu.conversionFactor,
+            parentConversionFactor: pu.isParent
+              ? pu.conversionFactor
+              : (pu.parentUnit?.conversionFactor ?? pu.conversionFactor),
+          });
+
+          return {
+            productUnitId: pu.productUnitId.toString(),
+            unitName: pu.unit.unitName,
+            conversionFactor: Number(pu.conversionFactor),
+            availableQty: Number(quantities.availableQty),
+            warehouseQty: Number(quantities.warehouseQty),
+          };
+        }),
       })),
     };
   }

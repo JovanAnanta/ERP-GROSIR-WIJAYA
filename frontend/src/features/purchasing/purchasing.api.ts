@@ -74,7 +74,9 @@ export interface ProductLookupOption {
   units: {
     productUnitId: string;
     unitName: string;
+    conversionFactor: number;
     availableQty: number;
+    warehouseQty: number;
   }[];
 }
 

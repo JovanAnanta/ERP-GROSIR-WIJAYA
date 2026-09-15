@@ -46,6 +46,7 @@ import {
   X,
 } from "lucide-react";
 import { parseApiError } from "@/utils/error";
+import { getProductWarehouseDisplay } from "../purchasing-stock";
 
 interface PIItemForm {
   rowId: string;
@@ -53,7 +54,7 @@ interface PIItemForm {
   productUnitId: string;
   productName: string;
   unitName: string;
-  availableQty: number;
+  warehouseDisplay: string;
   purchasedQty: number;
   bonusQty: number;
   price: number;
@@ -71,7 +72,7 @@ const createEmptyRow = (): PIItemForm => ({
   bonusQty: 0,
   price: 0,
   subtotal: 0,
-  availableQty: 0,
+  warehouseDisplay: "—",
   note: "",
 });
 
@@ -188,7 +189,7 @@ export default function CreatePurchaseInvoiceTab({
 
   // FIX: Menggunakan async wrapper untuk fetch edit data tanpa cascading synchronous setState
   useEffect(() => {
-    if (!editingInvoiceId) return;
+    if (!editingInvoiceId || allProducts.length === 0) return;
     let isMounted = true;
 
     async function fetchEditInvoice() {
@@ -213,7 +214,9 @@ export default function CreatePurchaseInvoiceTab({
           productUnitId: d.productUnitId,
           productName: d.productName,
           unitName: d.unitName,
-          availableQty: 0,
+          warehouseDisplay: getProductWarehouseDisplay(allProducts, {
+            productUnitId: d.productUnitId,
+          }),
           purchasedQty: d.quantity,
           bonusQty: d.bonusQuantity ?? 0,
           price: d.unitCost,
@@ -234,7 +237,7 @@ export default function CreatePurchaseInvoiceTab({
     return () => {
       isMounted = false;
     };
-  }, [editingInvoiceId, showError]);
+  }, [allProducts, editingInvoiceId, showError]);
 
   const handleSupplierChange = async (val: string | null) => {
     const safeVal = val || "";
@@ -248,14 +251,6 @@ export default function CreatePurchaseInvoiceTab({
     } catch (err: unknown) {
       console.error(parseApiError(err as Error));
     }
-  };
-
-  const getStock = (puId: string) => {
-    for (const p of allProducts) {
-      const u = p.units.find((un) => un.productUnitId === puId);
-      if (u) return u.availableQty;
-    }
-    return 0;
   };
 
   const getHistoryPrice = (puId: string) => {
@@ -295,7 +290,9 @@ export default function CreatePurchaseInvoiceTab({
             bonusQty: 0,
             price: historicalPrice,
             subtotal: historicalPrice * item.quantity,
-            availableQty: getStock(item.productUnitId),
+            warehouseDisplay: getProductWarehouseDisplay(allProducts, {
+              productId: item.productId,
+            }),
             note: "",
           };
         });
@@ -383,7 +380,9 @@ export default function CreatePurchaseInvoiceTab({
           bonusQty: 0,
           price: histPrice,
           subtotal: histPrice,
-          availableQty: getStock(unitId),
+          warehouseDisplay: getProductWarehouseDisplay(allProducts, {
+            productId: pId,
+          }),
           note: "",
         });
       }
@@ -444,7 +443,9 @@ export default function CreatePurchaseInvoiceTab({
       productName: prod.productName,
       productUnitId: "",
       unitName: "",
-      availableQty: 0,
+      warehouseDisplay: getProductWarehouseDisplay(allProducts, {
+        productId: prod.productId,
+      }),
       price: 0,
       subtotal: 0,
     };
@@ -466,7 +467,6 @@ export default function CreatePurchaseInvoiceTab({
       ...newItems[index],
       productUnitId: unit.productUnitId,
       unitName: unit.unitName,
-      availableQty: unit.availableQty,
       price: historyPrice,
       subtotal: historyPrice * item.purchasedQty,
     };
@@ -811,7 +811,7 @@ export default function CreatePurchaseInvoiceTab({
               <th className="p-2 text-[10px] font-bold text-slate-600 uppercase border-r border-slate-300 w-32">
                 Satuan Unit
               </th>
-              <th className="p-2 text-[10px] font-bold text-slate-600 uppercase border-r border-slate-300 w-24 text-center">
+              <th className="p-2 text-[10px] font-bold text-slate-600 uppercase border-r border-slate-300 min-w-[140px] text-center">
                 Stok Gudang
               </th>
               <th className="p-2 text-[10px] font-bold text-[#00509e] uppercase border-r border-slate-300 w-24 text-center">
@@ -879,7 +879,7 @@ export default function CreatePurchaseInvoiceTab({
                   <span
                     className={`text-[11px] font-bold ${item.productId ? "text-slate-700" : "text-slate-300"}`}
                   >
-                    {item.productId ? item.availableQty : "-"}
+                    {item.productId ? item.warehouseDisplay : "-"}
                   </span>
                 </td>
 
