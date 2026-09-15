@@ -11,6 +11,7 @@ compose="$repo_dir/deployment/scripts/compose.sh"
 check_required_container() {
   local service="$1"
   local container_id
+  local health
   local state
 
   container_id="$(bash "$compose" ps -q "$service")"
@@ -22,6 +23,12 @@ check_required_container() {
   state="$(docker inspect --format '{{.State.Status}}' "$container_id")"
   if [[ "$state" != "running" ]]; then
     echo "Container $service tidak berjalan (status: $state)." >&2
+    return 1
+  fi
+
+  health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$container_id")"
+  if [[ -n "$health" && "$health" != "healthy" ]]; then
+    echo "Container $service belum sehat (health: $health)." >&2
     return 1
   fi
 }

@@ -113,6 +113,7 @@ dipulihkan.
 ```bash
 chmod 700 secrets
 chmod 600 .env secrets/*.txt
+sudo chown root:root secrets/cloudflare_tunnel_token.txt
 ```
 
 ## 4. Cloudflare Tunnel
@@ -129,10 +130,12 @@ memberikan HTTPS dan menyembunyikan port VPS, tetapi halaman login tetap dapat
 dibuka siapa pun yang mengetahui alamatnya. Data ERP tetap dilindungi oleh
 login, session, dan permission backend.
 
-Container `cloudflared` dijalankan sebagai root hanya untuk membaca file token
-host dengan permission `0600`. Container tetap memakai filesystem read-only,
-tanpa Linux capability, dan `no-new-privileges`; jangan melonggarkan permission
-file token menjadi dapat dibaca semua user.
+File token dibuat milik `root:root` dengan permission `0600`. Container
+`cloudflared` hanya memakai root untuk membaca file tersebut dan tetap memakai
+filesystem read-only, tanpa Linux capability, serta `no-new-privileges`; jangan
+melonggarkan permission file token menjadi dapat dibaca semua user. Health check
+`cloudflared` juga memastikan sedikitnya satu koneksi ke edge Cloudflare sudah
+aktif.
 
 ## 5. Backblaze B2 untuk backup
 

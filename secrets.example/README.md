@@ -11,3 +11,5 @@ masing-masing hanya dengan satu nilai tanpa tanda kutip:
 
 Atur permission agar hanya administrator server yang dapat membacanya. Folder
 `secrets/` sudah diabaikan Git dan tidak boleh dikirim ke repository.
+File `cloudflare_tunnel_token.txt` harus dimiliki `root:root` dengan permission
+`0600` agar hanya container Tunnel yang dibatasi dapat membacanya.

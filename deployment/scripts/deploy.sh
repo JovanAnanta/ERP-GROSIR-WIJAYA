@@ -25,6 +25,11 @@ for file in "${required[@]}"; do
   fi
 done
 
+# cloudflared berjalan tanpa capability Linux tambahan. Jadikan token milik
+# root agar tetap dapat dibaca dengan permission 0600 tanpa membukanya ke user lain.
+chown root:root "$repo_dir/secrets/cloudflare_tunnel_token.txt"
+chmod 600 "$repo_dir/secrets/cloudflare_tunnel_token.txt"
+
 mkdir -p "$state_dir"
 current_version=""
 if [[ -f "$state_dir/current-version" ]]; then
