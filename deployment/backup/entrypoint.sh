@@ -2,8 +2,8 @@
 set -eu
 
 export RESTIC_PASSWORD_FILE="${RESTIC_PASSWORD_FILE:-/run/secrets/restic_password}"
-export AWS_ACCESS_KEY_ID="$(cat "${R2_ACCESS_KEY_ID_FILE:-/run/secrets/r2_access_key_id}")"
-export AWS_SECRET_ACCESS_KEY="$(cat "${R2_SECRET_ACCESS_KEY_FILE:-/run/secrets/r2_secret_access_key}")"
+export AWS_ACCESS_KEY_ID="$(cat "${BACKUP_ACCESS_KEY_ID_FILE:-/run/secrets/backup_access_key_id}")"
+export AWS_SECRET_ACCESS_KEY="$(cat "${BACKUP_SECRET_ACCESS_KEY_FILE:-/run/secrets/backup_secret_access_key}")"
 
 if ! restic snapshots >/dev/null 2>&1; then
   echo "Repository backup belum ada; membuat repository terenkripsi."

@@ -55,8 +55,8 @@ jobs:
           mkdir -p secrets
           printf 'ci-only\n' > secrets/cloudflare_tunnel_token.txt
           printf 'ci-only\n' > secrets/restic_password.txt
-          printf 'ci-only\n' > secrets/r2_access_key_id.txt
-          printf 'ci-only\n' > secrets/r2_secret_access_key.txt
+          printf 'ci-only\n' > secrets/backup_access_key_id.txt
+          printf 'ci-only\n' > secrets/backup_secret_access_key.txt
           printf 'ci-only-password\n' > secrets/initial_admin_password.txt
           docker compose -f docker-compose.production.yml config --quiet
 

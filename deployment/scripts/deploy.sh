@@ -15,8 +15,8 @@ required=(
   "$repo_dir/.env"
   "$repo_dir/secrets/cloudflare_tunnel_token.txt"
   "$repo_dir/secrets/restic_password.txt"
-  "$repo_dir/secrets/r2_access_key_id.txt"
-  "$repo_dir/secrets/r2_secret_access_key.txt"
+  "$repo_dir/secrets/backup_access_key_id.txt"
+  "$repo_dir/secrets/backup_secret_access_key.txt"
 )
 for file in "${required[@]}"; do
   if [[ ! -s "$file" ]]; then

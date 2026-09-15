@@ -112,14 +112,15 @@ services:
       PGUSER: erp_admin
       PGPASSWORD: ${DB_PASSWORD:?DB_PASSWORD wajib diatur}
       RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:?RESTIC_REPOSITORY wajib diatur}
+      AWS_DEFAULT_REGION: ${BACKUP_S3_REGION:?BACKUP_S3_REGION wajib diatur}
       TZ: ${TZ:-Asia/Jakarta}
       BACKUP_KEEP_DAILY: ${BACKUP_KEEP_DAILY:-7}
       BACKUP_KEEP_WEEKLY: ${BACKUP_KEEP_WEEKLY:-4}
       BACKUP_KEEP_MONTHLY: ${BACKUP_KEEP_MONTHLY:-12}
     secrets:
       - restic_password
-      - r2_access_key_id
-      - r2_secret_access_key
+      - backup_access_key_id
+      - backup_secret_access_key
     volumes:
       - backup_cache:/root/.cache/restic
       - backup_work:/backup-work
@@ -143,9 +144,9 @@ secrets:
     file: ./secrets/cloudflare_tunnel_token.txt
   restic_password:
     file: ./secrets/restic_password.txt
-  r2_access_key_id:
-    file: ./secrets/r2_access_key_id.txt
-  r2_secret_access_key:
-    file: ./secrets/r2_secret_access_key.txt
+  backup_access_key_id:
+    file: ./secrets/backup_access_key_id.txt
+  backup_secret_access_key:
+    file: ./secrets/backup_secret_access_key.txt
   initial_admin_password:
     file: ./secrets/initial_admin_password.txt

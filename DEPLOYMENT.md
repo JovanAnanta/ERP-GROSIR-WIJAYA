@@ -1,7 +1,7 @@
 # Deployment ERP Grosir Wijaya
 
 Panduan ini memakai satu VPS Ubuntu, Docker Compose, Cloudflare Tunnel, dan
-backup PostgreSQL terenkripsi ke Cloudflare R2. Database tidak dibuka ke
+backup PostgreSQL terenkripsi ke Backblaze B2. Database tidak dibuka ke
 internet. Pengguna hanya melihat halaman login; aplikasi tidak menyediakan
 registrasi mandiri.
 
@@ -12,7 +12,7 @@ Browser -> HTTPS Cloudflare -> Cloudflare Tunnel -> Nginx frontend
                                                    -> NestJS backend
                                                    -> PostgreSQL private
 
-PostgreSQL -> pg_dump -> restic encryption -> Cloudflare R2
+PostgreSQL -> pg_dump -> restic encryption -> Backblaze B2 (S3 API)
 Git tag -> GitHub Actions -> GHCR images -> VPS pull dan restart
 ```
 
@@ -27,8 +27,8 @@ diulang atau di-rollback.
   proses maintenance bersamaan.
 - Satu domain. Pembayaran domain terpisah dari VPS dan umumnya tahunan.
 - Akun Cloudflare gratis untuk DNS, HTTPS, dan Tunnel.
-- Bucket Cloudflare R2 untuk backup. Biaya mengikuti pemakaian setelah kuota
-  gratis penyedia terlampaui.
+- Bucket privat Backblaze B2 untuk backup. Gunakan batas biaya USD 0 dan
+  notifikasi pemakaian agar operasi berhenti ketika kuota gratis tercapai.
 - Docker Engine di VPS; Docker Engine tidak memerlukan biaya lisensi untuk
   skenario ini.
 
@@ -88,7 +88,8 @@ Edit `.env`:
 - `DATABASE_URL`: password yang sama pada URL internal PostgreSQL;
 - `APP_ORIGIN`: alamat HTTPS final, misalnya `https://erp.namatoko.com`;
 - `APP_VERSION`: tag rilis, misalnya `v1.0.0`;
-- `RESTIC_REPOSITORY`: endpoint bucket R2.
+- `RESTIC_REPOSITORY`: endpoint S3 bucket Backblaze B2;
+- `BACKUP_S3_REGION`: region pada endpoint bucket, misalnya `us-east-005`.
 
 Untuk menghindari kesalahan URL encoding, gunakan password database acak
 minimal 32 karakter yang terdiri dari huruf dan angka. File `.env` tidak boleh
@@ -100,8 +101,8 @@ tanda kutip:
 ```text
 cloudflare_tunnel_token.txt
 restic_password.txt
-r2_access_key_id.txt
-r2_secret_access_key.txt
+backup_access_key_id.txt
+backup_secret_access_key.txt
 initial_admin_password.txt
 ```
 
@@ -128,12 +129,18 @@ memberikan HTTPS dan menyembunyikan port VPS, tetapi halaman login tetap dapat
 dibuka siapa pun yang mengetahui alamatnya. Data ERP tetap dilindungi oleh
 login, session, dan permission backend.
 
-## 5. Cloudflare R2 untuk backup
+## 5. Backblaze B2 untuk backup
 
-1. Buat bucket khusus, misalnya `erp-grosir-wijaya-backup`.
-2. Buat API token R2 yang hanya dapat mengakses bucket tersebut.
-3. Isi access key dan secret key pada file secret terkait.
-4. Isi endpoint bucket pada `RESTIC_REPOSITORY`.
+1. Buat bucket privat khusus dan aktifkan enkripsi bawaan.
+2. Nonaktifkan Object Lock agar restic dapat menghapus data sesuai retensi.
+3. Atur lifecycle menjadi `Keep only the last version` agar versi tersembunyi
+   yang sudah dibuang restic tidak terus memakai kapasitas.
+4. Buat Application Key `Read and Write` yang hanya dapat mengakses bucket
+   tersebut, serta aktifkan `Allow List All Bucket Names` untuk kompatibilitas
+   S3.
+5. Isi key ID dan application key pada file secret backup terkait.
+6. Isi endpoint bucket pada `RESTIC_REPOSITORY` dan region endpoint pada
+   `BACKUP_S3_REGION`.
 
 Backup berjalan setiap hari pukul 02:00 zona `Asia/Jakarta`, terenkripsi sebelum
 disimpan, dengan retensi 7 harian, 4 mingguan, dan 12 bulanan. Ubah angka
@@ -249,7 +256,7 @@ dapat memakai aplikasi, tetapi bukan target utama pencetakan USB.
 - `.env`, token, password, dan file backup tidak ada di Git.
 - Password administrator awal sudah diganti.
 - Permission setiap role sudah diuji dengan akun non-owner.
-- Backup harian terlihat di R2 dan restore terisolasi sudah diuji.
+- Backup harian terlihat di Backblaze B2 dan restore terisolasi sudah diuji.
 - Waktu server, jam backup, format struk 80 mm, dan printer default sudah diuji.
 - Login, logout, transaksi, pembayaran, FIFO, serta audit log diuji pada alamat
   produksi sebelum data nyata dimasukkan.
@@ -257,5 +264,5 @@ dapat memakai aplikasi, tetapi bukan target utama pencetakan USB.
 ## Batas tanggung jawab
 
 Konfigurasi repository menyiapkan aplikasi untuk deployment yang dapat diulang,
-tetapi server belum benar-benar online sampai domain, VPS, Tunnel, R2, dan secret
+tetapi server belum benar-benar online sampai domain, VPS, Tunnel, B2, dan secret
 diisi. Kondisi produksi juga perlu dipantau dan diperbarui secara berkala.
