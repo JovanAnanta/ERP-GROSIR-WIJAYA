@@ -129,6 +129,11 @@ memberikan HTTPS dan menyembunyikan port VPS, tetapi halaman login tetap dapat
 dibuka siapa pun yang mengetahui alamatnya. Data ERP tetap dilindungi oleh
 login, session, dan permission backend.
 
+Container `cloudflared` dijalankan sebagai root hanya untuk membaca file token
+host dengan permission `0600`. Container tetap memakai filesystem read-only,
+tanpa Linux capability, dan `no-new-privileges`; jangan melonggarkan permission
+file token menjadi dapat dibaca semua user.
+
 ## 5. Backblaze B2 untuk backup
 
 1. Buat bucket privat khusus dan aktifkan enkripsi bawaan.

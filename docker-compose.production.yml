@@ -91,6 +91,13 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:2026.9.1
     restart: unless-stopped
+    # Compose memasang file secret lokal dengan permission milik host. Jalankan
+    # sebagai root hanya agar token 0600 dapat dibaca, lalu batasi container.
+    user: "0:0"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
     command: ["tunnel", "--no-autoupdate", "run"]
     environment:
       TUNNEL_TOKEN_FILE: /run/secrets/cloudflare_tunnel_token
